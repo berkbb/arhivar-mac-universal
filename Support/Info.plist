@@ -28,6 +28,29 @@
 				<string>org.tukaani.xz-archive</string>
 				<string>public.iso-image</string>
 				<string>com.apple.disk-image-udif</string>
+				<string>org.gnu.gnu-zip-tar-archive</string>
+				<string>public.tar-bzip2-archive</string>
+				<string>org.tukaani.tar-xz-archive</string>
+				<string>public.z-archive</string>
+				<string>com.microsoft.cab</string>
+				<string>public.cpio-archive</string>
+				<string>com.apple.xar-archive</string>
+				<string>com.vmware.vm-disk</string>
+				<string>com.vmware.foreign.vhd</string>
+				<string>com.facebook.zstandard-archive</string>
+				<string>org.lz4.lz4-archive</string>
+				<string>org.nongnu.lzip-archive</string>
+				<string>org.7-zip.lzma-archive</string>
+				<string>com.microsoft.windows-imaging-format</string>
+				<string>com.microsoft.vhdx</string>
+				<string>org.qemu.qcow2</string>
+				<string>org.debian.deb-archive</string>
+				<string>com.redhat.rpm-archive</string>
+				<string>org.7-zip.split-archive</string>
+				<string>com.arjsoftware.arj-archive</string>
+				<string>org.lha.lzh-archive</string>
+				<string>org.squashfs.squashfs-image</string>
+				<string>org.osta.udf-image</string>
 				<string>public.archive</string>
 			</array>
 		</dict>
@@ -85,6 +108,29 @@
 				<string>org.tukaani.xz-archive</string>
 				<string>public.iso-image</string>
 				<string>com.apple.disk-image-udif</string>
+				<string>org.gnu.gnu-zip-tar-archive</string>
+				<string>public.tar-bzip2-archive</string>
+				<string>org.tukaani.tar-xz-archive</string>
+				<string>public.z-archive</string>
+				<string>com.microsoft.cab</string>
+				<string>public.cpio-archive</string>
+				<string>com.apple.xar-archive</string>
+				<string>com.vmware.vm-disk</string>
+				<string>com.vmware.foreign.vhd</string>
+				<string>com.facebook.zstandard-archive</string>
+				<string>org.lz4.lz4-archive</string>
+				<string>org.nongnu.lzip-archive</string>
+				<string>org.7-zip.lzma-archive</string>
+				<string>com.microsoft.windows-imaging-format</string>
+				<string>com.microsoft.vhdx</string>
+				<string>org.qemu.qcow2</string>
+				<string>org.debian.deb-archive</string>
+				<string>com.redhat.rpm-archive</string>
+				<string>org.7-zip.split-archive</string>
+				<string>com.arjsoftware.arj-archive</string>
+				<string>org.lha.lzh-archive</string>
+				<string>org.squashfs.squashfs-image</string>
+				<string>org.osta.udf-image</string>
 				<string>public.archive</string>
 			</array>
 		</dict>
@@ -111,6 +157,29 @@
 				<string>org.tukaani.xz-archive</string>
 				<string>public.iso-image</string>
 				<string>com.apple.disk-image-udif</string>
+				<string>org.gnu.gnu-zip-tar-archive</string>
+				<string>public.tar-bzip2-archive</string>
+				<string>org.tukaani.tar-xz-archive</string>
+				<string>public.z-archive</string>
+				<string>com.microsoft.cab</string>
+				<string>public.cpio-archive</string>
+				<string>com.apple.xar-archive</string>
+				<string>com.vmware.vm-disk</string>
+				<string>com.vmware.foreign.vhd</string>
+				<string>com.facebook.zstandard-archive</string>
+				<string>org.lz4.lz4-archive</string>
+				<string>org.nongnu.lzip-archive</string>
+				<string>org.7-zip.lzma-archive</string>
+				<string>com.microsoft.windows-imaging-format</string>
+				<string>com.microsoft.vhdx</string>
+				<string>org.qemu.qcow2</string>
+				<string>org.debian.deb-archive</string>
+				<string>com.redhat.rpm-archive</string>
+				<string>org.7-zip.split-archive</string>
+				<string>com.arjsoftware.arj-archive</string>
+				<string>org.lha.lzh-archive</string>
+				<string>org.squashfs.squashfs-image</string>
+				<string>org.osta.udf-image</string>
 				<string>public.archive</string>
 			</array>
 		</dict>
@@ -130,6 +199,266 @@
 			<array>
 				<string>public.item</string>
 			</array>
+		</dict>
+	</array>
+	<key>UTImportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+				<string>public.archive</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Zstandard archive</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.facebook.zstandard-archive</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>zst</string>
+					<string>tzst</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+				<string>public.archive</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>LZ4 archive</string>
+			<key>UTTypeIdentifier</key>
+			<string>org.lz4.lz4-archive</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>lz4</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+				<string>public.archive</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Lzip archive</string>
+			<key>UTTypeIdentifier</key>
+			<string>org.nongnu.lzip-archive</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>lz</string>
+					<string>tlz</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+				<string>public.archive</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>LZMA archive</string>
+			<key>UTTypeIdentifier</key>
+			<string>org.7-zip.lzma-archive</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>lzma</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+				<string>public.archive</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Windows Imaging Format image</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.microsoft.windows-imaging-format</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>wim</string>
+					<string>swm</string>
+					<string>esd</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+				<string>public.archive</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>VHDX disk image</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.microsoft.vhdx</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>vhdx</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+				<string>public.archive</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>QCOW2 disk image</string>
+			<key>UTTypeIdentifier</key>
+			<string>org.qemu.qcow2</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>qcow2</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+				<string>public.archive</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Debian package</string>
+			<key>UTTypeIdentifier</key>
+			<string>org.debian.deb-archive</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>deb</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+				<string>public.archive</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>RPM package</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.redhat.rpm-archive</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>rpm</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+				<string>public.archive</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Split archive (first volume)</string>
+			<key>UTTypeIdentifier</key>
+			<string>org.7-zip.split-archive</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>001</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+				<string>public.archive</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>ARJ archive</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.arjsoftware.arj-archive</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>arj</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+				<string>public.archive</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>LZH archive</string>
+			<key>UTTypeIdentifier</key>
+			<string>org.lha.lzh-archive</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>lzh</string>
+					<string>lha</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+				<string>public.archive</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>SquashFS image</string>
+			<key>UTTypeIdentifier</key>
+			<string>org.squashfs.squashfs-image</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>squashfs</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+				<string>public.archive</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>UDF disk image</string>
+			<key>UTTypeIdentifier</key>
+			<string>org.osta.udf-image</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>udf</string>
+				</array>
+			</dict>
 		</dict>
 	</array>
 </dict>
