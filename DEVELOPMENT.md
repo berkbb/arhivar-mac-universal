@@ -80,7 +80,7 @@ Arhivar/
 
 ```bash
 swift build                      # quick development build
-swift test                       # 141 tests (ArhivarCoreTests + ArhivarAppTests); real-7zz tests use Vendor/7-Zip/7zz
+swift test                       # 142 tests (ArhivarCoreTests + ArhivarAppTests); real-7zz tests use Vendor/7-Zip/7zz
 ./Scripts/build_app.sh           # universal build/Arhivar.app (ARCHS=native for this Mac only)
 ./Scripts/package.sh             # tests + .app + dist/Arhivar-<version>.{dmg,zip,sha256}
 ./Scripts/package.sh --update-7zip   # update Vendor/7-Zip first, then package
@@ -133,7 +133,7 @@ The services are defined under `NSServices` in `Support/Info.plist`; their title
 ## Known limitations and unverified points
 
 - The UI could not be checked with screenshots in this environment; it was verified that the app launches and runs without errors. Drag to Finder, Quick Look and the services menu should be tried by hand.
-- ⌘C / ⌘V: SwiftUI's `onCopyCommand` / `onPasteCommand` are never reached from the hierarchical `Table` (the `copy:` action has no target), so the Edit menu's pasteboard group is replaced. `AppModel.copyCommand` / `pasteCommand` send the action on to the first responder while a text field is being edited (`AppModel.isEditingText`) and otherwise copy or add archive items. Covered by `BrowserViewTests` with a private pasteboard; pasting the copied files into Finder has not been tried by hand. The copied files live in the archive's session folder and are deleted when the archive is closed.
+- ⌘C / ⌘V / ⌘A: SwiftUI's `onCopyCommand` / `onPasteCommand` are never reached from the hierarchical `Table`, and neither `copy:` nor `selectAll:` has a target there, so the Edit menu's pasteboard group is replaced. `AppModel.copyCommand` / `pasteCommand` / `selectAllCommand` send the action on to the first responder while a text field is being edited (`AppModel.isEditingText`) and otherwise copy or add archive items. Covered by `BrowserViewTests` with a private pasteboard; pasting the copied files into Finder has not been tried by hand. The copied files live in the archive's session folder and are deleted when the archive is closed.
 - **Table cells must not use `@Environment` for observable objects:** the hierarchical `Table` updates re-inserted rows without the environment objects, which crashed with "No Observable object of type AppModel found". `NameCell` gets the model and settings as properties. `BrowserViewTests` renders `ContentView` in an off-screen window to catch this kind of crash.
 - `update-7zip.sh install --force` was run on 2026-10-17 with 26.04 against both a folder target and an app copy. Download, SHA-256, installation and re-signing were verified. An upgrade to a genuinely newer version has not happened yet.
 - The app is ad-hoc signed and not notarized. On another Mac, Gatekeeper approval is required on first launch. For distribution, a Developer ID signature and notarization should be added.
