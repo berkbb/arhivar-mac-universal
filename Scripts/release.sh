@@ -61,7 +61,7 @@ awk -v version="$VERSION" '
 cat >> "$NOTES" <<'EOF'
 
 ---
-**Kurulum:** `.dmg` dosyasını açıp Arhivar'ı Uygulamalar klasörüne sürükleyin. Uygulama ad-hoc imzalıdır; ilk açılışta macOS engellerse Sistem Ayarları › Gizlilik ve Güvenlik › **Yine de Aç** ile izin verin. Dosyaları `.sha256` ile doğrulayabilirsiniz.
+**Installation:** open the `.dmg` and drag Arhivar into the Applications folder. The app is ad-hoc signed; if macOS blocks it on first launch, allow it in System Settings › Privacy & Security › **Open Anyway**. You can verify the files with the `.sha256` file.
 EOF
 
 # --- Paketleme ---------------------------------------------------------------

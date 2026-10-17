@@ -1,130 +1,130 @@
-# Geliştirme
+# Development
 
-## Gereksinimler
+## Requirements
 
-- macOS 26 veya üstü
-- Xcode 26 veya üstü (Swift 6.2+). Evrensel derleme için tam Xcode gerekir; Command Line Tools yetmez.
+- macOS 26 or later
+- Xcode 26 or later (Swift 6.2+). The universal build needs full Xcode; the Command Line Tools are not enough.
 
-## Klasör yapısı
+## Folder layout
 
 ```
 Arhivar/
 ├── Package.swift
 ├── Sources/
-│   ├── ArhivarCore/          Arayüzden bağımsız, test edilen mantık
-│   │   ├── CommandRunner.swift     Süreç çalıştırma, ilerleme, zaman aşımı, iptal, hata sınıflandırma
-│   │   ├── ArchiveOptions.swift    Biçimler, düzeyler, 7zz argümanları (l, t, x, a)
-│   │   ├── ArchiveEditing.swift    Düzenleme komutları (a, d, rn), AddPlan, ItemExtractor, sürükleme, gezinme yardımcıları
-│   │   ├── ArchiveListing.swift    `7zz l -slt` ayrıştırıcı ve istatistikler
-│   │   ├── ArchiveTree.swift       Düz listeden klasör ağacı, sıralama, arama
-│   │   ├── Engine.swift            7zz bulma ve sürüm seçimi, güncelleyici sarmalayıcısı, ad yardımcıları
-│   │   └── Localization.swift      AppLanguage, StringTable, LKey (tüm metin anahtarları)
-│   └── Arhivar/              SwiftUI uygulaması (varsayılan yalıtım: MainActor)
-│       ├── ArhivarApp.swift        Sahneler, menü komutları, AppDelegate
-│       ├── AppModel.swift          Uygulama durumu ve tüm 7zz işlemleri
-│       ├── AppSettings.swift       UserDefaults tercihleri, görünüm, yerelleştirme ve biçimlendirme
-│       ├── FinderServices.swift    Finder sağ tık servisleri
-│       └── Views/                  Görünümler
+│   ├── ArhivarCore/          UI-independent, tested logic
+│   │   ├── CommandRunner.swift     Process execution, progress, timeout, cancellation, error classification
+│   │   ├── ArchiveOptions.swift    Formats, levels, 7zz arguments (l, t, x, a)
+│   │   ├── ArchiveEditing.swift    Edit commands (a, d, rn), AddPlan, ItemExtractor, drag-out, navigation helpers
+│   │   ├── ArchiveListing.swift    `7zz l -slt` parser and statistics
+│   │   ├── ArchiveTree.swift       Folder tree from the flat list, sorting, search
+│   │   ├── Engine.swift            Finding 7zz and choosing a version, updater wrapper, naming helpers
+│   │   └── Localization.swift      AppLanguage, StringTable, LKey (all string keys)
+│   └── Arhivar/              SwiftUI app (default isolation: MainActor)
+│       ├── ArhivarApp.swift        Scenes, menu commands, AppDelegate
+│       ├── AppModel.swift          App state and every 7zz operation
+│       ├── AppSettings.swift       UserDefaults preferences, appearance, localization and formatting
+│       ├── FinderServices.swift    Finder context menu services
+│       └── Views/                  Views
 ├── Resources/                {tr,en,ro}.lproj/Localizable.strings, ServicesMenu.strings, AppIcon.icns
-├── Support/Info.plist        Paket bilgisi, belge türleri, NSServices
+├── Support/Info.plist        Bundle info, document types, NSServices
 ├── Scripts/                  build_app.sh, package.sh, update-7zip.sh, make_icon.swift
-├── Vendor/7-Zip/             Pakete eklenen 7zz, lisansı ve kılavuzu
-├── Tests/ArhivarCoreTests/   Çekirdek birim ve entegrasyon testleri
-├── Tests/ArhivarAppTests/    Uygulama modeli (AppModel) akış testleri
-├── Paketle.command           Çift tıkla paketleme
-├── Yayimla.command           Çift tıkla GitHub Releases'e yayımlama
-└── 7-Zip-Guncelle.command    Çift tıkla 7-Zip güncelleme
+├── Vendor/7-Zip/             The 7zz bundled into the app, with its license and manual
+├── Tests/ArhivarCoreTests/   Core unit and integration tests
+├── Tests/ArhivarAppTests/    App model (AppModel) flow tests
+├── Paketle.command           Double-click to package
+├── Yayimla.command           Double-click to publish to GitHub Releases
+└── 7-Zip-Guncelle.command    Double-click to update 7-Zip
 ```
 
-## Mimari
+## Architecture
 
-- Arhivar 7-Zip'e bağlanmaz. Değiştirilmemiş `7zz` programını ayrı bir süreç olarak çalıştırır (LGPL uyumu için de bu yol seçildi).
-- Tüm 7zz argümanları `SevenZipCommand` tarafından üretilir ve test edilir. Dosya adları her zaman `--` ayracından sonra gelir. Seçili öğelerle çalışırken `-spd` verilir, böylece adlardaki `*` ve `?` joker karakter sayılmaz.
+- Arhivar does not link against 7-Zip. It runs the unmodified `7zz` program as a separate process (this is also how it stays LGPL compliant).
+- All 7zz arguments are produced and tested by `SevenZipCommand`. File names always come after the `--` separator. When working on selected items, `-spd` is passed so that `*` and `?` in names are not treated as wildcards.
 - `CommandRunner`:
-  - stdin'i boş bırakır: parola istenirse 7zz takılmaz, hata verir ve bu hata `wrongPassword` olarak sınıflandırılır.
-  - `-bsp1` çıktısındaki yüzdeleri okuyup ilerleme olarak bildirir.
-  - Görev iptal edilince süreci sonlandırır.
-- Arşiv listesi `ListingParser` ile okunur. `ArchiveTree`, arşivde açıkça bulunmayan ara klasörleri de oluşturur.
-- **Düzenleme:**
-  - `7zz rn` ve `7zz d` klasör yolunu önek olarak eşleştirir. Bu yüzden tek komut, açık klasör kaydı olmasa bile alt öğelerin hepsini kapsar (testlerle doğrulandı).
-  - Alt klasöre ekleme: `AddPlan` dosyaları geçici bir klasörde hedef yol yapısına kopyalar (APFS'de anlık) ve 7zz'yi orada göreli yollarla çalıştırır.
-- **Karantina:** `Quarantine.propagate` arşivin `com.apple.quarantine` değerini, çıkarmanın başladığı andan sonra yazılmış (ctime) öğelere uygular. "Kullanıcı onayladı" biti (0x40) temizlenir. 7zz bunu kendisi yapmaz.
-- **Açma güvenliği:** `OpenSafety.executableKind` riskli türleri ve çalıştırma bitini, `hasDeceptiveCharacters` görünmez ve yön değiştiren karakterleri bulur.
-- **Geçici dosyalar:** `$TMPDIR/Arhivar/session-<UUID>` (0700) arşiv başına tutulur ve arşiv kapanınca silinir. `ItemExtractor.sweepStale` açılışta 6 saatten eski klasörleri temizler.
-- **Liste ayrıştırma:** satırlar bayt düzeyinde bölünür, blok alanları `Substring` olarak tutulur ve tarih `ListingParser.parseTimestamp` ile okunur (DateFormatter kullanılmaz). Yaz saati geçişlerinde sonuç DateFormatter ile aynıdır; bunu testler denetler.
-- **Parolalar:** hiçbir zaman argüman olarak verilmez. `SevenZipCommand.passwordInput` parolayı 7zz'nin stdin'ine yazar; `l`, `t`, `x`, `d` ve `rn` parolayı kendileri sorar, `a` için çıplak `-p` verilir. Parola bilinmiyorsa stdin boştur ve 7zz `Break signaled` ile durur; bu "parola gerekli" olarak sınıflandırılır.
-- **Hazırlık klasörüyle çıkarma:** `StagedExtraction` hedefle aynı birimde bir klasör açar (`itemReplacementDirectory`; olmazsa gizli `.arhivar-staging-*`). 7zz oraya çıkarır, ardından üzerine yazma kuralı Swift'te uygulanarak hedefe taşınır. Hedefteki sembolik bağlantıların içine yazılmaz.
-- **Disk alanı:** `DiskSpace` / `InsufficientSpaceError`, seçimin açılmış boyutunu `volumeAvailableCapacityForImportantUsage` değerinden 1 GB pay düşülmüş alanla karşılaştırır.
-- **Sandbox:** `SandboxProfile.forOperation` her işlem için SBPL kuralları üretir ve `CommandRunner` 7zz'yi `/usr/bin/sandbox-exec -p … -D W0=…` ile başlatır. Yollar `realpath(3)` ile çözülür, çünkü `URL.resolvingSymlinksInPath()` `/private` önekini siler ve kural eşleşmez. Kişisel klasör yasağı yalnızca arşiv okunurken (liste, test, çıkarma, silme, yeniden adlandırma) uygulanır; oluşturma ve eklemede kullanıcı kaynakları seçtiği için uygulanmaz.
-- **Soğuk açılış:** Finder servisleri ve "Birlikte Aç" uygulama açılırken hemen gelebilir. `perform` motor henüz denetlenmediyse "Açılıyor…" gösterip `ensureEngine()` sonucunu bekler.
-- **Motor seçimi:** Ayarlarda özel bir 7zz seçildiyse o kullanılır. Yoksa uygulama paketindeki, yedek klasördeki (`~/Library/Application Support/Arhivar/engine`) ve Homebrew'daki kopyalar çalıştırılıp **en yeni sürüm** seçilir.
+  - leaves stdin empty: if a password is requested, 7zz stops instead of hanging, and the error is classified as `wrongPassword`.
+  - reads the percentages in the `-bsp1` output and reports them as progress.
+  - terminates the process when its task is cancelled.
+- The archive listing is read by `ListingParser`. `ArchiveTree` also creates intermediate folders that have no entry of their own in the archive.
+- **Editing:**
+  - `7zz rn` and `7zz d` match a folder path as a prefix, so a single command covers every child item even when the folder has no entry of its own (verified by tests).
+  - Adding into a subfolder: `AddPlan` copies the files into the target path structure inside a temporary folder (instant on APFS) and runs 7zz there with relative paths.
+- **Quarantine:** `Quarantine.propagate` applies the archive's `com.apple.quarantine` value to the items written after the extraction started (by ctime). The "user approved" bit (0x40) is cleared. 7zz does not do this by itself.
+- **Safe opening:** `OpenSafety.executableKind` detects risky types and the execute bit; `hasDeceptiveCharacters` detects invisible and direction-changing characters.
+- **Temporary files:** `$TMPDIR/Arhivar/session-<UUID>` (0700) is kept per archive and deleted when the archive is closed. `ItemExtractor.sweepStale` removes folders older than 6 hours at launch.
+- **Listing parser:** lines are split at the byte level, block fields are kept as `Substring`s, and dates are read with `ListingParser.parseTimestamp` (no DateFormatter). Across daylight saving transitions the result matches DateFormatter; tests check this.
+- **Passwords:** never passed as arguments. `SevenZipCommand.passwordInput` writes the password to 7zz's stdin; `l`, `t`, `x`, `d` and `rn` prompt for it themselves, and `a` gets a bare `-p`. If the password is unknown, stdin is empty and 7zz stops with `Break signaled`; this is classified as "password required".
+- **Staged extraction:** `StagedExtraction` creates a folder on the same volume as the destination (`itemReplacementDirectory`, or a hidden `.arhivar-staging-*` folder as a fallback). 7zz extracts into it, then the overwrite policy is applied in Swift while moving the items into the destination. It never writes through symbolic links in the destination.
+- **Disk space:** `DiskSpace` / `InsufficientSpaceError` compare the unpacked size of the selection with `volumeAvailableCapacityForImportantUsage` minus a 1 GB reserve.
+- **Sandbox:** `SandboxProfile.forOperation` generates SBPL rules for each operation, and `CommandRunner` starts 7zz with `/usr/bin/sandbox-exec -p … -D W0=…`. Paths are resolved with `realpath(3)`, because `URL.resolvingSymlinksInPath()` strips the `/private` prefix and the rule would not match. Personal folders are blocked only while an archive is being read (list, test, extract, delete, rename); they are not blocked for create and add, because the user chooses the sources there.
+- **Cold launch:** Finder services and "Open With" can arrive while the app is still starting. If the engine has not been checked yet, `perform` shows "Opening…" and waits for `ensureEngine()`.
+- **Engine selection:** a custom 7zz chosen in Settings always wins. Otherwise the copies in the app bundle, in the fallback folder (`~/Library/Application Support/Arhivar/engine`) and in Homebrew are run, and the **newest version** is picked.
 
-## Metin ekleme (yerelleştirme)
+## Adding strings (localization)
 
-1. `Sources/ArhivarCore/Localization.swift` içindeki `LKey` enum'una anahtarı ekleyin.
-2. Aynı anahtarı **üç dosyaya da** ekleyin: `Resources/tr.lproj`, `en.lproj` ve `ro.lproj` altındaki `Localizable.strings`.
-3. Biçim belirteçleri (`%@`, `%ld`, `%1$@`) üç dilde aynı olmalıdır. Sıra dile göre değişiyorsa sıralı belirteç (`%1$…`) kullanın.
+1. Add the key to the `LKey` enum in `Sources/ArhivarCore/Localization.swift`.
+2. Add the same key to **all three** files: `Localizable.strings` under `Resources/tr.lproj`, `en.lproj` and `ro.lproj`.
+3. Format specifiers (`%@`, `%ld`, `%1$@`) must be the same in all three languages. If the order changes between languages, use positional specifiers (`%1$…`).
 
-`swift test` eksik ya da fazla anahtarı ve uyuşmayan belirteçleri yakalar. Görünümlerde metin her zaman `settings.t(.anahtar)` ile alınır; sabit metin yazılmaz.
+`swift test` catches missing or extra keys and mismatched specifiers. Views always get text through `settings.t(.key)`; no hard-coded strings.
 
-## Derleme, test, paketleme
+## Build, test, package
 
 ```bash
-swift build                      # hızlı geliştirme derlemesi
-swift test                       # 89 test (ArhivarCoreTests + ArhivarAppTests); gerçek 7zz testleri Vendor/7-Zip/7zz kullanır
-./Scripts/build_app.sh           # evrensel build/Arhivar.app (ARCHS=native ile yalnızca bu Mac)
-./Scripts/package.sh             # testler + .app + dist/Arhivar-<sürüm>.{dmg,zip,sha256}
-./Scripts/package.sh --update-7zip   # önce Vendor/7-Zip'i güncelle, sonra paketle
+swift build                      # quick development build
+swift test                       # 89 tests (ArhivarCoreTests + ArhivarAppTests); real-7zz tests use Vendor/7-Zip/7zz
+./Scripts/build_app.sh           # universal build/Arhivar.app (ARCHS=native for this Mac only)
+./Scripts/package.sh             # tests + .app + dist/Arhivar-<version>.{dmg,zip,sha256}
+./Scripts/package.sh --update-7zip   # update Vendor/7-Zip first, then package
 ```
 
-Finder'dan aynı işler için `Paketle.command` ve `7-Zip-Guncelle.command` dosyalarına çift tıklanabilir.
+The same tasks can be run from Finder by double-clicking `Paketle.command` and `7-Zip-Guncelle.command`.
 
-Sürüm numarası `Support/Info.plist` içindeki `CFBundleShortVersionString` alanından okunur. Yeni sürümde bu alanı ve `CHANGELOG.md` dosyasını güncelleyin.
+The version number is read from `CFBundleShortVersionString` in `Support/Info.plist`. For a new release, update that field and `CHANGELOG.md`.
 
-## Sürüm yayımlama (yerel)
+## Publishing a release (locally)
 
-Dağıtım yalnızca GitHub Releases üzerinden yapılır. GitHub Actions kullanılmaz; yayım bu Mac'te `Scripts/release.sh` ya da `Yayimla.command` ile yapılır.
+Releases are distributed only through GitHub Releases. GitHub Actions is not used; releases are published from this Mac with `Scripts/release.sh` or `Yayimla.command`.
 
-1. `./Scripts/set-version.sh 1.1.0`: Info.plist'teki sürümü değiştirir ve derleme numarasını bir artırır.
-2. `CHANGELOG.md` içindeki `## [Yayımlanmadı]` başlığını `## [1.1.0] — <tarih>` olarak değiştirin. Betik sürüm notlarını bu bölümden alır.
-3. Değişiklikleri commit edip `git push` ile gönderin.
-4. `./Scripts/release.sh --dry-run`, ardından `./Scripts/release.sh` (ya da `--draft`).
+1. `./Scripts/set-version.sh 1.1.0`: changes the version in Info.plist and increments the build number.
+2. In `CHANGELOG.md`, add a `## [1.1.0] — <date>` heading below `## [Unreleased]` and move the entries under it. The script takes the release notes from this section.
+3. Commit the changes and `git push`.
+4. Run `./Scripts/release.sh --dry-run`, then `./Scripts/release.sh` (or `--draft`).
 
-`release.sh` şu adımları izler:
-- Çalışma kopyasının temiz olduğunu, `main` dalında bulunulduğunu, yerel dalın `origin/main` ile aynı olduğunu ve etiketin daha önce kullanılmadığını denetler.
-- `package.sh` çalıştırır.
-- `v<sürüm>` etiketini oluşturup gönderir.
-- `gh release create` ile `.dmg`, `.zip` ve `.sha256` dosyalarını yükler.
+`release.sh` does the following:
+- checks that the working copy is clean, that you are on `main`, that the local branch matches `origin/main` and that the tag has not been used yet;
+- runs `package.sh`;
+- creates and pushes the `v<version>` tag;
+- uploads the `.dmg`, `.zip` and `.sha256` files with `gh release create`.
 
-Depo adının tek kaynağı Info.plist'teki `ArhivarRepository` anahtarıdır. Hakkında penceresi ve uygulamanın güncelleme denetimi de bu anahtarı kullanır.
+The single source of the repository name is the `ArhivarRepository` key in Info.plist. The About window and the app's update check use it too.
 
-**Gizlilik:** Uygulama ilk açılışta izin ister. İzin verilirse açılışta GitHub API'sinden yalnızca herkese açık sürüm listeleri istenir (`api.github.com/repos/<depo>/releases/latest` ve `ip7z/7zip`). Depo özelken Arhivar denetimi "henüz herkese açık sürüm yok" sonucunu verir.
+**Privacy:** the app asks for permission on first launch. If allowed, at launch it requests only the public release lists from the GitHub API (`api.github.com/repos/<repo>/releases/latest` and `ip7z/7zip`). While the repository is private, the Arhivar check reports that there is no public release yet.
 
-## 7-Zip güncelleme akışı
+## 7-Zip update flow
 
-`update-7zip.sh` hedefi şöyle seçer:
+`update-7zip.sh` picks its target as follows:
 
-| Nereden çalıştı | Güncellenen |
+| Run from | Updated |
 | --- | --- |
-| Projeden (`Scripts/`) | `Vendor/7-Zip/` |
-| Uygulamanın içinden (`Arhivar.app/Contents/Resources/`) | O uygulamanın `Contents/MacOS/7zz` dosyası; ardından paket ad-hoc olarak yeniden imzalanır |
-| Uygulama paketi yazılamıyorsa | `~/Library/Application Support/Arhivar/engine/` |
-| `--dest` / `--app` verildiyse | Verilen hedefler (birden fazla olabilir) |
+| The project (`Scripts/`) | `Vendor/7-Zip/` |
+| Inside the app (`Arhivar.app/Contents/Resources/`) | That app's `Contents/MacOS/7zz`; the bundle is then ad-hoc re-signed |
+| The app bundle is not writable | `~/Library/Application Support/Arhivar/engine/` |
+| `--dest` / `--app` given | The given targets (more than one is allowed) |
 
-Doğrulama adımları:
-1. GitHub API'sinin verdiği SHA-256 özeti indirilen dosyayla karşılaştırılır.
-2. Dosyanın Mach-O olup olmadığına bakılır.
-3. İndirilen `7zz`'nin bildirdiği sürüm etiketle karşılaştırılır.
-4. Dosya önce geçici adla kopyalanır, sonra tek adımda yerine taşınır; yarım kurulum kalmaz.
+Verification steps:
+1. The SHA-256 digest reported by the GitHub API is compared with the downloaded file.
+2. The file is checked to be Mach-O.
+3. The version reported by the downloaded `7zz` is compared with the tag.
+4. The file is first copied under a temporary name, then moved into place in a single step, so a half-finished install is never left behind.
 
-## Finder servisleri
+## Finder services
 
-Servisler `Support/Info.plist` içindeki `NSServices` altında tanımlıdır; başlıklar `ServicesMenu.strings` dosyalarından gelir. Uygulama ilk açıldığında `NSUpdateDynamicServices()` ile kaydolurlar. Finder'da sağ tık › **Hızlı Eylemler** ya da **Servisler** altında görünürler. Görünmüyorlarsa Sistem Ayarları › Klavye › Klavye Kısayolları › Servisler bölümünden açılabilirler.
+The services are defined under `NSServices` in `Support/Info.plist`; their titles come from the `ServicesMenu.strings` files. They are registered with `NSUpdateDynamicServices()` when the app first launches. In Finder they appear under right-click › **Quick Actions** or **Services**. If they are missing, they can be enabled in System Settings › Keyboard › Keyboard Shortcuts › Services.
 
-## Bilinen sınırlar ve doğrulanmamış noktalar
+## Known limitations and unverified points
 
-- Arayüz bu ortamda ekran görüntüsüyle doğrulanamadı; uygulamanın açıldığı ve hatasız çalıştığı denetlendi. Finder'a sürükleme, Hızlı Bakış ve servis menüsü elle denenmeli.
-- `update-7zip.sh install --force` 2026-10-17 tarihinde 26.04 ile hem klasör hedefine hem bir uygulama kopyasına uygulandı. İndirme, SHA-256, kurulum ve yeniden imzalama doğrulandı. Gerçekten daha yeni bir sürüme geçiş henüz yaşanmadı.
-- Uygulama ad-hoc imzalı ve notarize edilmemiş. Başka bir Mac'te ilk açılışta Gatekeeper onayı gerekir. Dağıtım için Developer ID imzası ve notarization eklenmelidir.
-- RAR yalnızca açılabilir; unRAR lisansı RAR oluşturmayı yasaklar.
-- Yerinde düzenleme 7z, ZIP, TAR ve WIM ile sınırlıdır; bölünmüş arşivler düzenlenemez.
+- The UI could not be checked with screenshots in this environment; it was verified that the app launches and runs without errors. Drag to Finder, Quick Look and the services menu should be tried by hand.
+- `update-7zip.sh install --force` was run on 2026-10-17 with 26.04 against both a folder target and an app copy. Download, SHA-256, installation and re-signing were verified. An upgrade to a genuinely newer version has not happened yet.
+- The app is ad-hoc signed and not notarized. On another Mac, Gatekeeper approval is required on first launch. For distribution, a Developer ID signature and notarization should be added.
+- RAR can only be extracted; the unRAR license forbids creating RAR archives.
+- In-place editing is limited to 7z, ZIP, TAR and WIM; split archives cannot be edited.

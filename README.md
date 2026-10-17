@@ -1,69 +1,69 @@
 # Arhivar
 
-macOS 26+ için 7-Zip (`7zz`) tabanlı, SwiftUI ve Liquid Glass ile yazılmış yerel arşiv yöneticisi. Evrensel (Apple Silicon + Intel) olarak derlenir; 7-Zip motoru paketin içinde gelir.
+A native archive manager for macOS 26+, built with SwiftUI and Liquid Glass on top of 7-Zip (`7zz`). It is built as a universal app (Apple Silicon + Intel), and the 7-Zip engine ships inside the app bundle.
 
-## Özellikler
+## Features
 
-- **Arşiv tarayıcı**
-  - Klasör görünümü: çift tıkla klasöre girme, ⌘↑ ile üst klasöre çıkma, tıklanabilir yol çubuğu
-  - Ağaç görünümü; ⌘1 ve ⌘2 ile geçiş
-  - Sıralama, arama, Finder simgeleri, durum çubuğu, arşiv bilgisi
-- **Hızlı Bakış:** boşluk tuşu
-- **Finder'a sürükleme:** dosya ya da klasör bırakıldığı anda çıkarılır
-- **Açma:** 7z, ZIP, RAR, TAR, GZ, XZ, ISO, DMG ve 7-Zip'in açabildiği diğer biçimler
-- **Oluşturma:** 7z, ZIP, TAR, WIM, GZIP, BZIP2, XZ; sıkıştırma düzeyi, AES-256, dosya adı şifreleme, parçalara bölme
-- **Düzenleme (7z, ZIP, TAR, WIM):** dosya ekleme (sürükle-bırak dahil), silme, yeniden adlandırma
-- **Finder sağ tık menüsü:** Arhivar ile Buraya Çıkar / Aç / Sıkıştır
-- **Diller:** Türkçe (varsayılan), English, Română
-- **Görünüm:** Otomatik, Açık, Koyu
-- **Pencereler:** Ayarlar ve Hakkında
-- **7-Zip güncelleyici:** [github.com/ip7z/7zip](https://github.com/ip7z/7zip/releases) adresinden indirir, SHA-256 ile doğrular. Projedeki ve uygulamanın içindeki 7-Zip'i günceller.
+- **Archive browser**
+  - Folder view: double-click to enter a folder, ⌘↑ to go up, clickable path bar
+  - Tree view; switch between views with ⌘1 and ⌘2
+  - Sorting, search, Finder icons, status bar, archive info
+- **Quick Look:** press Space
+- **Drag to Finder:** a file or folder is extracted the moment it is dropped
+- **Open:** 7z, ZIP, RAR, TAR, GZ, XZ, ISO, DMG and every other format 7-Zip can read
+- **Create:** 7z, ZIP, TAR, WIM, GZIP, BZIP2, XZ; compression level, AES-256, file name encryption, split volumes
+- **Edit (7z, ZIP, TAR, WIM):** add files (including drag and drop), delete, rename
+- **Finder context menu:** Extract Here / Open / Compress with Arhivar
+- **Languages:** Turkish (default), English, Romanian
+- **Appearance:** Automatic, Light, Dark
+- **Windows:** Settings and About
+- **7-Zip updater:** downloads from [github.com/ip7z/7zip](https://github.com/ip7z/7zip/releases), verifies with SHA-256, and updates the 7-Zip copy in the project and inside the app.
 
-## Kurulum
+## Installation
 
-**Gereken:** macOS 26 (Tahoe) veya üstü. Apple Silicon ve Intel Mac'lerde çalışır.
+**Requires:** macOS 26 (Tahoe) or later. Runs on Apple Silicon and Intel Macs.
 
-1. [Sürümler](https://github.com/berkbb/arhivar-mac-universal/releases) sayfasından son `Arhivar-<sürüm>.dmg` dosyasını indirin.
-2. İsterseniz dosyayı doğrulayın. İndirdiğiniz klasörde çalıştırın:
+1. Download the latest `Arhivar-<version>.dmg` from the [Releases](https://github.com/berkbb/arhivar-mac-universal/releases) page.
+2. Optionally verify the download. Run this in the folder you downloaded it to:
    ```bash
-   shasum -a 256 -c Arhivar-<sürüm>.sha256 --ignore-missing
+   shasum -a 256 -c Arhivar-<version>.sha256 --ignore-missing
    ```
-3. `.dmg` dosyasını açın ve **Arhivar**'ı **Uygulamalar** klasörüne sürükleyin.
-4. **İlk açılış:** Arhivar Apple Developer ID ile değil ad-hoc imzalıdır. Bu yüzden macOS ilk açılışta "Arhivar açılamadı" uyarısı verir.
-   - Uyarıyı **Bitti** ile kapatın.
-   - **Sistem Ayarları › Gizlilik ve Güvenlik** bölümüne gidin, aşağıdaki "Arhivar engellendi" satırında **Yine de Aç**'a basın ve parolanızla onaylayın.
-   - Bu yalnızca bir kez gerekir. Her güncellemeden sonra yeniden istenebilir.
-5. İlk açılışta Arhivar, güncellemeleri GitHub'dan otomatik denetlemek için izin ister. Bu ayar sonradan **Ayarlar › Gelişmiş** bölümünden değiştirilebilir.
+3. Open the `.dmg` and drag **Arhivar** into the **Applications** folder.
+4. **First launch:** Arhivar is ad-hoc signed rather than signed with an Apple Developer ID, so macOS shows an "Arhivar can't be opened" warning the first time.
+   - Close the warning with **Done**.
+   - Go to **System Settings › Privacy & Security**, click **Open Anyway** next to "Arhivar was blocked", and confirm with your password.
+   - You only need to do this once, although macOS may ask again after an update.
+5. On first launch, Arhivar asks for permission to check GitHub for updates automatically. You can change this later in **Settings › Advanced**.
 
-**Finder sağ tık menüsü:** "Arhivar ile Buraya Çıkar / Aç / Sıkıştır" öğeleri sağ tık › **Hızlı Eylemler** ya da **Servisler** altında görünür. Görünmüyorlarsa Sistem Ayarları › Klavye › Klavye Kısayolları › Servisler › Dosyalar ve Klasörler bölümünden açın.
+**Finder context menu:** the "Extract Here / Open / Compress with Arhivar" items appear under right-click › **Quick Actions** or **Services**. If they are missing, enable them in System Settings › Keyboard › Keyboard Shortcuts › Services › Files and Folders.
 
-**Güncelleme:** Arhivar menüsündeki **Arhivar Güncellemelerini Denetle…** komutu yeni sürüm varsa indirme bağlantısını açar. 7-Zip motoru uygulamanın içinden, **7-Zip Güncellemelerini Denetle…** ile güncellenir.
+**Updates:** **Check for Arhivar Updates…** in the Arhivar menu opens the download link when a new version is available. The 7-Zip engine is updated from inside the app with **Check for 7-Zip Updates…**.
 
-## Geliştirme
+## Development
 
-Finder'da çift tıklayın:
+Double-click in Finder:
 
-- **`Paketle.command`**: testleri çalıştırır; evrensel `build/Arhivar.app` ile `dist/` altında `.dmg`, `.zip` ve SHA-256 dosyası üretir.
-- **`7-Zip-Guncelle.command`**: `Vendor/7-Zip` klasörünü ve varsa `build/Arhivar.app` içindeki 7-Zip'i son sürüme günceller.
-- **`Yayimla.command`**: önce deneme modunda neler yapılacağını gösterir. Onaylarsanız sürümü paketleyip `v<sürüm>` etiketiyle GitHub Releases'e yükler. Bunun için GitHub Actions kullanılmaz; her şey bu Mac'te çalışır.
+- **`Paketle.command`** (package): runs the tests and produces a universal `build/Arhivar.app` plus a `.dmg`, a `.zip` and a SHA-256 file under `dist/`.
+- **`7-Zip-Guncelle.command`** (update 7-Zip): updates `Vendor/7-Zip` and, if present, the 7-Zip copy inside `build/Arhivar.app` to the latest version.
+- **`Yayimla.command`** (publish): first shows what it will do in dry-run mode. If you confirm, it packages the release and uploads it to GitHub Releases with a `v<version>` tag. GitHub Actions is not used; everything runs on this Mac.
 
-Terminalden aynı işler:
+The same tasks from the terminal:
 
 ```bash
-./Scripts/package.sh                  # test + evrensel .app + .dmg + .zip
-./Scripts/package.sh --update-7zip    # önce 7-Zip'i güncelle, sonra paketle
-./Scripts/build_app.sh                # yalnızca build/Arhivar.app
-./Scripts/update-7zip.sh check        # yeni 7-Zip sürümü var mı?
-./Scripts/update-7zip.sh install      # Vendor/7-Zip'i güncelle
+./Scripts/package.sh                  # tests + universal .app + .dmg + .zip
+./Scripts/package.sh --update-7zip    # update 7-Zip first, then package
+./Scripts/build_app.sh                # build/Arhivar.app only
+./Scripts/update-7zip.sh check        # is a newer 7-Zip available?
+./Scripts/update-7zip.sh install      # update Vendor/7-Zip
 ./Scripts/update-7zip.sh install --app build/Arhivar.app
-./Scripts/set-version.sh 1.0.1        # sürümü değiştir (tek kaynak: Support/Info.plist)
-./Scripts/release.sh --dry-run        # yayımı dene; göndermeden göster
-./Scripts/release.sh                  # paketle, etiketle, GitHub Releases'e yükle
-swift test                            # 89 test
+./Scripts/set-version.sh 1.0.1        # change the version (single source: Support/Info.plist)
+./Scripts/release.sh --dry-run        # rehearse a release without sending anything
+./Scripts/release.sh                  # package, tag and upload to GitHub Releases
+swift test                            # 89 tests
 ```
 
-Gereken: Xcode 26 veya üstü. Ayrıntılar için [DEVELOPMENT.md](DEVELOPMENT.md), sürüm notları için [CHANGELOG.md](CHANGELOG.md).
+Requires Xcode 26 or later. See [DEVELOPMENT.md](DEVELOPMENT.md) for details and [CHANGELOG.md](CHANGELOG.md) for release notes.
 
-## Lisans
+## License
 
-Arhivar'ın kodu MIT lisanslıdır ([LICENSE](LICENSE)). Paketteki 7-Zip, GNU LGPL ve unRAR kısıtlamasıyla dağıtılır ([THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)). Bu kısıtlama nedeniyle Arhivar RAR arşivlerini açabilir ama oluşturamaz.
+Arhivar's own code is MIT licensed ([LICENSE](LICENSE)). The bundled 7-Zip is distributed under the GNU LGPL with the unRAR restriction ([THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)). Because of that restriction, Arhivar can extract RAR archives but cannot create them.
