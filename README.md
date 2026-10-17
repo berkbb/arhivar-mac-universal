@@ -18,6 +18,7 @@ A native archive manager for macOS 26+, built with SwiftUI and Liquid Glass on t
 - **Create:** 7z, ZIP, TAR, WIM, GZIP, BZIP2, XZ; compression level, AES-256, file name encryption, split volumes
 - **Edit (7z, ZIP, TAR, WIM):** add files (including drag and drop), delete, rename
 - **Finder context menu:** Extract Here / Open / Compress with Arhivar
+- **Document icons:** when Arhivar is the default app for a type, archives get Arhivar icons (ZIP, 7Z, RAR, TAR family, disk images, other archives)
 - **Languages:** Turkish (default), English, Romanian
 - **Appearance:** Automatic, Light, Dark
 - **Windows:** Settings and About
@@ -63,7 +64,7 @@ The same tasks from the terminal:
 ./Scripts/set-version.sh 1.0.1        # change the version (single source: Support/Info.plist)
 ./Scripts/release.sh --dry-run        # rehearse a release without sending anything
 ./Scripts/release.sh                  # package, tag and upload to GitHub Releases
-swift test                            # 144 tests
+swift test                            # 146 tests
 ```
 
 Requires Xcode 26 or later. See [DEVELOPMENT.md](DEVELOPMENT.md) for details, [ROADMAP.md](ROADMAP.md) for planned features and [CHANGELOG.md](CHANGELOG.md) for release notes.

@@ -27,9 +27,10 @@ Arhivar/
 │       ├── AppSettings.swift       UserDefaults preferences, appearance, localization and formatting
 │       ├── FinderServices.swift    Finder context menu services
 │       └── Views/                  Views
-├── Resources/                {tr,en,ro}.lproj/Localizable.strings, ServicesMenu.strings, AppIcon.icns
+├── Resources/                {tr,en,ro}.lproj/Localizable.strings, ServicesMenu.strings, AppIcon.icns,
+│                             DocumentIcons/{zip,7z,rar,tar,disk,archive}.icns
 ├── Support/Info.plist        Bundle info, document types, NSServices
-├── Scripts/                  build_app.sh, package.sh, update-7zip.sh, make_icon.swift
+├── Scripts/                  build_app.sh, package.sh, update-7zip.sh, make_icon.swift, make_document_icons.swift
 ├── Vendor/7-Zip/             The 7zz bundled into the app, with its license and manual
 ├── Tests/ArhivarCoreTests/   Core unit and integration tests
 ├── Tests/ArhivarAppTests/    App model (AppModel) flow tests
@@ -68,6 +69,18 @@ Arhivar/
 - **Cold launch:** Finder services and "Open With" can arrive while the app is still starting. If the engine has not been checked yet, `perform` shows "Opening…" and waits for `ensureEngine()`.
 - **Engine selection:** a custom 7zz chosen in Settings always wins. Otherwise the copies in the app bundle, in the fallback folder (`~/Library/Application Support/Arhivar/engine`) and in Homebrew are run, and the **newest version** is picked.
 
+## Document icons
+
+`CFBundleDocumentTypes` in `Support/Info.plist` is split into six families, each with its own `CFBundleTypeIconFile`: `zip`, `7z`, `rar`, `tar` (tar and single-stream compressors), `disk` (ISO, DMG, VHD, VMDK, QCOW2, SquashFS, UDF, WIM) and `archive` (CAB, CPIO, XAR, DEB, RPM, split `.001`, ARJ, LZH and the `public.archive` catch-all). Every family keeps `LSHandlerRank = Alternate`, so Arhivar never takes over a type by itself; Finder shows the icons only for types the user makes Arhivar the default for. `DocumentIconTests` checks that every family has its `.icns` and that each type belongs to exactly one family.
+
+The icons are drawn in code (no SF Symbols, which Apple's license does not allow in icons). They go up to 512 px (no 1024 px layer) to keep the six icons at about 1.7 MB; one icon per format (33 icons) was tried and came to about 10 MB, so formats share their family's icon.
+
+```bash
+swift Scripts/make_document_icons.swift Resources/DocumentIcons --preview /tmp/document-icons.png
+```
+
+`build_app.sh` copies `Resources/DocumentIcons/*.icns` into the bundle (and draws them if they are missing). After changing the icons, Finder may keep the old ones until the Launch Services and icon caches refresh (re-register the app or log out and back in).
+
 ## Adding strings (localization)
 
 1. Add the key to the `LKey` enum in `Sources/ArhivarCore/Localization.swift`.
@@ -80,7 +93,7 @@ Arhivar/
 
 ```bash
 swift build                      # quick development build
-swift test                       # 144 tests (ArhivarCoreTests + ArhivarAppTests); real-7zz tests use Vendor/7-Zip/7zz
+swift test                       # 146 tests (ArhivarCoreTests + ArhivarAppTests); real-7zz tests use Vendor/7-Zip/7zz
 ./Scripts/build_app.sh           # universal build/Arhivar.app (ARCHS=native for this Mac only)
 ./Scripts/package.sh             # tests + .app + dist/Arhivar-<version>.{dmg,zip,sha256}
 ./Scripts/package.sh --update-7zip   # update Vendor/7-Zip first, then package

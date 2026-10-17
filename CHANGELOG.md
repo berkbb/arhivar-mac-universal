@@ -13,6 +13,7 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 - **One-step `.tar.gz`, `.tar.xz` and `.tar.bz2`** creation for folders and multiple files. (The official 7-Zip engine can extract `.zst` but cannot create it, so Zstandard creation is not offered.)
 - **Nested archives:** double-clicking an archive inside an archive (or "Open in Arhivar" in the context menu) opens it in the browser; the path bar shows the enclosing archives, and clicking one or pressing ⌘↑ at the root returns to it. Nested archives are read-only.
 - **Checksums:** "Checksums…" in the context menu and the Archive menu shows the CRC32, SHA-256 and BLAKE2sp of a file (`7zz h`) with a Copy button.
+- **Document icons:** when Arhivar is chosen as the default app for an archive type (Get Info › Open with › Change All), Finder shows Arhivar's own icons in six families: ZIP, 7Z, RAR, TAR and compressed files (gz, bz2, xz, zst, …), disk images (ISO, DMG, VHD, VMDK, QCOW2, WIM, …) and other archives (CAB, DEB, RPM, XAR, split `.001`, …). The icons are drawn by `Scripts/make_document_icons.swift`.
 - The archive info panel shows the archive comment, the number of solid blocks and the number of volumes.
 - The welcome screen announces a new Arhivar release found by the check at launch (previously only visible in Settings › Advanced).
 - Finder "Open With" and the services menu now list more archive types: Zstandard, LZ4, lzip, LZMA, WIM, VHDX, QCOW2, DEB, RPM, split `.001`, ARJ, LZH, SquashFS, UDF, CAB, CPIO, XAR, VMDK, VHD and the `.tgz`/`.tbz`/`.txz` variants.
