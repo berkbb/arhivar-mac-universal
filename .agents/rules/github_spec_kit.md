@@ -1,0 +1,18 @@
+# GitHub Spec Kit (Spec-Driven Development / SDD) Standard
+
+- **Source:** GitHub Spec Kit (2026)
+- **Version / Publication Date:** 2026.04
+- **Last Review Date:** 2026-10-17
+- **Change Summary:** Adopted for `arhivar-mac-universal` governance.
+
+---
+
+## 1. Overview
+
+Establishes Specification-Driven Development (SDD) lifecycle phases: Constitution, Specify, Clarify, Checklist, Plan, Tasks, Analyze, Implement, Converge, and Tasks-to-Issues.
+
+## 2. Application in Arhivar
+
+- Treat specifications, constitutions (`AGENTS.md`), and roadmaps (`ROADMAP.md`) as living executable artifacts.
+- Resolve ambiguities before implementation and enforce review gates via unit and integration tests.
+- Keep `ROADMAP.md`, `CHANGELOG.md`, and `.agents/context/roadmap.md` synchronized with code changes.
