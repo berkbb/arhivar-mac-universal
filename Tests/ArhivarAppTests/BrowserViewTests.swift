@@ -178,4 +178,34 @@ struct BrowserViewTests {
         model.pasteCommand(pasteboard: pasteboard)
         #expect(model.addRequest?.sources == [extra])
     }
+
+    /// ⌘A: `selectAll:` tabloya ulaşmadığı için menü komutu seçimi modelden kurar.
+    @Test func editMenuSelectsAllItems() async throws {
+        let zip = try makeFinderZip()
+        let window = showWindow()
+        defer { cleanUp(window) }
+        await model.refreshEngine()
+        model.browserMode = .folders
+        model.openArchive(zip)
+        await settle()
+        model.primaryAction(["Şirket"])
+        await render(window)
+        if let table = table(in: try #require(window.contentView)) { window.makeFirstResponder(table) }
+
+        model.selectAllCommand()
+        await render(window)
+        #expect(model.selection == ["Şirket/Dekont1.pdf", "Şirket/EAR2026.pdf", "Şirket/Ekran Resmi.png"])
+
+        // Metin düzenlenirken seçim değişmez (komut metne gider); aramada yalnızca sonuçlar seçilir.
+        model.selection = []
+        model.selectAllCommand(editingText: true)
+        #expect(model.selection.isEmpty)
+        model.searchText = "pdf"
+        await render(window)
+        model.selectAllCommand()
+        // Sonuçlar __MACOSX içindeki AppleDouble kopyalarını ("._Dekont1.pdf") da içerebilir.
+        #expect(model.selection == Set(model.displayNodes.map(\.id)))
+        #expect(model.selection.isSuperset(of: ["Şirket/Dekont1.pdf", "Şirket/EAR2026.pdf"]))
+        #expect(!model.selection.contains("Şirket/Ekran Resmi.png"))
+    }
 }

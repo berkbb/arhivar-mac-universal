@@ -941,6 +941,16 @@ final class AppModel {
         }
     }
 
+    /// Düzen › Tümünü Seç (⌘A): `selectAll:` da hiyerarşik tabloya ulaşmaz. Metin düzenleniyorsa metne gider;
+    /// değilse tabloda görünen öğelerin (açık klasörün içeriği ya da arama sonuçları) tümü seçilir.
+    func selectAllCommand(editingText: Bool = AppModel.isEditingText) {
+        if !editingText, listing != nil {
+            selection = Set(displayNodes.map(\.id))
+        } else {
+            NSApp?.sendAction(#selector(NSText.selectAll(_:)), to: nil, from: nil)
+        }
+    }
+
     private static func hasFiles(_ pasteboard: NSPasteboard) -> Bool {
         pasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
     }

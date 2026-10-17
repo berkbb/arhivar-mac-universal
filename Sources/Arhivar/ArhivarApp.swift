@@ -109,7 +109,7 @@ struct AppCommands: Commands {
                 .keyboardShortcut("v")
             Button(settings.t(.editPasteMatchStyle)) { NSApp.sendAction(#selector(NSTextView.pasteAsPlainText(_:)), to: nil, from: nil) }
                 .keyboardShortcut("v", modifiers: [.command, .option, .shift])
-            Button(settings.t(.editSelectAll)) { NSApp.sendAction(#selector(NSText.selectAll(_:)), to: nil, from: nil) }
+            Button(settings.t(.editSelectAll)) { model.selectAllCommand() }
                 .keyboardShortcut("a")
         }
 
