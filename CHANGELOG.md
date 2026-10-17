@@ -49,6 +49,9 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 - Creating archives and editing archives in place check free disk space first (the archive size for edits; the source size for uncompressed formats and `.tar.*`).
 - The first-launch update consent no longer collides with an archive opened with "Open With"; it is asked once the operation is finished.
 - Opening several files from the Dock together with an archive now offers to create an archive with all of them, as dragging does.
+- Quitting while inside a nested archive deletes the temporary folders of the enclosing archives too (previously they stayed until the next launch's cleanup).
+- Creating an archive from sources with the same name is refused with a clear message even when the New Archive sheet is bypassed.
+- Copying (⌘C) and calculating checksums show their own symbols in the progress overlay.
 - Reloading an archive after an edit removes stale preview files; "Reset All Settings" no longer leaves the language or browser mode preference behind.
 
 ### Changed
