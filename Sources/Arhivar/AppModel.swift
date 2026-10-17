@@ -113,7 +113,7 @@ final class AppModel {
     var currentFolder = "" { didSet { rebuildDisplay() } }
     var browserMode: BrowserMode = .folders {
         didSet {
-            UserDefaults.standard.set(browserMode.rawValue, forKey: Self.browserModeKey)
+            defaults.set(browserMode.rawValue, forKey: Self.browserModeKey)
             rebuildDisplay()
         }
     }
@@ -140,17 +140,21 @@ final class AppModel {
     @ObservationIgnored private var toastTask: Task<Void, Never>?
     @ObservationIgnored private var didLaunch = false
     @ObservationIgnored private var headersEncrypted = false
+    @ObservationIgnored private var serviceQueue: [URL] = []
+    @ObservationIgnored private var serviceTask: Task<Void, Never>?
+    @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var previewCache: [String: URL] = [:]
 
     private static let recentsKey = "recentArchives"
     private static let maxRecents = 12
     private static let browserModeKey = "browserMode"
 
-    init(settings: AppSettings) {
+    init(settings: AppSettings, defaults: UserDefaults = .standard) {
         self.settings = settings
-        let paths = UserDefaults.standard.stringArray(forKey: Self.recentsKey) ?? []
+        self.defaults = defaults
+        let paths = defaults.stringArray(forKey: Self.recentsKey) ?? []
         recentArchives = paths.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) }
-        browserMode = BrowserMode(rawValue: UserDefaults.standard.string(forKey: Self.browserModeKey) ?? "") ?? .folders
+        browserMode = BrowserMode(rawValue: defaults.string(forKey: Self.browserModeKey) ?? "") ?? .folders
     }
 
     var engineVersion: String? {
@@ -281,23 +285,22 @@ final class AppModel {
     }
 
     func openArchive(_ url: URL) {
-        if url != archiveURL { password = nil }
-        loadArchive(url)
+        loadArchive(url, password: url == archiveURL ? password : nil)
     }
 
-    private func loadArchive(_ url: URL) {
-        perform(.progressReading, archive: url, retry: .open) { runner, _ in
-            try await self.readListing(of: url, runner: runner, keepFolder: false)
+    private func loadArchive(_ url: URL, password candidate: String?) {
+        perform(.progressReading, archive: url, retry: .open, usedPassword: candidate != nil) { runner, _ in
+            try await self.readListing(of: url, runner: runner, keepFolder: false, password: candidate)
             self.addRecent(url)
         }
     }
 
     /// Listeyi 7zz'den okur ve görünüm durumunu günceller.
-    private func readListing(of url: URL, runner: CommandRunner, keepFolder: Bool) async throws {
-        let currentPassword = password
+    private func readListing(of url: URL, runner: CommandRunner, keepFolder: Bool, password candidate: String?) async throws {
+        let currentPassword = candidate
         let result = try await runner.run(SevenZipCommand.list(archive: url, password: currentPassword))
         try SevenZipError.check(result)
-        let listing = ListingParser.parse(result.stdout)
+        let listing = ListingParser.parse(result.stdout, fallbackName: ArchiveNaming.streamItemName(for: url))
 
         // Adlar şifreliyse (7z -mhe) parolasız liste başarısız olur; eklemelerde de korunmalı.
         var encryptedHeaders = false
@@ -308,6 +311,7 @@ final class AppModel {
 
         let folder = currentFolder
         archiveURL = url
+        password = currentPassword
         self.listing = listing
         statistics = ArchiveStatistics(listing: listing)
         headersEncrypted = encryptedHeaders
@@ -333,6 +337,16 @@ final class AppModel {
         previewCache = [:]
         quickLookURL = nil
         showInfo = false
+    }
+
+    /// Finder'dan "Birlikte Aç" / Dock: arşivler her zaman açılır (açık arşive eklenmez); diğer dosyalar yeni arşiv sayfasına gider.
+    func handleOpenRequest(_ urls: [URL]) {
+        let files = urls.filter(\.isFileURL)
+        if let archive = files.first(where: { ArchiveNaming.isArchive($0) && !ArchiveNaming.defaultIsDirectory($0) }) {
+            openArchive(archive)
+        } else if !files.isEmpty {
+            beginCreate(sources: files)
+        }
     }
 
     /// Bırakılan öğeler: düzenlenebilir bir arşiv açıksa eklemeyi önerir; yoksa tek arşiv → aç, diğerleri → yeni arşiv.
@@ -398,17 +412,17 @@ final class AppModel {
             return
         }
         guard let destination = chooseExtractDestination(for: archive) else { return }
-        runExtract(archive: archive, items: items, destination: destination)
+        runExtract(archive: archive, items: items, destination: destination, password: password)
     }
 
-    private func runExtract(archive: URL, items: [String], destination: URL) {
+    private func runExtract(archive: URL, items: [String], destination: URL, password: String?) {
         let options = ExtractOptions(
             archive: archive, destination: destination, items: items,
             password: password, overwrite: settings.overwriteMode
         )
-        perform(.progressExtracting, archive: archive, retry: .extract(items: items, destination: destination)) { runner, progress in
+        perform(.progressExtracting, archive: archive, retry: .extract(items: items, destination: destination), usedPassword: password != nil) { runner, progress in
             try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
-            let result = try await runner.run(SevenZipCommand.extract(options), onProgress: progress)
+            let result = try await runner.run(SevenZipCommand.extract(options), workingDirectory: options.workingDirectory, onProgress: progress)
             let warning = try SevenZipError.check(result)
             self.finish(message: self.t(.toastExtracted, destination.lastPathComponent), reveal: destination, warning: warning)
         }
@@ -516,7 +530,7 @@ final class AppModel {
             let command = SevenZipCommand.add(archive: archive, names: plan.names, password: currentPassword, encryptHeaders: encryptHeaders)
             let result = try await runner.run(command, workingDirectory: plan.workingDirectory, onProgress: progress)
             let warning = try SevenZipError.check(result)
-            try await self.readListing(of: archive, runner: runner, keepFolder: true)
+            try await self.readListing(of: archive, runner: runner, keepFolder: true, password: currentPassword)
             self.finishEdit(warning: warning)
         }
     }
@@ -543,7 +557,7 @@ final class AppModel {
         perform(.progressUpdating, archive: archive, retry: .delete(items: items)) { runner, progress in
             let result = try await runner.run(SevenZipCommand.delete(archive: archive, items: items, password: currentPassword), onProgress: progress)
             let warning = try SevenZipError.check(result)
-            try await self.readListing(of: archive, runner: runner, keepFolder: true)
+            try await self.readListing(of: archive, runner: runner, keepFolder: true, password: currentPassword)
             self.finishEdit(warning: warning)
         }
     }
@@ -568,7 +582,7 @@ final class AppModel {
         perform(.progressUpdating, archive: archive, retry: .rename(path: path, newName: name)) { runner, _ in
             let result = try await runner.run(SevenZipCommand.rename(archive: archive, from: path, to: newPath, password: currentPassword))
             let warning = try SevenZipError.check(result)
-            try await self.readListing(of: archive, runner: runner, keepFolder: true)
+            try await self.readListing(of: archive, runner: runner, keepFolder: true, password: currentPassword)
             self.selection = [newPath]
             self.finishEdit(warning: warning)
         }
@@ -585,20 +599,33 @@ final class AppModel {
     // MARK: - Finder servisleri
 
     /// "Arhivar ile Buraya Çıkar": arşivleri yanlarına (ayarlara göre alt klasöre) sırayla çıkarır.
+    /// Açık arşivin parolasına dokunmaz; parola isteyen bir arşivde kuyruk yanıt gelene kadar bekler.
     func extractHere(_ archives: [URL]) {
-        let queue = archives.filter { ArchiveNaming.isArchive($0) }
-        guard !queue.isEmpty else { return }
-        Task {
-            for archive in queue {
+        serviceQueue += archives.filter { ArchiveNaming.isArchive($0) }
+        guard serviceTask == nil, !serviceQueue.isEmpty else { return }
+        serviceTask = Task {
+            while !serviceQueue.isEmpty {
+                let archive = serviceQueue.removeFirst()
+                await waitUntilIdle()
                 let base = archive.deletingLastPathComponent()
                 let destination = settings.extractIntoSubfolder
                     ? base.appendingPathComponent(ArchiveNaming.baseName(of: archive), isDirectory: true)
                     : base
-                await operationTask?.value
-                password = nil
-                runExtract(archive: archive, items: [], destination: destination)
-                await operationTask?.value
+                runExtract(archive: archive, items: [], destination: destination, password: nil)
+                // Parola sorulursa, yeniden deneme de bitene kadar sıradakine geçme.
+                await waitUntilIdle()
             }
+            serviceTask = nil
+        }
+    }
+
+    /// Kuyruktaki işlerin bitmesini bekler (testler ve sıralı servisler için).
+    var serviceQueueTask: Task<Void, Never>? { serviceTask }
+
+    private func waitUntilIdle() async {
+        while operation != nil || passwordRequest != nil {
+            await operationTask?.value
+            if passwordRequest != nil { try? await Task.sleep(for: .milliseconds(150)) }
         }
     }
 
@@ -661,14 +688,16 @@ final class AppModel {
     func submitPassword(_ value: String) {
         guard let request = passwordRequest else { return }
         passwordRequest = nil
-        password = value
+        // Parola yalnızca açık arşive aitse saklanır; başka bir arşivin işi (ör. Buraya Çıkar) kendi parolasını taşır.
+        let isCurrentArchive = request.archive == archiveURL
+        if isCurrentArchive { password = value }
         switch request.action {
         case .open:
-            loadArchive(request.archive)
+            loadArchive(request.archive, password: value)
         case .extract(let items, let destination):
             if let destination {
-                runExtract(archive: request.archive, items: items, destination: destination)
-            } else {
+                runExtract(archive: request.archive, items: items, destination: destination, password: value)
+            } else if isCurrentArchive {
                 extract(items: items)
             }
         case .test:
@@ -703,8 +732,10 @@ final class AppModel {
         _ title: LKey,
         archive: URL?,
         retry: PendingAction?,
+        usedPassword: Bool? = nil,
         _ body: @escaping (CommandRunner, @escaping @Sendable (Double) -> Void) async throws -> Void
     ) {
+        let usedPassword = usedPassword ?? (archive != nil && archive == archiveURL && password != nil)
         guard operation == nil else { return }
         guard let engineURL, engineStatus != .missing else {
             alert = AlertItem(title: t(.engineMissingTitle), message: t(.errorEngineNotFound))
@@ -722,21 +753,20 @@ final class AppModel {
                     Task { @MainActor in self.operation?.progress = value }
                 }
             } catch {
-                handle(error, archive: archive, retry: retry)
+                handle(error, archive: archive, retry: retry, usedPassword: usedPassword)
             }
         }
     }
 
-    private func handle(_ error: Error, archive: URL?, retry: PendingAction?) {
+    private func handle(_ error: Error, archive: URL?, retry: PendingAction?, usedPassword: Bool) {
         if let error = error as? SevenZipError {
             switch error {
             case .cancelled:
                 return
             case .wrongPassword:
                 if let archive, let retry {
-                    let wasRetry = password != nil
-                    password = nil
-                    passwordRequest = PasswordRequest(archive: archive, isRetry: wasRetry, action: retry)
+                    if archive == archiveURL { password = nil }
+                    passwordRequest = PasswordRequest(archive: archive, isRetry: usedPassword, action: retry)
                     return
                 }
             default:
@@ -815,7 +845,7 @@ final class AppModel {
     }
 
     private func saveRecents() {
-        UserDefaults.standard.set(recentArchives.map(\.path), forKey: Self.recentsKey)
+        defaults.set(recentArchives.map(\.path), forKey: Self.recentsKey)
     }
 
     func reveal(_ url: URL) {

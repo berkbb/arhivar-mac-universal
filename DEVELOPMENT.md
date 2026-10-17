@@ -29,7 +29,8 @@ Arhivar/
 ├── Support/Info.plist        Paket bilgisi, belge türleri, NSServices
 ├── Scripts/                  build_app.sh, package.sh, update-7zip.sh, make_icon.swift
 ├── Vendor/7-Zip/             Pakete eklenen 7zz, lisansı ve kılavuzu
-├── Tests/ArhivarCoreTests/   Birim ve entegrasyon testleri
+├── Tests/ArhivarCoreTests/   Çekirdek birim ve entegrasyon testleri
+├── Tests/ArhivarAppTests/    Uygulama modeli (AppModel) akış testleri
 ├── Paketle.command           Çift tıkla paketleme
 └── 7-Zip-Guncelle.command    Çift tıkla 7-Zip güncelleme
 ```
@@ -60,7 +61,7 @@ Arhivar/
 
 ```bash
 swift build                      # hızlı geliştirme derlemesi
-swift test                       # 42 test; entegrasyon testleri Vendor/7-Zip/7zz'yi kullanır
+swift test                       # 57 test (ArhivarCoreTests + ArhivarAppTests); gerçek 7zz testleri Vendor/7-Zip/7zz kullanır
 ./Scripts/build_app.sh           # evrensel build/Arhivar.app (ARCHS=native ile yalnızca bu Mac)
 ./Scripts/package.sh             # testler + .app + dist/Arhivar-<sürüm>.{dmg,zip,sha256}
 ./Scripts/package.sh --update-7zip   # önce Vendor/7-Zip'i güncelle, sonra paketle

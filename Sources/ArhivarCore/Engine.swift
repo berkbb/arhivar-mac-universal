@@ -153,6 +153,15 @@ public enum ArchiveNaming {
         isArchiveExtension(url.pathExtension)
     }
 
+    /// Tek akışlı arşivin (xz, bzip2, gzip) içindeki öğenin adı: "yedek.tar.xz" → "yedek.tar", "a.txz" → "a.tar".
+    public static func streamItemName(for url: URL) -> String {
+        let base = url.deletingPathExtension().lastPathComponent
+        switch url.pathExtension.lowercased() {
+        case "tgz", "txz", "tbz", "tbz2", "tlz", "tzst", "taz": return base + ".tar"
+        default: return base.isEmpty ? url.lastPathComponent : base
+        }
+    }
+
     /// "fotograflar.tar.gz" → "fotograflar", "veri.7z.001" → "veri".
     public static func baseName(of url: URL) -> String {
         var name = url.lastPathComponent

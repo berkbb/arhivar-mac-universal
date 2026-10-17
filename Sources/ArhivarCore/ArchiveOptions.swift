@@ -133,6 +133,11 @@ public struct ExtractOptions: Sendable, Equatable {
     public var password: String?
     public var overwrite: OverwriteMode
 
+    /// 7zz'nin çalışması gereken klasör; yalnızca hedef yolunda "*" varsa doludur.
+    public var workingDirectory: URL? {
+        destination.path.contains("*") ? destination : nil
+    }
+
     public init(archive: URL, destination: URL, items: [String] = [], password: String? = nil, overwrite: OverwriteMode) {
         self.archive = archive
         self.destination = destination
@@ -160,7 +165,9 @@ public enum SevenZipCommand {
     }
 
     public static func extract(_ options: ExtractOptions) -> [String] {
-        var args = ["x", "-o" + options.destination.path, options.overwrite.switchValue, "-bsp1", "-bb0", "-y"]
+        // 7zz -o yolundaki "*" karakterini arşiv adıyla değiştirir; böyle bir yolda hedef klasörde çalışılıp "-o." verilir.
+        let output = options.workingDirectory == nil ? options.destination.path : "."
+        var args = ["x", "-o" + output, options.overwrite.switchValue, "-bsp1", "-bb0", "-y"]
         args += common
         args += passwordSwitch(options.password)
         // Seçili öğelerin adları joker karakter olarak yorumlanmasın.

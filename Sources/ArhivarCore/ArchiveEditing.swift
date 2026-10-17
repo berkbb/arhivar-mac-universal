@@ -91,7 +91,7 @@ public struct ItemExtractor: Sendable {
         }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let options = ExtractOptions(archive: archive, destination: directory, items: [path], password: password, overwrite: .replace)
-        let result = try await runner.run(SevenZipCommand.extract(options), onProgress: onProgress)
+        let result = try await runner.run(SevenZipCommand.extract(options), workingDirectory: options.workingDirectory, onProgress: onProgress)
         try SevenZipError.check(result)
         guard FileManager.default.fileExists(atPath: target.path) else {
             throw SevenZipError.failed(code: result.exitCode, message: path)

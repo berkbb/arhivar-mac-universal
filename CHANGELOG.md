@@ -3,6 +3,22 @@
 Bu dosya [Keep a Changelog](https://keepachangelog.com/tr/1.1.0/) biçimini ve
 [Semantic Versioning](https://semver.org/lang/tr/) kurallarını izler.
 
+## [Yayımlanmadı]
+
+### Düzeltilenler
+
+- `.tar.xz` ve `.tar.bz2` arşivleri boş açılıyordu; içteki `.tar` artık listelenip çıkarılabiliyor
+- Bir arşiv açıkken Finder'dan "Birlikte Aç" ile gelen arşiv, açık arşive eklenmek yerine açılıyor
+- `Cannot open the file as [7z] archive` ve `Is not archive` mesajları "arşiv değil" olarak tanınıyor
+- Adında `50%` gibi bir ifade geçen dosyalar ilerleme göstergesini bozmuyor
+- Adında `*` geçen bir klasöre çıkarma artık doğru klasöre yazıyor (7zz `-o` yolundaki `*` karakterini arşiv adıyla değiştiriyordu)
+- "Buraya Çıkar" açık arşivin parolasını silmiyor; kuyruktaki şifreli arşiv parola beklerken sıradakine geçilmiyor
+
+### Eklenenler
+
+- Uygulama modeli için `ArhivarAppTests` test hedefi (gerçek 7zz ile)
+- `Vendor/7-Zip/SOURCE.txt`: projedeki 7-Zip sürümü, indirme adresi ve SHA-256 özeti; güncelleyici bu dosyayı yazar
+
 ## [1.0.0] — 2026-10-17
 
 İlk sürüm.

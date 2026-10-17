@@ -33,7 +33,9 @@ public enum SevenZipError: Error, Equatable, Sendable {
         }
         // 7zz çıkış kodları: 1 = uyarı, 2 = ölümcül hata, 7 = komut satırı, 8 = bellek, 255 = kullanıcı durdurdu.
         if result.exitCode == 1 { return diagnostic(from: combined) }
-        if combined.range(of: "open the file as archive", options: .caseInsensitive) != nil {
+        // "Cannot open the file as archive", "Cannot open the file as [7z] archive", "Is not archive"
+        if combined.range(of: "open the file as", options: .caseInsensitive) != nil
+            || combined.range(of: "is not archive", options: .caseInsensitive) != nil {
             throw SevenZipError.notArchive
         }
         if result.exitCode == 255 { throw SevenZipError.cancelled }
@@ -55,21 +57,19 @@ public enum SevenZipError: Error, Equatable, Sendable {
 
 /// 7zz -bsp1 ilerleme çıktısındaki yüzdeleri okur.
 public enum ProgressParser {
-    /// Metindeki son "NN%" değerini döndürür (0...100).
+    /// Metindeki son ilerleme değerini döndürür (0...100).
+    ///
+    /// 7zz her güncellemeyi geri silme (\b) karakterleriyle ayrılmış " 26% 3 + dosya" biçiminde yazar.
+    /// Yüzde yalnızca bir parçanın başında sayılır; dosya adındaki "50%" gibi metinler yok sayılır.
     public static func lastPercentage(in text: String) -> Int? {
-        let characters = Array(text)
-        var index = characters.count - 1
-        while index >= 0 {
-            if characters[index] == "%" {
-                var digits = ""
-                var cursor = index - 1
-                while cursor >= 0, characters[cursor].isASCII, characters[cursor].isNumber, digits.count < 3 {
-                    digits.insert(characters[cursor], at: digits.startIndex)
-                    cursor -= 1
-                }
-                if let value = Int(digits), value <= 100 { return value }
-            }
-            index -= 1
+        let segments = text.split(whereSeparator: { $0 == "\u{8}" || $0 == "\r" || $0 == "\n" })
+        for segment in segments.reversed() {
+            let trimmed = segment.drop(while: { $0 == " " })
+            let digits = trimmed.prefix(while: { $0.isASCII && $0.isNumber })
+            guard !digits.isEmpty, digits.count <= 3,
+                  trimmed.dropFirst(digits.count).first == "%",
+                  let value = Int(digits), value <= 100 else { continue }
+            return value
         }
         return nil
     }

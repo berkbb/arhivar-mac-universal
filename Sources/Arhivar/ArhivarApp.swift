@@ -49,7 +49,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Finder'dan "Birlikte Aç" ile gelen arşivler.
     func application(_ application: NSApplication, open urls: [URL]) {
-        AppModel.shared.handleDrop(urls)
+        AppModel.shared.handleOpenRequest(urls)
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

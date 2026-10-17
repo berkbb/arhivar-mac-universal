@@ -54,7 +54,8 @@ public struct ArchiveListing: Sendable, Equatable {
 
 /// `7zz l -slt` (teknik liste) çıktısını ayrıştırır.
 public enum ListingParser {
-    public static func parse(_ output: String, timeZone: TimeZone = .current) -> ArchiveListing {
+    /// - Parameter fallbackName: Tek akışlı biçimlerde (xz, bzip2) 7zz öğe adı yazmaz; bu ad kullanılır.
+    public static func parse(_ output: String, timeZone: TimeZone = .current, fallbackName: String? = nil) -> ArchiveListing {
         let lines = output.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -71,6 +72,9 @@ public enum ListingParser {
         var block: [String: String] = [:]
 
         func flush() {
+            if !block.isEmpty, block["Path"]?.isEmpty ?? true, entries.isEmpty, let fallbackName {
+                block["Path"] = fallbackName
+            }
             if let entry = makeEntry(block, formatter: formatter) { entries.append(entry) }
             block = [:]
         }

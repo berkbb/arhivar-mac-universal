@@ -14,5 +14,7 @@ let package = Package(
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
         .testTarget(name: "ArhivarCoreTests", dependencies: ["ArhivarCore"]),
+        // Uygulama modeli (AppModel) akışları; gerçek 7zz ile çalışır.
+        .testTarget(name: "ArhivarAppTests", dependencies: ["Arhivar", "ArhivarCore"]),
     ]
 )

@@ -133,6 +133,39 @@ struct EngineIntegrationTests {
         return ListingParser.parse(result.stdout).entries.map(\.path).sorted()
     }
 
+
+    @Test func tarXzListsAndExtractsInnerTar() async throws {
+        defer { try? FileManager.default.removeItem(at: workspace) }
+        let tar = Process()
+        tar.executableURL = URL(fileURLWithPath: "/usr/bin/tar")
+        tar.arguments = ["-cJf", workspace.appendingPathComponent("yedek.tar.xz").path, "-C", workspace.path, "kaynak"]
+        try tar.run()
+        tar.waitUntilExit()
+        let archive = workspace.appendingPathComponent("yedek.tar.xz")
+
+        let result = try await runner.run(SevenZipCommand.list(archive: archive))
+        try SevenZipError.check(result)
+        let listing = ListingParser.parse(result.stdout, fallbackName: ArchiveNaming.streamItemName(for: archive))
+        #expect(listing.entries.map(\.path) == ["yedek.tar"])
+
+        let extracted = try await ItemExtractor(runner: runner, archive: archive, password: nil)
+            .extract("yedek.tar", into: workspace.appendingPathComponent("gecici"))
+        #expect(FileManager.default.fileExists(atPath: extracted.path))
+    }
+
+    @Test func extractsIntoFolderWithStarInName() async throws {
+        defer { try? FileManager.default.removeItem(at: workspace) }
+        let archive = workspace.appendingPathComponent("yildiz.zip")
+        try SevenZipError.check(try await runner.run(SevenZipCommand.create(CreateOptions(
+            sources: [workspace.appendingPathComponent("kaynak/not.txt")], destination: archive, format: .zip, level: .fast
+        ))))
+        let destination = workspace.appendingPathComponent("İş*Yedek", isDirectory: true)
+        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+        let options = ExtractOptions(archive: archive, destination: destination, overwrite: .replace)
+        try SevenZipError.check(try await runner.run(SevenZipCommand.extract(options), workingDirectory: options.workingDirectory))
+        #expect(FileManager.default.fileExists(atPath: destination.appendingPathComponent("not.txt").path))
+    }
+
     @Test func readsEngineVersion() async throws {
         let result = try await runner.run([], timeout: 15)
         #expect(EngineLocator.parseVersion(result.stdout) != nil)
