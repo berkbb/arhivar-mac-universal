@@ -5,6 +5,8 @@
 #   SEVENZIP_DIR  Pakete eklenecek 7-Zip klasörü (varsayılan: Vendor/7-Zip)
 #   CONFIG        debug | release (varsayılan: release)
 #   ARCHS         Derlenecek mimariler (varsayılan: "arm64 x86_64"; yalnızca bu Mac için: ARCHS=native)
+#   SIGN_IDENTITY İmza kimliği (varsayılan: "-", ad-hoc). Ör. "Developer ID Application: Ad (TAKIM)";
+#                 ad-hoc dışındaki kimliklerde noter onayı için sertleştirilmiş çalışma zamanı ve zaman damgası eklenir.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -12,6 +14,9 @@ SEVENZIP_DIR="${SEVENZIP_DIR:-$ROOT/Vendor/7-Zip}"
 CONFIG="${CONFIG:-release}"
 ARCHS="${ARCHS:-arm64 x86_64}"
 APP="$ROOT/build/Arhivar.app"
+SIGN_IDENTITY="${SIGN_IDENTITY:--}"
+SIGN_ARGS=(--force --sign "$SIGN_IDENTITY")
+if [ "$SIGN_IDENTITY" != "-" ]; then SIGN_ARGS+=(--options runtime --timestamp); fi
 
 BUILD_ARGS=(-c "$CONFIG" --package-path "$ROOT")
 if [ "$ARCHS" != "native" ]; then
@@ -49,13 +54,13 @@ if [ -x "$SEVENZIP_DIR/7zz" ]; then
     cp -R "$SEVENZIP_DIR/MANUAL" "$APP/Contents/Resources/Manual"
     find "$APP/Contents/Resources/Manual" -name .DS_Store -delete
   fi
-  codesign --force --sign - "$APP/Contents/MacOS/7zz"
+  codesign "${SIGN_ARGS[@]}" "$APP/Contents/MacOS/7zz"
 else
   echo "⚠ $SEVENZIP_DIR/7zz bulunamadı. Önce ./Scripts/update-7zip.sh install çalıştırın." >&2
   exit 1
 fi
 
-echo "▸ Ad-hoc imzalanıyor…"
-codesign --force --sign - "$APP"
+if [ "$SIGN_IDENTITY" = "-" ]; then echo "▸ Ad-hoc imzalanıyor…"; else echo "▸ İmzalanıyor: $SIGN_IDENTITY"; fi
+codesign "${SIGN_ARGS[@]}" "$APP"
 echo "▸ Mimariler: $(lipo -archs "$APP/Contents/MacOS/Arhivar")"
 echo "✓ Hazır: $APP"

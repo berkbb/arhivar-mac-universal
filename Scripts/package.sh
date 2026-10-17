@@ -51,7 +51,8 @@ ditto -c -k --keepParent "$APP" "$DIST/$NAME.zip"
 
 STAGING="$(mktemp -d "${TMPDIR:-/tmp}/arhivar-dmg.XXXXXX")"
 trap 'rm -rf "$STAGING"' EXIT
-cp -R "$APP" "$STAGING/"
+# ditto paket üst verisini ve genişletilmiş öznitelikleri (imza dahil) olduğu gibi korur.
+ditto "$APP" "$STAGING/Arhivar.app"
 ln -s /Applications "$STAGING/Applications"
 cp "$ROOT/LICENSE" "$STAGING/LICENSE.txt"
 cp "$ROOT/THIRD_PARTY_NOTICES.md" "$STAGING/THIRD_PARTY_NOTICES.txt"

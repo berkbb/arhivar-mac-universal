@@ -25,6 +25,8 @@ FORCE=0
 VERIFY=1
 TARGET_KINDS=()
 TARGET_PATHS=()
+# Hedef yedek klasöre çevrildiyse, oradaki 7zz henüz yokken sürümü okunacak özgün (paketteki) 7zz.
+TARGET_ORIGINALS=()
 
 usage() {
   sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//' >&2
@@ -32,7 +34,7 @@ usage() {
 
 log() { echo "$*" >&2; }
 fail() { log "HATA: $*"; echo "STATUS=error"; echo "ERROR=$*"; exit 1; }
-add_target() { TARGET_KINDS+=("$1"); TARGET_PATHS+=("$2"); }
+add_target() { TARGET_KINDS+=("$1"); TARGET_PATHS+=("$2"); TARGET_ORIGINALS+=(""); }
 
 COMMAND="${1:-}"
 [ $# -gt 0 ] && shift
@@ -73,6 +75,7 @@ for i in "${!TARGET_KINDS[@]}"; do
       log "Uyarı: $APP_PATH yazılamıyor; 7zz $FALLBACK_DIR klasörüne kurulacak."
       TARGET_KINDS[$i]=dir
       TARGET_PATHS[$i]="$FALLBACK_DIR"
+      TARGET_ORIGINALS[$i]="$APP_PATH/Contents/MacOS/7zz"
     fi
   fi
 done
@@ -130,10 +133,13 @@ DIGEST="$(sed -n 's/^DIGEST=//p' <<<"$RELEASE_INFO")"
 [[ "$URL" == "$DOWNLOAD_PREFIX"* ]] || fail "Beklenmeyen indirme adresi: $URL"
 
 # Kurulu sürüm: hedeflerin en eskisi (biri eksikse güncelleme gerekir).
+# Yedek klasöre çevrilen hedefte henüz 7zz yoksa uygulamanın kendi 7zz'si geçerlidir; "yok" sayılmaz.
 if [ -z "$CURRENT" ]; then
   LOWEST=""
   for i in "${!TARGET_KINDS[@]}"; do
-    VERSION="$(engine_version "$(target_binary "${TARGET_KINDS[$i]}" "${TARGET_PATHS[$i]}")")"
+    BINARY="$(target_binary "${TARGET_KINDS[$i]}" "${TARGET_PATHS[$i]}")"
+    if [ ! -x "$BINARY" ] && [ -n "${TARGET_ORIGINALS[$i]}" ]; then BINARY="${TARGET_ORIGINALS[$i]}"; fi
+    VERSION="$(engine_version "$BINARY")"
     if [ -z "$VERSION" ]; then LOWEST=""; break; fi
     if [ -z "$LOWEST" ] || [ "$(version_number "$VERSION")" -lt "$(version_number "$LOWEST")" ]; then
       LOWEST="$VERSION"
