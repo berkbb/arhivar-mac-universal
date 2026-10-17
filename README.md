@@ -2,6 +2,10 @@
 
 A native archive manager for macOS 26+, built with SwiftUI and Liquid Glass on top of 7-Zip (`7zz`). It is built as a universal app (Apple Silicon + Intel), and the 7-Zip engine ships inside the app bundle.
 
+<p align="center">
+  <img src="docs/screenshots/welcome-dark.png" width="800" alt="Arhivar welcome screen in dark mode, with Open Archive and New Archive buttons, a drop zone and the 7-Zip 26.04 engine status">
+</p>
+
 ## Features
 
 - **Archive browser**
