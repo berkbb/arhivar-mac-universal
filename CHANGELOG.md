@@ -5,6 +5,8 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/tr/1.1.0/) biçimini ve
 
 ## [Yayımlanmadı]
 
+## [1.0.1] — 2026-10-17
+
 ### Güvenlik
 
 - Parolalar 7zz'ye komut satırı yerine stdin üzerinden veriliyor; işlem sürerken `ps` ile okunamıyor.
