@@ -9,7 +9,7 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 - **Smart subfolder extraction:** "Folder named after the archive" is now *When there is more than one item* (default), *Always* or *Never*. An archive with a single top-level item is extracted directly (no `Name/Name/…` nesting); an archive with several top-level items ("tarbomb") is gathered in a folder named after it. The old on/off preference is migrated (off → Never).
 - **Exclude macOS metadata** (`.DS_Store`, `._*`, `__MACOSX`) when creating or adding to archives: an option in the New Archive sheet and in Settings › Compression.
-- **Finder-style shortcuts:** ⌘↓ enters the selected folder or opens the selected file, ⌘I toggles the archive info, ⌘C copies the selected items as files (paste them in Finder while the archive is open), ⌘V adds the files on the clipboard to an editable archive. "Copy" is also in the context menu.
+- **Finder-style shortcuts:** ⌘↓ enters the selected folder or opens the selected file, ⌘I toggles the archive info, ⌘C copies the selected items as files (paste them in Finder while the archive is open), ⌘V adds the files on the clipboard to an editable archive. "Copy" is also in the context menu. The Edit menu's Cut, Copy, Paste and Select All are Arhivar commands that act on the archive table and pass through to text fields as usual.
 - **One-step `.tar.gz`, `.tar.xz` and `.tar.bz2`** creation for folders and multiple files. (The official 7-Zip engine can extract `.zst` but cannot create it, so Zstandard creation is not offered.)
 - **Nested archives:** double-clicking an archive inside an archive (or "Open in Arhivar" in the context menu) opens it in the browser; the path bar shows the enclosing archives, and clicking one or pressing ⌘↑ at the root returns to it. Nested archives are read-only.
 - **Checksums:** "Checksums…" in the context menu and the Archive menu shows the CRC32, SHA-256 and BLAKE2sp of a file (`7zz h`) with a Copy button.
@@ -31,6 +31,7 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ### Fixed
 
+- The app crashed ("No Observable object of type AppModel found") when returning to the archive root from a folder with the path bar or ⌘↑; the table's name cells no longer read the model from the environment.
 - Adding files to a password-protected 7z whose file names were not encrypted turned file name encryption on.
 - `.app` bundles and frameworks are archived with their symbolic links as links (they were stored as copies, about three times larger and with broken signatures).
 - Creating or adding a file or folder whose name contains `*` or `?` could pick up other files matching it as a pattern.

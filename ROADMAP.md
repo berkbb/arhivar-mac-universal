@@ -210,7 +210,7 @@ Replace the boolean `extractIntoSubfolder` toggle with a three-way mode: **Smart
 Add an `excludeMacMetadata: Bool` toggle in `CreateArchiveSheet` and **Settings › Compression** that passes `-xr!.DS_Store`, `-xr!._*` and `-xr!__MACOSX` to `7zz` when creating or updating archives.
 
 ### 3. ✅ [High] Finder-Style Keyboard Shortcuts (`⌘↓`, `⌘I`, `⌘C` / `⌘V`)
-- **Status:** ✅ Done — Archive menu items for ⌘↓ and ⌘I, `onCopyCommand` / `onPasteCommand` on the table, "Copy" in the context menu; test `copyAndPasteFiles`. Pasting into Finder by hand is not verified yet.
+- **Status:** ✅ Done — Archive menu items for ⌘↓ and ⌘I; ⌘C / ⌘V through Edit menu commands (`AppModel.copyCommand` / `pasteCommand`, because `onCopyCommand` never reaches the hierarchical table), "Copy" in the context menu; tests `copyAndPasteFiles`, `editMenuCopiesAndPastesFiles`. Pasting into Finder by hand is not verified yet.
 - **`⌘↓` (Command + Down Arrow):** Enter the selected folder or open the selected file (symmetric with `⌘↑` to go up).
 - **`⌘I` (Command + I):** Toggle the Archive Info popover (`model.showInfo.toggle()`).
 - **`⌘C` / `⌘V` (Copy & Paste):** Copy selected archive items to `NSPasteboard` (extracting on demand for pasting into Finder) and allow `⌘V` in editable archives to add files from the Finder clipboard.
