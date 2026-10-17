@@ -151,13 +151,30 @@ private struct AdvancedSettingsView: View {
                         .buttonStyle(.glassProminent)
                     }
                 }
-                Toggle(settings.t(.updateAutoCheck), isOn: $settings.checkUpdatesAtLaunch)
             } header: {
                 Text(settings.t(.updateSection))
             } footer: {
                 Text(settings.t(.updateSource))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+            }
+
+            Section(settings.t(.appUpdateSection)) {
+                LabeledContent(settings.t(.settingsEngineVersion), value: "\(AppInfo.version) (\(AppInfo.build))")
+                appUpdateStatus
+                HStack {
+                    Button(settings.t(.updateCheck)) {
+                        Task { await model.checkForAppUpdate(interactive: false) }
+                    }
+                    .disabled(model.appUpdateState == .checking)
+                    if case .available = model.appUpdateState {
+                        Button(settings.t(.appUpdateDownload)) { model.openAppDownload() }
+                            .buttonStyle(.glassProminent)
+                    }
+                }
+                // Arhivar ve 7-Zip için ortak açılış denetimi; elle değiştirmek de izin yanıtı sayılır.
+                Toggle(settings.t(.updateAutoCheck), isOn: $settings.checkUpdatesAtLaunch)
+                    .onChange(of: settings.checkUpdatesAtLaunch) { settings.updateConsentAsked = true }
             }
 
             Section {
@@ -209,6 +226,25 @@ private struct AdvancedSettingsView: View {
             Label { Text(settings.t(.updateInstalling, version)) } icon: { ProgressView().controlSize(.small) }
         case .installed(let version):
             Label(settings.t(.updateInstalled, version), systemImage: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+        case .failed(let message):
+            Label(message, systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+        }
+    }
+
+    @ViewBuilder
+    private var appUpdateStatus: some View {
+        switch model.appUpdateState {
+        case .idle:
+            EmptyView()
+        case .checking:
+            Label { Text(settings.t(.updateChecking)) } icon: { ProgressView().controlSize(.small) }
+        case .available(let release):
+            Label(settings.t(.appUpdateAvailable, release.version, AppInfo.version), systemImage: "arrow.down.circle.fill")
+                .foregroundStyle(.tint)
+        case .upToDate:
+            Label(settings.t(.appUpdateUpToDate, AppInfo.version), systemImage: "checkmark.circle.fill")
                 .foregroundStyle(.green)
         case .failed(let message):
             Label(message, systemImage: "exclamationmark.triangle.fill")

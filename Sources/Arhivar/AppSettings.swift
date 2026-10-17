@@ -70,9 +70,10 @@ final class AppSettings {
         static let multithreaded = "multithreaded"
         static let customEnginePath = "customEnginePath"
         static let checkUpdatesAtLaunch = "checkUpdatesAtLaunch"
+        static let updateConsentAsked = "updateConsentAsked"
         static let all = [
             language, appearance, extractLocation, customExtractFolder, extractIntoSubfolder, revealAfterOperation,
-            overwriteMode, defaultFormat, defaultLevel, multithreaded, customEnginePath, checkUpdatesAtLaunch,
+            overwriteMode, defaultFormat, defaultLevel, multithreaded, customEnginePath, checkUpdatesAtLaunch, updateConsentAsked,
         ]
     }
 
@@ -100,7 +101,10 @@ final class AppSettings {
     var defaultLevel: CompressionLevel { didSet { defaults.set(defaultLevel.rawValue, forKey: Key.defaultLevel) } }
     var multithreaded: Bool { didSet { defaults.set(multithreaded, forKey: Key.multithreaded) } }
     var customEnginePath: String? { didSet { defaults.set(customEnginePath, forKey: Key.customEnginePath) } }
+    /// Açılışta GitHub'a bağlanmak kullanıcının iznine bağlıdır; varsayılan kapalıdır.
     var checkUpdatesAtLaunch: Bool { didSet { defaults.set(checkUpdatesAtLaunch, forKey: Key.checkUpdatesAtLaunch) } }
+    /// İlk açılışta izin bir kez sorulur.
+    var updateConsentAsked: Bool { didSet { defaults.set(updateConsentAsked, forKey: Key.updateConsentAsked) } }
 
     init(defaults: UserDefaults = .standard, bundle: Bundle = .main) {
         self.defaults = defaults
@@ -116,7 +120,8 @@ final class AppSettings {
         defaultLevel = CompressionLevel(rawValue: defaults.object(forKey: Key.defaultLevel) as? Int ?? -1) ?? .normal
         multithreaded = defaults.object(forKey: Key.multithreaded) as? Bool ?? true
         customEnginePath = defaults.string(forKey: Key.customEnginePath)
-        checkUpdatesAtLaunch = defaults.object(forKey: Key.checkUpdatesAtLaunch) as? Bool ?? true
+        checkUpdatesAtLaunch = defaults.object(forKey: Key.checkUpdatesAtLaunch) as? Bool ?? false
+        updateConsentAsked = defaults.object(forKey: Key.updateConsentAsked) as? Bool ?? false
     }
 
     func resetAll() {
@@ -133,7 +138,8 @@ final class AppSettings {
         defaultLevel = .normal
         multithreaded = true
         customEnginePath = nil
-        checkUpdatesAtLaunch = true
+        checkUpdatesAtLaunch = false
+        updateConsentAsked = false
     }
 
     /// Tüm pencerelere (Ayarlar ve Hakkında dahil) seçilen görünümü uygular.

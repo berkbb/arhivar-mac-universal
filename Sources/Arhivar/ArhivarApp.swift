@@ -72,6 +72,9 @@ struct AppCommands: Commands {
             Button(settings.t(.menuCheckUpdates)) {
                 Task { await model.checkForUpdates(interactive: true) }
             }
+            Button(settings.t(.menuCheckAppUpdates)) {
+                Task { await model.checkForAppUpdate(interactive: true) }
+            }
         }
 
         CommandGroup(replacing: .newItem) {

@@ -192,6 +192,17 @@
 "aboutNotices" = "Third-Party Notices";
 "aboutCopyright" = "© %@ Babadogan Tech and Edu";
 "unknown" = "unknown";
+"appUpdateSection" = "Arhivar updates";
+"appUpdateAvailable" = "Arhivar %1$@ is available (you have %2$@).";
+"appUpdateUpToDate" = "Arhivar is up to date (%@).";
+"appUpdateDownload" = "Download";
+"appUpdateNoReleases" = "No public Arhivar release was found on GitHub yet.";
+"menuCheckAppUpdates" = "Check for Arhivar Updates…";
+"consentTitle" = "Check for updates automatically?";
+"consentMessage" = "At launch, Arhivar can ask GitHub whether new versions of Arhivar and 7-Zip are available. Only the public release list is requested; no personal data is sent. You can change this later in Settings › Advanced.";
+"consentAllow" = "Check Automatically";
+"consentDeny" = "Don’t Check";
+"aboutRepository" = "GitHub";
 "openRiskyTitle" = "Open this file?";
 "openRiskyMessage" = "“%1$@” can run code on your Mac (%2$@). Open it only if you trust where the archive came from.";
 "openAnyway" = "Open Anyway";

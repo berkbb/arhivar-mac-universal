@@ -16,6 +16,7 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/tr/1.1.0/) biçimini ve
 
 ### Güvenlik
 
+- Açılışta GitHub'a bağlanmadan önce ilk açılışta izin soruluyor; "açılışta güncellemeleri denetle" artık varsayılan olarak kapalı.
 - İnternetten inmiş bir arşivden çıkarılan dosyalar arşivin karantina (Gatekeeper) işaretini taşıyor. "Kullanıcı onayladı" biti aktarılmıyor. Bu, Çıkar, Buraya Çıkar, Hızlı Bakış, çift tıkla açma ve Finder'a sürükleme için geçerli.
 - Çalıştırılabilir ya da sistemi değiştirebilen dosyalar (`.command`, `.pkg`, `.mobileconfig`, uzantısız Unix programları…) açılmadan önce onay soruluyor.
 - Gerçek uzantıyı gizleyebilen görünmez ya da yön değiştiren karakterler (ör. U+202E) listede `⟦U+202E⟧` olarak, uyarı simgesiyle gösteriliyor.
@@ -27,6 +28,11 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/tr/1.1.0/) biçimini ve
 
 ### Eklenenler
 
+- Yerel yayımlama: `Scripts/release.sh` ve `Yayimla.command`. Betik paketler, `v<sürüm>` etiketini oluşturur ve GitHub Releases'e yükler; sürüm notlarını CHANGELOG'dan alır. GitHub Actions kullanılmaz.
+- `Scripts/set-version.sh`: sürümün tek kaynağı `Support/Info.plist`.
+- Arhivar güncelleme denetimi: GitHub Releases'te yeni sürüm varsa indirme bağlantısı sunulur. Menüye, Ayarlar › Gelişmiş bölümüne ve açılış denetimine eklendi.
+- Hakkında penceresine GitHub deposu bağlantısı.
+- README'ye kurulum ve ilk açılış (ad-hoc imza) talimatı.
 - Uygulama modeli için `ArhivarAppTests` test hedefi (gerçek 7zz ile)
 - `Vendor/7-Zip/SOURCE.txt`: projedeki 7-Zip sürümü, indirme adresi ve SHA-256 özeti; güncelleyici bu dosyayı yazar
 

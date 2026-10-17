@@ -231,6 +231,36 @@ struct AppModelTests {
         #expect(fixture.model.openRisk(for: text, path: "fatura\u{202E}txt.command") != nil)
     }
 
+    /// A7: ilk açılışta GitHub'a bağlanmadan önce izin sorulur; açılış denetimi varsayılan olarak kapalıdır.
+    @Test func launchAsksForUpdateConsentWithoutNetwork() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        #expect(!fixture.settings.checkUpdatesAtLaunch)
+        #expect(!fixture.settings.updateConsentAsked)
+
+        await fixture.model.launch()
+        let alert = try #require(fixture.model.alert)
+        #expect(alert.action != nil && alert.cancelAction != nil)
+        // İzin verilmeden hiçbir denetim başlamamalı.
+        #expect(fixture.model.updateState == .idle)
+        #expect(fixture.model.appUpdateState == .idle)
+
+        fixture.model.respondToUpdateConsent(false)
+        #expect(fixture.settings.updateConsentAsked)
+        #expect(!fixture.settings.checkUpdatesAtLaunch)
+        #expect(fixture.defaults.bool(forKey: "updateConsentAsked"))
+    }
+
+    @Test func secondLaunchDoesNotAskAgain() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        fixture.settings.updateConsentAsked = true
+        fixture.settings.checkUpdatesAtLaunch = false
+        await fixture.model.launch()
+        #expect(fixture.model.alert == nil)
+        #expect(fixture.model.appUpdateState == .idle)
+    }
+
     @Test func folderNavigationAndEditing() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanUp() }

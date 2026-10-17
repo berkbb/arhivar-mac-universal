@@ -32,6 +32,7 @@ Arhivar/
 ├── Tests/ArhivarCoreTests/   Çekirdek birim ve entegrasyon testleri
 ├── Tests/ArhivarAppTests/    Uygulama modeli (AppModel) akış testleri
 ├── Paketle.command           Çift tıkla paketleme
+├── Yayimla.command           Çift tıkla GitHub Releases'e yayımlama
 └── 7-Zip-Guncelle.command    Çift tıkla 7-Zip güncelleme
 ```
 
@@ -65,7 +66,7 @@ Arhivar/
 
 ```bash
 swift build                      # hızlı geliştirme derlemesi
-swift test                       # 69 test (ArhivarCoreTests + ArhivarAppTests); gerçek 7zz testleri Vendor/7-Zip/7zz kullanır
+swift test                       # 74 test (ArhivarCoreTests + ArhivarAppTests); gerçek 7zz testleri Vendor/7-Zip/7zz kullanır
 ./Scripts/build_app.sh           # evrensel build/Arhivar.app (ARCHS=native ile yalnızca bu Mac)
 ./Scripts/package.sh             # testler + .app + dist/Arhivar-<sürüm>.{dmg,zip,sha256}
 ./Scripts/package.sh --update-7zip   # önce Vendor/7-Zip'i güncelle, sonra paketle
@@ -74,6 +75,25 @@ swift test                       # 69 test (ArhivarCoreTests + ArhivarAppTests);
 Finder'dan aynı işler için `Paketle.command` ve `7-Zip-Guncelle.command` dosyalarına çift tıklanabilir.
 
 Sürüm numarası `Support/Info.plist` içindeki `CFBundleShortVersionString` alanından okunur. Yeni sürümde bu alanı ve `CHANGELOG.md` dosyasını güncelleyin.
+
+## Sürüm yayımlama (yerel)
+
+Dağıtım yalnızca GitHub Releases üzerinden yapılır. GitHub Actions kullanılmaz; yayım bu Mac'te `Scripts/release.sh` ya da `Yayimla.command` ile yapılır.
+
+1. `./Scripts/set-version.sh 1.1.0`: Info.plist'teki sürümü değiştirir ve derleme numarasını bir artırır.
+2. `CHANGELOG.md` içindeki `## [Yayımlanmadı]` başlığını `## [1.1.0] — <tarih>` olarak değiştirin. Betik sürüm notlarını bu bölümden alır.
+3. Değişiklikleri commit edip `git push` ile gönderin.
+4. `./Scripts/release.sh --dry-run`, ardından `./Scripts/release.sh` (ya da `--draft`).
+
+`release.sh` şu adımları izler:
+- Çalışma kopyasının temiz olduğunu, `main` dalında bulunulduğunu, yerel dalın `origin/main` ile aynı olduğunu ve etiketin daha önce kullanılmadığını denetler.
+- `package.sh` çalıştırır.
+- `v<sürüm>` etiketini oluşturup gönderir.
+- `gh release create` ile `.dmg`, `.zip` ve `.sha256` dosyalarını yükler.
+
+Depo adının tek kaynağı Info.plist'teki `ArhivarRepository` anahtarıdır. Hakkında penceresi ve uygulamanın güncelleme denetimi de bu anahtarı kullanır.
+
+**Gizlilik:** Uygulama ilk açılışta izin ister. İzin verilirse açılışta GitHub API'sinden yalnızca herkese açık sürüm listeleri istenir (`api.github.com/repos/<depo>/releases/latest` ve `ip7z/7zip`). Depo özelken Arhivar denetimi "henüz herkese açık sürüm yok" sonucunu verir.
 
 ## 7-Zip güncelleme akışı
 

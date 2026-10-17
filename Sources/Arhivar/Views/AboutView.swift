@@ -41,6 +41,7 @@ struct AboutView: View {
                     HStack(spacing: 8) {
                         Button(settings.t(.menuWebsite), systemImage: "globe") { openURL(AppLinks.website) }
                         Button(settings.t(.menuManual), systemImage: "book") { model.openManual() }
+                        Button(settings.t(.aboutRepository), systemImage: "chevron.left.forwardslash.chevron.right") { openURL(AppLinks.repository) }
                     }
                     HStack(spacing: 8) {
                         Button(settings.t(.aboutAppLicense), systemImage: "doc.text") {

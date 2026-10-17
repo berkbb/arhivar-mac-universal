@@ -192,6 +192,17 @@
 "aboutNotices" = "Notificări terți";
 "aboutCopyright" = "© %@ Babadogan Tech and Edu";
 "unknown" = "necunoscut";
+"appUpdateSection" = "Actualizări Arhivar";
+"appUpdateAvailable" = "Arhivar %1$@ este disponibil (ai %2$@).";
+"appUpdateUpToDate" = "Arhivar este actualizat (%@).";
+"appUpdateDownload" = "Descarcă";
+"appUpdateNoReleases" = "Încă nu există o versiune publică Arhivar pe GitHub.";
+"menuCheckAppUpdates" = "Caută actualizări Arhivar…";
+"consentTitle" = "Cauți actualizări automat?";
+"consentMessage" = "La pornire, Arhivar poate întreba GitHub dacă există versiuni noi de Arhivar și 7-Zip. Se cere doar lista publică de versiuni; nu se trimit date personale. Poți schimba asta oricând în Setări › Avansat.";
+"consentAllow" = "Caută automat";
+"consentDeny" = "Nu căuta";
+"aboutRepository" = "GitHub";
 "openRiskyTitle" = "Deschizi acest fișier?";
 "openRiskyMessage" = "„%1$@” poate rula cod pe Mac (%2$@). Deschide-l doar dacă ai încredere în sursa arhivei.";
 "openAnyway" = "Deschide oricum";

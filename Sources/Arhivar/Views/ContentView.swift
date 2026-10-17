@@ -47,7 +47,7 @@ struct ContentView: View {
         ) { alert in
             if let actionTitle = alert.actionTitle, let action = alert.action {
                 Button(actionTitle, action: action)
-                Button(settings.t(.buttonCancel), role: .cancel) {}
+                Button(alert.cancelTitle ?? settings.t(.buttonCancel), role: .cancel) { alert.cancelAction?() }
             } else {
                 Button(settings.t(.buttonOK)) {}
             }

@@ -192,6 +192,17 @@
 "aboutNotices" = "Üçüncü Taraf Bildirimleri";
 "aboutCopyright" = "© %@ Babadogan Tech and Edu";
 "unknown" = "bilinmiyor";
+"appUpdateSection" = "Arhivar güncellemeleri";
+"appUpdateAvailable" = "Arhivar %1$@ yayımlandı (sizdeki: %2$@).";
+"appUpdateUpToDate" = "Arhivar güncel (%@).";
+"appUpdateDownload" = "İndir";
+"appUpdateNoReleases" = "GitHub’da henüz herkese açık bir Arhivar sürümü bulunamadı.";
+"menuCheckAppUpdates" = "Arhivar Güncellemelerini Denetle…";
+"consentTitle" = "Güncellemeler otomatik denetlensin mi?";
+"consentMessage" = "Arhivar açılışta GitHub’a Arhivar ve 7-Zip’in yeni sürümü olup olmadığını sorabilir. Yalnızca herkese açık sürüm listesi istenir; kişisel veri gönderilmez. Bunu daha sonra Ayarlar › Gelişmiş bölümünden değiştirebilirsiniz.";
+"consentAllow" = "Otomatik Denetle";
+"consentDeny" = "Denetleme";
+"aboutRepository" = "GitHub";
 "openRiskyTitle" = "Bu dosya açılsın mı?";
 "openRiskyMessage" = "“%1$@” Mac’inizde kod çalıştırabilir (%2$@). Yalnızca arşivin kaynağına güveniyorsanız açın.";
 "openAnyway" = "Yine de Aç";

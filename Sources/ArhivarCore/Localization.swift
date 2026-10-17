@@ -114,5 +114,7 @@ public enum LKey: String, CaseIterable, Sendable {
     case deleteConfirmTitle, deleteConfirmMessage, renameTitle, renameField, addConfirmTitle
     case progressUpdating, toastUpdated, readOnlyArchive
     case openRiskyTitle, openRiskyMessage, openAnyway, deceptiveNameReason, deceptiveNameHelp
+    case appUpdateSection, appUpdateAvailable, appUpdateUpToDate, appUpdateDownload, appUpdateNoReleases, menuCheckAppUpdates
+    case consentTitle, consentMessage, consentAllow, consentDeny, aboutRepository
     case unknown
 }

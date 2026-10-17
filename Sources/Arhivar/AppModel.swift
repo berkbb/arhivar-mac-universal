@@ -39,6 +39,17 @@ struct AlertItem: Identifiable {
     let message: String
     var actionTitle: String?
     var action: (() -> Void)?
+    /// Vazgeç düğmesinin başlığı ve eylemi (varsayılan: "Vazgeç", eylemsiz).
+    var cancelTitle: String?
+    var cancelAction: (() -> Void)?
+}
+
+enum AppUpdateState: Equatable {
+    case idle
+    case checking
+    case available(AppRelease)
+    case upToDate
+    case failed(message: String)
 }
 
 /// Parola sorulduktan sonra yeniden denenecek işlem.
@@ -103,6 +114,8 @@ final class AppModel {
     var engineStatus: EngineStatus = .checking
     private(set) var engineURL: URL?
     var updateState: UpdateState = .idle
+    /// Arhivar'ın kendi güncelleme durumu (GitHub Releases).
+    var appUpdateState: AppUpdateState = .idle
 
     private(set) var archiveURL: URL?
     private(set) var listing: ArchiveListing?
@@ -182,9 +195,71 @@ final class AppModel {
         // Önceki çalıştırmalardan (ör. çökme sonrası) kalan geçici klasörleri temizle.
         ItemExtractor.sweepStale(olderThan: 6 * 3600)
         await refreshEngine()
-        if settings.checkUpdatesAtLaunch {
+        if !settings.updateConsentAsked {
+            askUpdateConsent()
+        } else if settings.checkUpdatesAtLaunch {
             await checkForUpdates(interactive: false)
+            await checkForAppUpdate(interactive: false)
         }
+    }
+
+    /// İlk açılışta, GitHub'a bağlanmadan önce bir kez izin ister.
+    private func askUpdateConsent() {
+        alert = AlertItem(
+            title: t(.consentTitle),
+            message: t(.consentMessage),
+            actionTitle: t(.consentAllow),
+            action: { [weak self] in self?.respondToUpdateConsent(true) },
+            cancelTitle: t(.consentDeny),
+            cancelAction: { [weak self] in self?.respondToUpdateConsent(false) }
+        )
+    }
+
+    func respondToUpdateConsent(_ allow: Bool) {
+        settings.updateConsentAsked = true
+        settings.checkUpdatesAtLaunch = allow
+        guard allow else { return }
+        Task {
+            await checkForUpdates(interactive: false)
+            await checkForAppUpdate(interactive: false)
+        }
+    }
+
+    // MARK: - Arhivar güncellemesi
+
+    func checkForAppUpdate(interactive: Bool) async {
+        guard appUpdateState != .checking else { return }
+        appUpdateState = .checking
+        do {
+            let release = try await AppUpdateChecker.latest(repository: AppInfo.repository)
+            if AppUpdateChecker.isNewer(release.version, than: AppInfo.version) {
+                appUpdateState = .available(release)
+                if interactive {
+                    alert = AlertItem(
+                        title: t(.menuCheckAppUpdates),
+                        message: t(.appUpdateAvailable, release.version, AppInfo.version),
+                        actionTitle: t(.appUpdateDownload),
+                        action: { [weak self] in self?.openAppDownload() }
+                    )
+                }
+            } else {
+                appUpdateState = .upToDate
+                if interactive { alert = AlertItem(title: t(.menuCheckAppUpdates), message: t(.appUpdateUpToDate, AppInfo.version)) }
+            }
+        } catch {
+            let message = (error as? AppUpdateChecker.CheckError) == .noReleases ? t(.appUpdateNoReleases) : error.localizedDescription
+            appUpdateState = .failed(message: message)
+            if interactive { alert = AlertItem(title: t(.updateFailed), message: message) }
+        }
+    }
+
+    /// Ad-hoc imzalı uygulama kendini kurmaz; indirme bağlantısı (yoksa sürüm sayfası) tarayıcıda açılır.
+    func openAppDownload() {
+        guard case .available(let release) = appUpdateState else {
+            NSWorkspace.shared.open(AppLinks.releases)
+            return
+        }
+        NSWorkspace.shared.open(release.downloadURL ?? release.pageURL)
     }
 
     func refreshEngine() async {
@@ -947,12 +1022,18 @@ extension AppModel {
 enum AppLinks {
     static let website = URL(string: "https://www.7-zip.org")!
     static let license = URL(string: "https://www.7-zip.org/license.txt")!
-    static let releases = URL(string: "https://github.com/ip7z/7zip/releases")!
+    static let sevenZipReleases = URL(string: "https://github.com/ip7z/7zip/releases")!
+    static var repository: URL { URL(string: "https://github.com/\(AppInfo.repository)")! }
+    static var releases: URL { URL(string: "https://github.com/\(AppInfo.repository)/releases")! }
 }
 
 enum AppInfo {
     static var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0" }
     static var build: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1" }
+    /// GitHub deposu ("sahip/ad"); tek kaynağı Info.plist'teki ArhivarRepository anahtarıdır.
+    static var repository: String {
+        Bundle.main.object(forInfoDictionaryKey: "ArhivarRepository") as? String ?? "berkbb/arhivar-mac-universal"
+    }
     static var currentYear: String { String(Calendar.current.component(.year, from: .now)) }
 }
 
