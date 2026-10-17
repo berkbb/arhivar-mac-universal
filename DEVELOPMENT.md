@@ -17,7 +17,9 @@ Arhivar/
 │   │   ├── ArchiveEditing.swift    Edit commands (a, d, rn), AddPlan, ItemExtractor, drag-out, navigation helpers
 │   │   ├── ArchiveListing.swift    `7zz l -slt` parser and statistics
 │   │   ├── ArchiveTree.swift       Folder tree from the flat list, sorting, search
-│   │   ├── Engine.swift            Finding 7zz and choosing a version, updater wrapper, naming helpers
+│   │   ├── Engine.swift            Finding 7zz and choosing a version, updater wrapper, naming helpers (split volumes)
+│   │   ├── Checksums.swift         `7zz h` command and checksum parser
+│   │   ├── StagedExtraction.swift  Staging folder, merge policy, symlink checks, smart subfolder, disk space
 │   │   └── Localization.swift      AppLanguage, StringTable, LKey (all string keys)
 │   └── Arhivar/              SwiftUI app (default isolation: MainActor)
 │       ├── ArhivarApp.swift        Scenes, menu commands, AppDelegate
@@ -39,12 +41,16 @@ Arhivar/
 ## Architecture
 
 - Arhivar does not link against 7-Zip. It runs the unmodified `7zz` program as a separate process (this is also how it stays LGPL compliant).
-- All 7zz arguments are produced and tested by `SevenZipCommand`. File names always come after the `--` separator. When working on selected items, `-spd` is passed so that `*` and `?` in names are not treated as wildcards.
+- All 7zz arguments are produced and tested by `SevenZipCommand`. File names always come after the `--` separator. When working on selected items, `-spd` is passed so that `*` and `?` in names are not treated as wildcards. For `a` (create, add), `-spd` is passed only when a source name contains `*` or `?`, because `-spd` also turns off the wildcards of the `-x` exclusion patterns (`-xr!._*`).
+- `a` stores symbolic links as links (`-snl`, Settings › Compression) and, when chosen, excludes `.DS_Store`, `._*` and `__MACOSX`. Adding to an encrypted ZIP passes `-mem=AES256`.
+- `.tar.gz` / `.tar.xz` / `.tar.bz2` are created in two steps: a tar in a staging folder on the destination volume (named after the destination, because gzip stores the inner name), then compressed into the destination. The official 7zz cannot compress Zstandard (`E_NOTIMPL`).
 - `CommandRunner`:
   - leaves stdin empty: if a password is requested, 7zz stops instead of hanging, and the error is classified as `wrongPassword`.
   - reads the percentages in the `-bsp1` output and reports them as progress.
   - terminates the process when its task is cancelled.
 - The archive listing is read by `ListingParser`. `ArchiveTree` also creates intermediate folders that have no entry of their own in the archive.
+- **Paths:** `ArchiveEntry.path` / `ArchiveNode.id` are normalized (`./src//a/` → `src/a`) for the tree, navigation and selection. 7zz matches items only by the raw path it listed, so every command gets `archivePath` (`AppModel.archivePath(for:)`); for an intermediate folder it is derived from a child's raw path (`ArchiveTree.rawPrefix`).
+- **Sizes** are summed with `saturatingAdding` so archives that declare absurd sizes cannot overflow `Int64`.
 - **Editing:**
   - `7zz rn` and `7zz d` match a folder path as a prefix, so a single command covers every child item even when the folder has no entry of its own (verified by tests).
   - Adding into a subfolder: `AddPlan` copies the files into the target path structure inside a temporary folder (instant on APFS) and runs 7zz there with relative paths.
@@ -54,7 +60,10 @@ Arhivar/
 - **Listing parser:** lines are split at the byte level, block fields are kept as `Substring`s, and dates are read with `ListingParser.parseTimestamp` (no DateFormatter). Across daylight saving transitions the result matches DateFormatter; tests check this.
 - **Passwords:** never passed as arguments. `SevenZipCommand.passwordInput` writes the password to 7zz's stdin; `l`, `t`, `x`, `d` and `rn` prompt for it themselves, and `a` gets a bare `-p`. If the password is unknown, stdin is empty and 7zz stops with `Break signaled`; this is classified as "password required".
 - **Staged extraction:** `StagedExtraction` creates a folder on the same volume as the destination (`itemReplacementDirectory`, or a hidden `.arhivar-staging-*` folder as a fallback). 7zz extracts into it, then the overwrite policy is applied in Swift while moving the items into the destination. It never writes through symbolic links in the destination.
-- **Disk space:** `DiskSpace` / `InsufficientSpaceError` compare the unpacked size of the selection with `volumeAvailableCapacityForImportantUsage` minus a 1 GB reserve.
+  - `secureSymlinks` removes links that resolve outside the extracted tree and rewrites the absolute links 7zz points into the staging folder as relative ones. "Replace it" uses `.usingNewMetadataOnly` and re-checks the quarantine flag.
+  - `contentRoot(in:stripping:)` drops the current folder's path when selected items are extracted from a subfolder; `destination(for:base:archiveName:mode:)` applies the subfolder rule (`SubfolderMode.smart` looks at the extracted top-level items).
+- **Nested archives:** `AppModel.archiveStack` keeps the enclosing archives (listing, password, session folder, folder and selection). The nested archive is extracted into the parent's session folder, gets its own session folder and is read-only. `returnToArchive(level:)` and `goUp()` at the root pop the stack and delete the nested sessions.
+- **Disk space:** `DiskSpace` / `InsufficientSpaceError` compare the unpacked size of the selection with `volumeAvailableCapacityForImportantUsage` minus a 1 GB reserve. Before writing an archive, `requiredForWriting` asks for the current archive size (7zz writes an updated copy next to it) plus the source size when the result is not compressed (tar, wim, "store", the `.tar.*` intermediate tar); for compressed output the final size is unknown, so sources are not counted.
 - **Sandbox:** `SandboxProfile.forOperation` generates SBPL rules for each operation, and `CommandRunner` starts 7zz with `/usr/bin/sandbox-exec -p … -D W0=…`. Paths are resolved with `realpath(3)`, because `URL.resolvingSymlinksInPath()` strips the `/private` prefix and the rule would not match. Personal folders are blocked only while an archive is being read (list, test, extract, delete, rename); they are not blocked for create and add, because the user chooses the sources there.
 - **Cold launch:** Finder services and "Open With" can arrive while the app is still starting. If the engine has not been checked yet, `perform` shows "Opening…" and waits for `ensureEngine()`.
 - **Engine selection:** a custom 7zz chosen in Settings always wins. Otherwise the copies in the app bundle, in the fallback folder (`~/Library/Application Support/Arhivar/engine`) and in Homebrew are run, and the **newest version** is picked.
@@ -71,7 +80,7 @@ Arhivar/
 
 ```bash
 swift build                      # quick development build
-swift test                       # 90 tests (ArhivarCoreTests + ArhivarAppTests); real-7zz tests use Vendor/7-Zip/7zz
+swift test                       # 138 tests (ArhivarCoreTests + ArhivarAppTests); real-7zz tests use Vendor/7-Zip/7zz
 ./Scripts/build_app.sh           # universal build/Arhivar.app (ARCHS=native for this Mac only)
 ./Scripts/package.sh             # tests + .app + dist/Arhivar-<version>.{dmg,zip,sha256}
 ./Scripts/package.sh --update-7zip   # update Vendor/7-Zip first, then package
@@ -108,7 +117,7 @@ The single source of the repository name is the `ArhivarRepository` key in Info.
 | --- | --- |
 | The project (`Scripts/`) | `Vendor/7-Zip/` |
 | Inside the app (`Arhivar.app/Contents/Resources/`) | That app's `Contents/MacOS/7zz`; the bundle is then ad-hoc re-signed |
-| The app bundle is not writable | `~/Library/Application Support/Arhivar/engine/` |
+| The app bundle is not writable | `~/Library/Application Support/Arhivar/engine/` (until a 7zz is installed there, the bundle's 7zz version counts as the installed version; the app also passes `--current <version>` unless a custom 7zz is chosen) |
 | `--dest` / `--app` given | The given targets (more than one is allowed) |
 
 Verification steps:
@@ -124,6 +133,7 @@ The services are defined under `NSServices` in `Support/Info.plist`; their title
 ## Known limitations and unverified points
 
 - The UI could not be checked with screenshots in this environment; it was verified that the app launches and runs without errors. Drag to Finder, Quick Look and the services menu should be tried by hand.
+- ⌘C / ⌘V use `onCopyCommand` / `onPasteCommand` on the archive table and are covered by model tests with a private pasteboard; pasting the copied files into Finder has not been tried by hand. The copied files live in the archive's session folder and are deleted when the archive is closed.
 - `update-7zip.sh install --force` was run on 2026-10-17 with 26.04 against both a folder target and an app copy. Download, SHA-256, installation and re-signing were verified. An upgrade to a genuinely newer version has not happened yet.
 - The app is ad-hoc signed and not notarized. On another Mac, Gatekeeper approval is required on first launch. For distribution, a Developer ID signature and notarization should be added.
 - RAR can only be extracted; the unRAR license forbids creating RAR archives.

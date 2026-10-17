@@ -5,6 +5,56 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ## [Unreleased]
 
+### Added
+
+- **Smart subfolder extraction:** "Folder named after the archive" is now *When there is more than one item* (default), *Always* or *Never*. An archive with a single top-level item is extracted directly (no `Name/Name/…` nesting); an archive with several top-level items ("tarbomb") is gathered in a folder named after it. The old on/off preference is migrated (off → Never).
+- **Exclude macOS metadata** (`.DS_Store`, `._*`, `__MACOSX`) when creating or adding to archives: an option in the New Archive sheet and in Settings › Compression.
+- **Finder-style shortcuts:** ⌘↓ enters the selected folder or opens the selected file, ⌘I toggles the archive info, ⌘C copies the selected items as files (paste them in Finder while the archive is open), ⌘V adds the files on the clipboard to an editable archive. "Copy" is also in the context menu.
+- **One-step `.tar.gz`, `.tar.xz` and `.tar.bz2`** creation for folders and multiple files. (The official 7-Zip engine can extract `.zst` but cannot create it, so Zstandard creation is not offered.)
+- **Nested archives:** double-clicking an archive inside an archive (or "Open in Arhivar" in the context menu) opens it in the browser; the path bar shows the enclosing archives, and clicking one or pressing ⌘↑ at the root returns to it. Nested archives are read-only.
+- **Checksums:** "Checksums…" in the context menu and the Archive menu shows the CRC32, SHA-256 and BLAKE2sp of a file (`7zz h`) with a Copy button.
+- The archive info panel shows the archive comment, the number of solid blocks and the number of volumes.
+- The welcome screen announces a new Arhivar release found by the check at launch (previously only visible in Settings › Advanced).
+- Finder "Open With" and the services menu now list more archive types: Zstandard, LZ4, lzip, LZMA, WIM, VHDX, QCOW2, DEB, RPM, split `.001`, ARJ, LZH, SquashFS, UDF, CAB, CPIO, XAR, VMDK, VHD and the `.tgz`/`.tbz`/`.txz` variants.
+- `build_app.sh` accepts `SIGN_IDENTITY` (default ad-hoc) for Developer ID signing; non ad-hoc identities get the hardened runtime and a timestamp.
+
+### Security
+
+- An archive declaring sizes that add up to more than `Int64.max` (zip bomb) no longer crashes the app; sizes are summed with saturation.
+- Files added to an encrypted ZIP are encrypted with AES-256 like the rest of the archive (7-Zip used the weak ZipCrypto for them).
+- Symbolic links that would point outside the destination after extraction are removed, and links 7-Zip wrote relative to the staging folder are made relative; extraction reports the skipped links as a warning instead of failing.
+- "Replace it" no longer carries the old file's metadata over to the new file; the new file keeps the archive's quarantine flag.
+- The temporary copies made when adding files into a subfolder are readable only by the user (`0700`).
+- 7zz no longer gets read access to `~/.kube`, `~/.docker`, `~/.npmrc`, `~/.pypirc`, `~/.git-credentials` and browser profiles while reading an archive.
+- AppleScript, Shortcuts, preference panes and Quick Look generators ask for confirmation before opening, and names hidden with Braille or Hangul blank characters are flagged as deceptive.
+- A 7zz process that ignores the cancel request is killed after 2 seconds, so cancelling never hangs.
+
+### Fixed
+
+- Adding files to a password-protected 7z whose file names were not encrypted turned file name encryption on.
+- `.app` bundles and frameworks are archived with their symbolic links as links (they were stored as copies, about three times larger and with broken signatures).
+- Creating or adding a file or folder whose name contains `*` or `?` could pick up other files matching it as a pattern.
+- A 7zz stopped by an external signal was reported as "wrong password".
+- TAR archives made with `tar -czf a.tgz .` showed a "." folder, and items with `./`, `//` or a trailing `/` in their path could not be navigated, extracted, renamed or deleted correctly.
+- The Name column sorts like Finder ("file2" before "file10", case-insensitive, "Çanta" before "Zebra").
+- Split archives: a new split archive is added to the recent archives and revealed by its first volume, opening `.002` (or `.part2.rar`) opens the first volume, and the archive size is the total of all volumes.
+- When the app bundle is not writable, the 7-Zip update check no longer reports a false "update available".
+- Cancelling "Extract Here with Arhivar" stops the whole batch instead of continuing with the next archive.
+- Selecting files with the same name from different folders is caught in the New Archive sheet (their folders are shown) and when adding; previously 7-Zip failed with "Duplicate filename on disk".
+- Extracting selected items while inside a subfolder no longer recreates the whole inner path at the destination.
+- Dropping files on a path bar folder and then cancelling no longer changes the current folder; the drop is ignored while an operation runs.
+- The New Archive sheet explains why Create is disabled when the password is not confirmed yet.
+- The status bar and info panel count folders that exist only in file paths.
+- Creating archives and editing archives in place check free disk space first (the archive size for edits; the source size for uncompressed formats and `.tar.*`).
+- The first-launch update consent no longer collides with an archive opened with "Open With"; it is asked once the operation is finished.
+- Opening several files from the Dock together with an archive now offers to create an archive with all of them, as dragging does.
+- Reloading an archive after an edit removes stale preview files; "Reset All Settings" no longer leaves the language or browser mode preference behind.
+
+### Changed
+
+- The archive listing is parsed without building an intermediate array of lines, and cached path icons are bounded.
+- The `.dmg` is staged with `ditto` so bundle metadata is preserved.
+
 ## [1.0.2] — 2026-10-17
 
 ### Fixed
