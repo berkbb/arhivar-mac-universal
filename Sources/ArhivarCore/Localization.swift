@@ -117,5 +117,6 @@ public enum LKey: String, CaseIterable, Sendable {
     case appUpdateSection, appUpdateAvailable, appUpdateUpToDate, appUpdateDownload, appUpdateNoReleases, menuCheckAppUpdates
     case consentTitle, consentMessage, consentAllow, consentDeny, aboutRepository
     case errorDiskSpace
+    case settingsSandbox, settingsSandboxNote
     case unknown
 }

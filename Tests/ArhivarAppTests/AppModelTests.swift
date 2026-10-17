@@ -168,7 +168,9 @@ struct AppModelTests {
 
         fixture.model.extractHere([secret, plain])
         // Şifreli arşiv parola istemeli; ikinci arşiv henüz çıkarılmamış olmalı.
-        while fixture.model.passwordRequest == nil { try await Task.sleep(for: .milliseconds(50)) }
+        // Süre sınırı: bir hata parola isteğini engellerse test sonsuza dek beklemesin.
+        for _ in 0..<200 where fixture.model.passwordRequest == nil { try await Task.sleep(for: .milliseconds(50)) }
+        try #require(fixture.model.passwordRequest != nil)
         #expect(fixture.model.passwordRequest?.archive == secret)
         #expect(!FileManager.default.fileExists(atPath: fixture.workspace.appendingPathComponent("duz").path))
 

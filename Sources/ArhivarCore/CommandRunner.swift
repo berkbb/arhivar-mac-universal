@@ -82,9 +82,12 @@ public enum ProgressParser {
 /// Alt süreçleri çalıştırır; ilerleme, zaman aşımı ve iptal desteği sunar.
 public struct CommandRunner: Sendable {
     public let executableURL: URL
+    /// Doluysa program sandbox-exec altında bu kurallarla çalıştırılır.
+    public let sandbox: SandboxProfile?
 
-    public init(executableURL: URL) {
+    public init(executableURL: URL, sandbox: SandboxProfile? = nil) {
         self.executableURL = executableURL
+        self.sandbox = sandbox
     }
 
     /// Süreci çalıştırır. Sıfırdan farklı çıkış kodu hata sayılmaz; sınıflandırma çağırana aittir.
@@ -100,7 +103,13 @@ public struct CommandRunner: Sendable {
         input: Data? = nil,
         onProgress: (@Sendable (Double) -> Void)? = nil
     ) async throws -> ProcessResult {
-        let box = try ProcessBox(executableURL: executableURL, arguments: arguments, input: input)
+        let launch: (URL, [String])
+        if let sandbox, SandboxProfile.isAvailable {
+            launch = (SandboxProfile.launcher, sandbox.launchArguments(executable: executableURL, arguments: arguments))
+        } else {
+            launch = (executableURL, arguments)
+        }
+        let box = try ProcessBox(executableURL: launch.0, arguments: launch.1, input: input)
         if let workingDirectory { box.process.currentDirectoryURL = workingDirectory }
         let state = RunState(onProgress: onProgress)
 

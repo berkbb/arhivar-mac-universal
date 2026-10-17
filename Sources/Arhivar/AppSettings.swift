@@ -71,9 +71,10 @@ final class AppSettings {
         static let customEnginePath = "customEnginePath"
         static let checkUpdatesAtLaunch = "checkUpdatesAtLaunch"
         static let updateConsentAsked = "updateConsentAsked"
+        static let sandboxEngine = "sandboxEngine"
         static let all = [
             language, appearance, extractLocation, customExtractFolder, extractIntoSubfolder, revealAfterOperation,
-            overwriteMode, defaultFormat, defaultLevel, multithreaded, customEnginePath, checkUpdatesAtLaunch, updateConsentAsked,
+            overwriteMode, defaultFormat, defaultLevel, multithreaded, customEnginePath, checkUpdatesAtLaunch, updateConsentAsked, sandboxEngine,
         ]
     }
 
@@ -105,6 +106,8 @@ final class AppSettings {
     var checkUpdatesAtLaunch: Bool { didSet { defaults.set(checkUpdatesAtLaunch, forKey: Key.checkUpdatesAtLaunch) } }
     /// İlk açılışta izin bir kez sorulur.
     var updateConsentAsked: Bool { didSet { defaults.set(updateConsentAsked, forKey: Key.updateConsentAsked) } }
+    /// 7zz'yi kum havuzunda (sandbox-exec) çalıştır; varsayılan açık.
+    var sandboxEngine: Bool { didSet { defaults.set(sandboxEngine, forKey: Key.sandboxEngine) } }
 
     init(defaults: UserDefaults = .standard, bundle: Bundle = .main) {
         self.defaults = defaults
@@ -122,6 +125,7 @@ final class AppSettings {
         customEnginePath = defaults.string(forKey: Key.customEnginePath)
         checkUpdatesAtLaunch = defaults.object(forKey: Key.checkUpdatesAtLaunch) as? Bool ?? false
         updateConsentAsked = defaults.object(forKey: Key.updateConsentAsked) as? Bool ?? false
+        sandboxEngine = defaults.object(forKey: Key.sandboxEngine) as? Bool ?? true
     }
 
     func resetAll() {
@@ -140,6 +144,7 @@ final class AppSettings {
         customEnginePath = nil
         checkUpdatesAtLaunch = false
         updateConsentAsked = false
+        sandboxEngine = true
     }
 
     /// Tüm pencerelere (Ayarlar ve Hakkında dahil) seçilen görünümü uygular.

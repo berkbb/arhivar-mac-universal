@@ -192,6 +192,8 @@
 "aboutNotices" = "Notificări terți";
 "aboutCopyright" = "© %@ Babadogan Tech and Edu";
 "unknown" = "necunoscut";
+"settingsSandbox" = "Rulează motorul 7-Zip izolat (recomandat)";
+"settingsSandboxNote" = "7zz nu poate folosi rețeaua, poate scrie doar în dosarul țintă și nu poate citi dosare private precum ~/.ssh sau Keychains în timp ce citește o arhivă.";
 "errorDiskSpace" = "Spațiu insuficient pe disc: sunt necesari %1$@, sunt disponibili %2$@. Nu s-a scris nimic.";
 "appUpdateSection" = "Actualizări Arhivar";
 "appUpdateAvailable" = "Arhivar %1$@ este disponibil (ai %2$@).";

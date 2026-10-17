@@ -135,6 +135,14 @@ private struct AdvancedSettingsView: View {
                 Button(settings.t(.settingsEngineCheck)) {
                     Task { await model.refreshEngine() }
                 }
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle(settings.t(.settingsSandbox), isOn: $settings.sandboxEngine)
+                        .disabled(!SandboxProfile.isAvailable)
+                    Text(settings.t(.settingsSandboxNote))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             Section {

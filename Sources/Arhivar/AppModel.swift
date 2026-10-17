@@ -377,6 +377,7 @@ final class AppModel {
     /// Listeyi 7zz'den okur ve görünüm durumunu günceller.
     private func readListing(of url: URL, runner: CommandRunner, keepFolder: Bool, password candidate: String?) async throws {
         let currentPassword = candidate
+        let runner = confined(runner, archive: url)
         let result = try await runner.run(SevenZipCommand.list(archive: url), input: SevenZipCommand.passwordInput(currentPassword))
         try SevenZipError.check(result)
         let listing = ListingParser.parse(result.stdout, fallbackName: ArchiveNaming.streamItemName(for: url))
@@ -506,7 +507,7 @@ final class AppModel {
             // 1. Boş alan. Açık arşivin listesi yoksa (ör. Buraya Çıkar) önce listelenir; parola gerekirse burada sorulur.
             var entries = knownEntries
             if entries == nil {
-                let listed = try await runner.run(SevenZipCommand.list(archive: archive), input: SevenZipCommand.passwordInput(password))
+                let listed = try await self.confined(runner, archive: archive).run(SevenZipCommand.list(archive: archive), input: SevenZipCommand.passwordInput(password))
                 try SevenZipError.check(listed)
                 entries = ListingParser.parse(listed.stdout, fallbackName: ArchiveNaming.streamItemName(for: archive)).entries
             }
@@ -516,7 +517,7 @@ final class AppModel {
             let staging = try StagedExtraction.makeStagingDirectory(for: destination)
             defer { try? fileManager.removeItem(at: staging) }
             let options = ExtractOptions(archive: archive, destination: staging, items: items, password: password, overwrite: .replace)
-            let result = try await runner.run(
+            let result = try await self.confined(runner, archive: archive, writable: [staging]).run(
                 SevenZipCommand.extract(options), workingDirectory: options.workingDirectory, input: options.input, onProgress: progress
             )
             let warning = try SevenZipError.check(result)
@@ -536,7 +537,7 @@ final class AppModel {
         }
         let currentPassword = password
         perform(.progressTesting, archive: archive, retry: .test) { runner, progress in
-            let result = try await runner.run(SevenZipCommand.test(archive: archive), input: SevenZipCommand.passwordInput(currentPassword), onProgress: progress)
+            let result = try await self.confined(runner, archive: archive).run(SevenZipCommand.test(archive: archive), input: SevenZipCommand.passwordInput(currentPassword), onProgress: progress)
             let warning = try SevenZipError.check(result)
             if let warning {
                 self.alert = AlertItem(title: self.t(.warningTitle), message: warning)
@@ -594,7 +595,8 @@ final class AppModel {
         }
         let currentPassword = password
         perform(.progressExtracting, archive: archive, retry: retry) { runner, progress in
-            let extractor = ItemExtractor(runner: runner, archive: archive, password: currentPassword, root: self.sessionDirectory())
+            let session = self.sessionDirectory()
+            let extractor = ItemExtractor(runner: self.confined(runner, archive: archive, writable: [session]), archive: archive, password: currentPassword, root: session)
             let url = try await extractor.extract(path, expectedSize: self.node(path)?.size, onProgress: progress)
             self.previewCache[path] = url
             completion(url)
@@ -628,7 +630,9 @@ final class AppModel {
     /// Listeden Finder'a sürüklenecek öğe; parola gerekiyorsa ve bilinmiyorsa sürükleme kapalıdır.
     func dragItem(for node: ArchiveNode) -> ArchiveItemTransfer? {
         guard let archive = archiveURL, let engineURL, !needsPassword(for: [node.id]) else { return nil }
-        let extractor = ItemExtractor(runner: CommandRunner(executableURL: engineURL), archive: archive, password: password, root: sessionDirectory())
+        let session = sessionDirectory()
+        let runner = confined(CommandRunner(executableURL: engineURL), archive: archive, writable: [session])
+        let extractor = ItemExtractor(runner: runner, archive: archive, password: password, root: session)
         let name = (node.id as NSString).lastPathComponent
         return ArchiveItemTransfer(extractor: extractor, path: node.id, name: name, size: node.size)
     }
@@ -671,7 +675,8 @@ final class AppModel {
                 if let staging = plan.stagingDirectory { try? FileManager.default.removeItem(at: staging) }
             }
             let command = SevenZipCommand.add(archive: archive, names: plan.names, password: currentPassword, encryptHeaders: encryptHeaders)
-            let result = try await runner.run(command, workingDirectory: plan.workingDirectory, input: SevenZipCommand.passwordInput(currentPassword), onProgress: progress)
+            let writer = self.confined(runner, archive: archive, writable: [archive.deletingLastPathComponent()], protectPersonalData: false)
+            let result = try await writer.run(command, workingDirectory: plan.workingDirectory, input: SevenZipCommand.passwordInput(currentPassword), onProgress: progress)
             let warning = try SevenZipError.check(result)
             try await self.readListing(of: archive, runner: runner, keepFolder: true, password: currentPassword)
             self.finishEdit(warning: warning)
@@ -698,7 +703,7 @@ final class AppModel {
         }
         let currentPassword = password
         perform(.progressUpdating, archive: archive, retry: .delete(items: items)) { runner, progress in
-            let result = try await runner.run(SevenZipCommand.delete(archive: archive, items: items), input: SevenZipCommand.passwordInput(currentPassword), onProgress: progress)
+            let result = try await self.confined(runner, archive: archive, writable: [archive.deletingLastPathComponent()]).run(SevenZipCommand.delete(archive: archive, items: items), input: SevenZipCommand.passwordInput(currentPassword), onProgress: progress)
             let warning = try SevenZipError.check(result)
             try await self.readListing(of: archive, runner: runner, keepFolder: true, password: currentPassword)
             self.finishEdit(warning: warning)
@@ -723,7 +728,7 @@ final class AppModel {
         }
         let currentPassword = password
         perform(.progressUpdating, archive: archive, retry: .rename(path: path, newName: name)) { runner, _ in
-            let result = try await runner.run(SevenZipCommand.rename(archive: archive, from: path, to: newPath), input: SevenZipCommand.passwordInput(currentPassword))
+            let result = try await self.confined(runner, archive: archive, writable: [archive.deletingLastPathComponent()]).run(SevenZipCommand.rename(archive: archive, from: path, to: newPath), input: SevenZipCommand.passwordInput(currentPassword))
             let warning = try SevenZipError.check(result)
             try await self.readListing(of: archive, runner: runner, keepFolder: true, password: currentPassword)
             self.selection = [newPath]
@@ -814,7 +819,8 @@ final class AppModel {
 
     func createArchive(_ options: CreateOptions) {
         perform(.progressCreating, archive: nil, retry: nil) { runner, progress in
-            let result = try await runner.run(SevenZipCommand.create(options), input: options.input, onProgress: progress)
+            let writer = self.confined(runner, archive: options.destination, writable: [options.destination.deletingLastPathComponent()], protectPersonalData: false)
+            let result = try await writer.run(SevenZipCommand.create(options), input: options.input, onProgress: progress)
             let warning = try SevenZipError.check(result)
             let exists = FileManager.default.fileExists(atPath: options.destination.path)
             if exists { self.addRecent(options.destination) }
@@ -866,6 +872,13 @@ final class AppModel {
 
     func cancelOperation() {
         currentTask?.cancel()
+    }
+
+    /// 7zz'yi işleme uygun kum havuzu kurallarıyla çalıştıran kopya: ağ kapalı, yalnızca `writable` klasörlerine yazar,
+    /// arşiv okunurken kişisel veri klasörlerini okuyamaz. Ayarlar › Gelişmiş'ten kapatılabilir.
+    func confined(_ runner: CommandRunner, archive: URL, writable: [URL] = [], protectPersonalData: Bool = true) -> CommandRunner {
+        guard settings.sandboxEngine else { return runner }
+        return runner.sandboxed(.forOperation(archive: archive, writable: writable, protectPersonalData: protectPersonalData))
     }
 
     /// Süren işlem (varsa); sıralı işlemler bunun bitmesini bekler.
