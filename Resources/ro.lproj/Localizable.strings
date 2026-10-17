@@ -1,0 +1,215 @@
+/* Arhivar — Română */
+
+"appName" = "Arhivar";
+"appTagline" = "Un manager modern de arhive, bazat pe 7-Zip";
+
+"menuAbout" = "Despre Arhivar";
+"menuNewArchive" = "Arhivă nouă…";
+"menuOpenArchive" = "Deschide arhiva…";
+"menuCloseArchive" = "Închide arhiva";
+"menuArchive" = "Arhivă";
+"menuExtractAll" = "Extrage tot…";
+"menuExtractSelected" = "Extrage selecția…";
+"menuTestArchive" = "Testează arhiva";
+"menuShowInFinder" = "Arată arhiva în Finder";
+"menuClearRecents" = "Golește arhivele recente";
+"menuManual" = "Manualul 7-Zip";
+"menuWebsite" = "Site-ul 7-Zip";
+"menuCheckUpdates" = "Caută actualizări 7-Zip…";
+
+"toolbarOpen" = "Deschide";
+"toolbarCreate" = "Creează";
+"toolbarExtract" = "Extrage";
+"toolbarTest" = "Testează";
+"toolbarInfo" = "Informații";
+"searchPrompt" = "Caută în arhivă";
+
+"sidebarLibrary" = "Bibliotecă";
+"sidebarHome" = "Acasă";
+"sidebarRecent" = "Arhive recente";
+"sidebarNoRecents" = "Nicio arhivă recentă";
+"sidebarRemoveRecent" = "Elimină din listă";
+
+"welcomeTitle" = "Bun venit în Arhivar";
+"welcomeSubtitle" = "Deschide o arhivă pentru a-i răsfoi conținutul sau trage fișiere aici pentru a crea una nouă.";
+"welcomeDropHint" = "Trage fișiere sau arhive aici";
+"welcomeSupportedFormats" = "Deschide 7z, ZIP, RAR, TAR, GZ, XZ, ISO, DMG și multe altele. Creează 7z, ZIP, TAR, WIM, GZ, BZ2 și XZ.";
+
+"engineReady" = "7-Zip %@ este pregătit";
+"engineChecking" = "Se verifică motorul 7-Zip…";
+"engineMissingTitle" = "Motorul 7-Zip nu a fost găsit";
+"engineMissingMessage" = "Arhivar are nevoie de programul 7zz. Instalează-l cu actualizatorul sau alege locația lui în Setări › Avansat.";
+"engineBlockedTitle" = "Motorul 7-Zip nu răspunde";
+"engineBlockedMessage" = "Este posibil ca macOS să blocheze 7zz deoarece a fost descărcat de pe internet. Permite-l în Configurări sistem › Confidențialitate și securitate sau instalează o copie nouă cu actualizatorul.";
+
+"columnName" = "Nume";
+"columnSize" = "Dimensiune";
+"columnPacked" = "Comprimat";
+"columnModified" = "Modificat";
+"columnMethod" = "Metodă";
+"contextOpen" = "Deschide";
+"contextExtract" = "Extrage…";
+"emptyArchive" = "Această arhivă este goală.";
+"noSearchResults" = "Niciun rezultat pentru „%@”";
+
+"statusItems" = "Elemente: %ld";
+"statusSize" = "Dimensiune: %@";
+"statusPacked" = "Comprimat: %@";
+"statusRatio" = "Raport: %@";
+"statusSelected" = "Selectate: %ld";
+"statusEncrypted" = "Criptată";
+
+"infoTitle" = "Informații arhivă";
+"infoLocation" = "Locație";
+"infoType" = "Tip";
+"infoMethod" = "Metodă";
+"infoSolid" = "Solidă";
+"infoArchiveSize" = "Dimensiunea arhivei";
+"infoFiles" = "Fișiere";
+"infoFolders" = "Dosare";
+"infoUnpackedSize" = "Dimensiune dezarhivată";
+"infoRatio" = "Rată de comprimare";
+"infoEncrypted" = "Criptată";
+"yes" = "Da";
+"no" = "Nu";
+
+"createTitle" = "Arhivă nouă";
+"createSources" = "Fișiere de adăugat";
+"createAddFiles" = "Adaugă fișiere…";
+"createRemove" = "Elimină";
+"createDropHint" = "Trage fișiere și dosare aici";
+"createOutput" = "Ieșire";
+"createArchiveName" = "Numele arhivei";
+"createDestination" = "Salvează în";
+"createOptions" = "Opțiuni";
+"createFormat" = "Format";
+"createLevel" = "Nivel de comprimare";
+"createEncryption" = "Criptare";
+"createPassword" = "Parolă";
+"createPasswordConfirm" = "Confirmă parola";
+"createEncryptNames" = "Criptează numele fișierelor";
+"createPasswordMismatch" = "Parolele nu se potrivesc.";
+"createEncryptionUnsupported" = "Acest format nu acceptă criptarea.";
+"createSplit" = "Împarte în volume";
+"createSplitNone" = "Nu împărți";
+"createSingleFileOnly" = "Acest format poate comprima un singur fișier. Folosește 7z sau ZIP pentru mai multe elemente.";
+"createExistsWarning" = "Există deja o arhivă cu acest nume. Fișierele noi vor fi adăugate în ea.";
+"createButton" = "Creează arhiva";
+
+"levelStore" = "Stocare (fără comprimare)";
+"levelFastest" = "Cea mai rapidă";
+"levelFast" = "Rapidă";
+"levelNormal" = "Normală";
+"levelMaximum" = "Maximă";
+"levelUltra" = "Ultra";
+
+"buttonCancel" = "Anulează";
+"buttonOK" = "OK";
+"buttonChoose" = "Alege…";
+"buttonShowInFinder" = "Arată în Finder";
+"buttonOpenSettings" = "Deschide setările";
+"buttonUnlock" = "Deblochează";
+
+"panelOpenArchive" = "Alege o arhivă de deschis";
+"panelChooseDestination" = "Alege unde să fie extrase fișierele";
+"panelExtract" = "Extrage";
+"panelAdd" = "Adaugă";
+
+"progressReading" = "Se citește arhiva…";
+"progressCreating" = "Se creează arhiva…";
+"progressExtracting" = "Se extrag fișierele…";
+"progressTesting" = "Se testează arhiva…";
+
+"toastExtracted" = "Fișierele au fost extrase în %@";
+"toastCreated" = "%@ a fost creată";
+"toastTestPassed" = "Nicio eroare găsită în %@";
+
+"passwordTitle" = "Parolă necesară";
+"passwordMessage" = "„%@” este protejată. Introdu parola pentru a continua.";
+"passwordWrong" = "Parolă greșită. Încearcă din nou.";
+
+"errorTitle" = "A apărut o problemă";
+"warningTitle" = "Finalizat cu avertismente";
+"errorEngineNotFound" = "Programul 7zz nu a putut fi găsit sau pornit.";
+"errorEngineTimeout" = "7zz nu a răspuns la timp. Este posibil ca macOS să-l blocheze; permite-l în Configurări sistem › Confidențialitate și securitate.";
+"errorCancelled" = "Operațiunea a fost anulată.";
+"errorWrongPassword" = "Parola este greșită.";
+"errorNotArchive" = "Acest fișier nu poate fi deschis ca arhivă.";
+"errorFailed" = "7-Zip s-a oprit cu codul de eroare %ld.";
+
+"settingsGeneral" = "General";
+"settingsCompression" = "Comprimare";
+"settingsAdvanced" = "Avansat";
+"settingsLanguage" = "Limbă";
+"settingsLanguageNote" = "Arhivar se schimbă imediat. Meniurile de sistem se actualizează la următoarea pornire.";
+"languageSystem" = "Implicit sistem";
+"settingsAppearance" = "Aspect";
+"appearanceSystem" = "Automat";
+"appearanceLight" = "Luminos";
+"appearanceDark" = "Întunecat";
+"settingsExtraction" = "Extragere";
+"settingsExtractTo" = "Extrage în";
+"extractToAsk" = "Întreabă de fiecare dată";
+"extractToNextTo" = "Lângă arhivă";
+"extractToCustom" = "Un dosar fix";
+"settingsCustomFolder" = "Dosar";
+"settingsSubfolder" = "Creează un dosar cu numele arhivei";
+"settingsReveal" = "Arată rezultatul în Finder la final";
+"settingsOverwrite" = "Dacă fișierul există deja";
+"overwriteReplace" = "Înlocuiește-l";
+"overwriteSkip" = "Omite-l";
+"overwriteRename" = "Păstrează-le pe amândouă";
+"settingsDefaults" = "Valori implicite pentru arhive noi";
+"settingsDefaultFormat" = "Format";
+"settingsDefaultLevel" = "Nivel de comprimare";
+"settingsMultithread" = "Folosește toate nucleele procesorului";
+"settingsEngine" = "Motorul 7-Zip";
+"settingsEnginePath" = "Locație";
+"settingsEngineVersion" = "Versiune";
+"settingsEngineCheck" = "Verifică din nou";
+"settingsEngineNotFound" = "Negăsit";
+"settingsEngineUseCustom" = "Folosește un 7zz personalizat";
+"settingsReset" = "Resetează toate setările";
+"settingsResetConfirm" = "Resetezi toate setările la valorile implicite?";
+
+"updateSection" = "Actualizări 7-Zip";
+"updateCheck" = "Caută actualizări";
+"updateInstall" = "Instalează 7-Zip %@";
+"updateChecking" = "Se caută actualizări…";
+"updateInstalling" = "Se descarcă și se instalează 7-Zip %@…";
+"updateAvailable" = "7-Zip %1$@ este disponibil (instalat: %2$@).";
+"updateUpToDate" = "7-Zip este actualizat (%@).";
+"updateInstalled" = "7-Zip %@ a fost instalat.";
+"updateFailed" = "Actualizarea a eșuat";
+"updateAutoCheck" = "Caută actualizări la pornire";
+"updateSource" = "Se descarcă de pe github.com/ip7z/7zip și se verifică prin SHA-256.";
+
+"aboutVersion" = "Versiunea %1$@ (%2$@)";
+"aboutPoweredBy" = "Bazat pe 7-Zip %@";
+"aboutEngineCredit" = "7-Zip este © Igor Pavlov, distribuit sub licența GNU LGPL cu restricția de licență unRAR.";
+"aboutLicense" = "Licența 7-Zip";
+"aboutAppLicense" = "Licența Arhivar (MIT)";
+"aboutNotices" = "Notificări terți";
+"aboutCopyright" = "© %@ Babadogan Tech and Edu";
+"unknown" = "necunoscut";
+
+"viewFolders" = "Dosare";
+"viewTree" = "Arbore";
+"viewModeLabel" = "Stil listă";
+"navUp" = "Dosarul părinte";
+"contextQuickLook" = "Previzualizare rapidă";
+"toolbarAdd" = "Adaugă";
+"editAddFiles" = "Adaugă fișiere în arhivă…";
+"editDelete" = "Șterge…";
+"editRename" = "Redenumește…";
+"buttonAdd" = "Adaugă";
+"buttonDelete" = "Șterge";
+"buttonRename" = "Redenumește";
+"deleteConfirmTitle" = "Ștergi %ld elemente din arhivă?";
+"deleteConfirmMessage" = "Această acțiune nu poate fi anulată.";
+"renameTitle" = "Redenumește";
+"renameField" = "Nume nou";
+"addConfirmTitle" = "Adaugi %1$ld elemente în „%2$@”?";
+"progressUpdating" = "Se actualizează arhiva…";
+"toastUpdated" = "Arhiva a fost actualizată";
+"readOnlyArchive" = "Acest tip de arhivă nu poate fi editat. Extrage-o și creează o arhivă nouă.";

@@ -1,0 +1,4 @@
+version=26.04
+asset=7z2604-mac.tar.xz
+url=https://github.com/ip7z/7zip/releases/download/26.04/7z2604-mac.tar.xz
+sha256=bee04358cbcbc7106273cee0e8d72916db2696c48067a3538c34d8cd6fd16578

@@ -1,0 +1,215 @@
+/* Arhivar — English */
+
+"appName" = "Arhivar";
+"appTagline" = "A modern archive manager powered by 7-Zip";
+
+"menuAbout" = "About Arhivar";
+"menuNewArchive" = "New Archive…";
+"menuOpenArchive" = "Open Archive…";
+"menuCloseArchive" = "Close Archive";
+"menuArchive" = "Archive";
+"menuExtractAll" = "Extract All…";
+"menuExtractSelected" = "Extract Selected…";
+"menuTestArchive" = "Test Archive";
+"menuShowInFinder" = "Show Archive in Finder";
+"menuClearRecents" = "Clear Recent Archives";
+"menuManual" = "7-Zip Manual";
+"menuWebsite" = "7-Zip Website";
+"menuCheckUpdates" = "Check for 7-Zip Updates…";
+
+"toolbarOpen" = "Open";
+"toolbarCreate" = "Create";
+"toolbarExtract" = "Extract";
+"toolbarTest" = "Test";
+"toolbarInfo" = "Info";
+"searchPrompt" = "Search in archive";
+
+"sidebarLibrary" = "Library";
+"sidebarHome" = "Home";
+"sidebarRecent" = "Recent Archives";
+"sidebarNoRecents" = "No recent archives";
+"sidebarRemoveRecent" = "Remove from List";
+
+"welcomeTitle" = "Welcome to Arhivar";
+"welcomeSubtitle" = "Open an archive to browse its contents, or drop files here to create a new one.";
+"welcomeDropHint" = "Drop files or archives here";
+"welcomeSupportedFormats" = "Opens 7z, ZIP, RAR, TAR, GZ, XZ, ISO, DMG and many more. Creates 7z, ZIP, TAR, WIM, GZ, BZ2 and XZ.";
+
+"engineReady" = "7-Zip %@ is ready";
+"engineChecking" = "Checking the 7-Zip engine…";
+"engineMissingTitle" = "7-Zip engine not found";
+"engineMissingMessage" = "Arhivar needs the 7zz program. Install it with the updater or choose its location in Settings › Advanced.";
+"engineBlockedTitle" = "7-Zip engine is not responding";
+"engineBlockedMessage" = "macOS may be blocking 7zz because it was downloaded from the internet. Allow it in System Settings › Privacy & Security, or install a fresh copy with the updater.";
+
+"columnName" = "Name";
+"columnSize" = "Size";
+"columnPacked" = "Packed";
+"columnModified" = "Modified";
+"columnMethod" = "Method";
+"contextOpen" = "Open";
+"contextExtract" = "Extract…";
+"emptyArchive" = "This archive is empty.";
+"noSearchResults" = "No results for “%@”";
+
+"statusItems" = "Items: %ld";
+"statusSize" = "Size: %@";
+"statusPacked" = "Packed: %@";
+"statusRatio" = "Ratio: %@";
+"statusSelected" = "Selected: %ld";
+"statusEncrypted" = "Encrypted";
+
+"infoTitle" = "Archive Info";
+"infoLocation" = "Location";
+"infoType" = "Type";
+"infoMethod" = "Method";
+"infoSolid" = "Solid";
+"infoArchiveSize" = "Archive size";
+"infoFiles" = "Files";
+"infoFolders" = "Folders";
+"infoUnpackedSize" = "Unpacked size";
+"infoRatio" = "Compression ratio";
+"infoEncrypted" = "Encrypted";
+"yes" = "Yes";
+"no" = "No";
+
+"createTitle" = "New Archive";
+"createSources" = "Files to add";
+"createAddFiles" = "Add Files…";
+"createRemove" = "Remove";
+"createDropHint" = "Drop files and folders here";
+"createOutput" = "Output";
+"createArchiveName" = "Archive name";
+"createDestination" = "Save to";
+"createOptions" = "Options";
+"createFormat" = "Format";
+"createLevel" = "Compression level";
+"createEncryption" = "Encryption";
+"createPassword" = "Password";
+"createPasswordConfirm" = "Confirm password";
+"createEncryptNames" = "Encrypt file names";
+"createPasswordMismatch" = "Passwords do not match.";
+"createEncryptionUnsupported" = "This format does not support encryption.";
+"createSplit" = "Split into volumes";
+"createSplitNone" = "Don't split";
+"createSingleFileOnly" = "This format can compress only a single file. Use 7z or ZIP for multiple items.";
+"createExistsWarning" = "An archive with this name already exists. New files will be added to it.";
+"createButton" = "Create Archive";
+
+"levelStore" = "Store (no compression)";
+"levelFastest" = "Fastest";
+"levelFast" = "Fast";
+"levelNormal" = "Normal";
+"levelMaximum" = "Maximum";
+"levelUltra" = "Ultra";
+
+"buttonCancel" = "Cancel";
+"buttonOK" = "OK";
+"buttonChoose" = "Choose…";
+"buttonShowInFinder" = "Show in Finder";
+"buttonOpenSettings" = "Open Settings";
+"buttonUnlock" = "Unlock";
+
+"panelOpenArchive" = "Choose an archive to open";
+"panelChooseDestination" = "Choose where to extract the files";
+"panelExtract" = "Extract";
+"panelAdd" = "Add";
+
+"progressReading" = "Reading archive…";
+"progressCreating" = "Creating archive…";
+"progressExtracting" = "Extracting files…";
+"progressTesting" = "Testing archive…";
+
+"toastExtracted" = "Files extracted to %@";
+"toastCreated" = "%@ created";
+"toastTestPassed" = "No errors found in %@";
+
+"passwordTitle" = "Password Required";
+"passwordMessage" = "“%@” is protected. Enter its password to continue.";
+"passwordWrong" = "Wrong password. Please try again.";
+
+"errorTitle" = "Something went wrong";
+"warningTitle" = "Finished with warnings";
+"errorEngineNotFound" = "The 7zz program could not be found or started.";
+"errorEngineTimeout" = "7zz did not respond in time. macOS may be blocking it; allow it in System Settings › Privacy & Security.";
+"errorCancelled" = "The operation was cancelled.";
+"errorWrongPassword" = "The password is wrong.";
+"errorNotArchive" = "This file cannot be opened as an archive.";
+"errorFailed" = "7-Zip stopped with error code %ld.";
+
+"settingsGeneral" = "General";
+"settingsCompression" = "Compression";
+"settingsAdvanced" = "Advanced";
+"settingsLanguage" = "Language";
+"settingsLanguageNote" = "Arhivar switches instantly. System menus follow after the next launch.";
+"languageSystem" = "System default";
+"settingsAppearance" = "Appearance";
+"appearanceSystem" = "Automatic";
+"appearanceLight" = "Light";
+"appearanceDark" = "Dark";
+"settingsExtraction" = "Extraction";
+"settingsExtractTo" = "Extract to";
+"extractToAsk" = "Ask every time";
+"extractToNextTo" = "Next to the archive";
+"extractToCustom" = "A fixed folder";
+"settingsCustomFolder" = "Folder";
+"settingsSubfolder" = "Create a folder named after the archive";
+"settingsReveal" = "Show results in Finder when finished";
+"settingsOverwrite" = "If a file already exists";
+"overwriteReplace" = "Replace it";
+"overwriteSkip" = "Skip it";
+"overwriteRename" = "Keep both";
+"settingsDefaults" = "New archive defaults";
+"settingsDefaultFormat" = "Format";
+"settingsDefaultLevel" = "Compression level";
+"settingsMultithread" = "Use all processor cores";
+"settingsEngine" = "7-Zip engine";
+"settingsEnginePath" = "Location";
+"settingsEngineVersion" = "Version";
+"settingsEngineCheck" = "Check Again";
+"settingsEngineNotFound" = "Not found";
+"settingsEngineUseCustom" = "Use a custom 7zz";
+"settingsReset" = "Reset All Settings";
+"settingsResetConfirm" = "Reset all settings to their defaults?";
+
+"updateSection" = "7-Zip updates";
+"updateCheck" = "Check for Updates";
+"updateInstall" = "Install 7-Zip %@";
+"updateChecking" = "Checking for updates…";
+"updateInstalling" = "Downloading and installing 7-Zip %@…";
+"updateAvailable" = "7-Zip %1$@ is available (installed: %2$@).";
+"updateUpToDate" = "7-Zip is up to date (%@).";
+"updateInstalled" = "7-Zip %@ installed.";
+"updateFailed" = "Update failed";
+"updateAutoCheck" = "Check for updates at launch";
+"updateSource" = "Downloaded from github.com/ip7z/7zip and verified with SHA-256.";
+
+"aboutVersion" = "Version %1$@ (%2$@)";
+"aboutPoweredBy" = "Powered by 7-Zip %@";
+"aboutEngineCredit" = "7-Zip is © Igor Pavlov, distributed under the GNU LGPL with the unRAR license restriction.";
+"aboutLicense" = "7-Zip License";
+"aboutAppLicense" = "Arhivar License (MIT)";
+"aboutNotices" = "Third-Party Notices";
+"aboutCopyright" = "© %@ Babadogan Tech and Edu";
+"unknown" = "unknown";
+
+"viewFolders" = "Folders";
+"viewTree" = "Tree";
+"viewModeLabel" = "List style";
+"navUp" = "Enclosing Folder";
+"contextQuickLook" = "Quick Look";
+"toolbarAdd" = "Add";
+"editAddFiles" = "Add Files to Archive…";
+"editDelete" = "Delete…";
+"editRename" = "Rename…";
+"buttonAdd" = "Add";
+"buttonDelete" = "Delete";
+"buttonRename" = "Rename";
+"deleteConfirmTitle" = "Delete %ld items from the archive?";
+"deleteConfirmMessage" = "This cannot be undone.";
+"renameTitle" = "Rename";
+"renameField" = "New name";
+"addConfirmTitle" = "Add %1$ld items to “%2$@”?";
+"progressUpdating" = "Updating archive…";
+"toastUpdated" = "Archive updated";
+"readOnlyArchive" = "This archive type can’t be edited. Extract it and create a new archive instead.";

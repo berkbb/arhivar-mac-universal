@@ -1,0 +1,215 @@
+/* Arhivar — Türkçe */
+
+"appName" = "Arhivar";
+"appTagline" = "7-Zip gücüyle çalışan modern arşiv yöneticisi";
+
+"menuAbout" = "Arhivar Hakkında";
+"menuNewArchive" = "Yeni Arşiv…";
+"menuOpenArchive" = "Arşiv Aç…";
+"menuCloseArchive" = "Arşivi Kapat";
+"menuArchive" = "Arşiv";
+"menuExtractAll" = "Tümünü Çıkar…";
+"menuExtractSelected" = "Seçilenleri Çıkar…";
+"menuTestArchive" = "Arşivi Test Et";
+"menuShowInFinder" = "Arşivi Finder'da Göster";
+"menuClearRecents" = "Son Arşivleri Temizle";
+"menuManual" = "7-Zip Kılavuzu";
+"menuWebsite" = "7-Zip Web Sitesi";
+"menuCheckUpdates" = "7-Zip Güncellemelerini Denetle…";
+
+"toolbarOpen" = "Aç";
+"toolbarCreate" = "Oluştur";
+"toolbarExtract" = "Çıkar";
+"toolbarTest" = "Test Et";
+"toolbarInfo" = "Bilgi";
+"searchPrompt" = "Arşivde ara";
+
+"sidebarLibrary" = "Kitaplık";
+"sidebarHome" = "Ana Sayfa";
+"sidebarRecent" = "Son Arşivler";
+"sidebarNoRecents" = "Henüz arşiv açılmadı";
+"sidebarRemoveRecent" = "Listeden Kaldır";
+
+"welcomeTitle" = "Arhivar'a Hoş Geldiniz";
+"welcomeSubtitle" = "İçeriğine göz atmak için bir arşiv açın ya da yeni arşiv oluşturmak için dosyaları buraya bırakın.";
+"welcomeDropHint" = "Dosyaları veya arşivleri buraya bırakın";
+"welcomeSupportedFormats" = "7z, ZIP, RAR, TAR, GZ, XZ, ISO, DMG ve daha fazlasını açar. 7z, ZIP, TAR, WIM, GZ, BZ2 ve XZ oluşturur.";
+
+"engineReady" = "7-Zip %@ hazır";
+"engineChecking" = "7-Zip motoru denetleniyor…";
+"engineMissingTitle" = "7-Zip motoru bulunamadı";
+"engineMissingMessage" = "Arhivar'ın 7zz programına ihtiyacı var. Güncelleyiciyle kurun ya da konumunu Ayarlar › Gelişmiş bölümünden seçin.";
+"engineBlockedTitle" = "7-Zip motoru yanıt vermiyor";
+"engineBlockedMessage" = "7zz internetten indirildiği için macOS onu engelliyor olabilir. Sistem Ayarları › Gizlilik ve Güvenlik bölümünden izin verin ya da güncelleyiciyle yeni bir kopya kurun.";
+
+"columnName" = "Ad";
+"columnSize" = "Boyut";
+"columnPacked" = "Sıkıştırılmış";
+"columnModified" = "Değiştirilme";
+"columnMethod" = "Yöntem";
+"contextOpen" = "Aç";
+"contextExtract" = "Çıkar…";
+"emptyArchive" = "Bu arşiv boş.";
+"noSearchResults" = "“%@” için sonuç yok";
+
+"statusItems" = "Öğe: %ld";
+"statusSize" = "Boyut: %@";
+"statusPacked" = "Sıkıştırılmış: %@";
+"statusRatio" = "Oran: %@";
+"statusSelected" = "Seçili: %ld";
+"statusEncrypted" = "Şifreli";
+
+"infoTitle" = "Arşiv Bilgisi";
+"infoLocation" = "Konum";
+"infoType" = "Tür";
+"infoMethod" = "Yöntem";
+"infoSolid" = "Katı (solid)";
+"infoArchiveSize" = "Arşiv boyutu";
+"infoFiles" = "Dosyalar";
+"infoFolders" = "Klasörler";
+"infoUnpackedSize" = "Açılmış boyut";
+"infoRatio" = "Sıkıştırma oranı";
+"infoEncrypted" = "Şifreli";
+"yes" = "Evet";
+"no" = "Hayır";
+
+"createTitle" = "Yeni Arşiv";
+"createSources" = "Eklenecek dosyalar";
+"createAddFiles" = "Dosya Ekle…";
+"createRemove" = "Kaldır";
+"createDropHint" = "Dosya ve klasörleri buraya bırakın";
+"createOutput" = "Çıktı";
+"createArchiveName" = "Arşiv adı";
+"createDestination" = "Kaydedileceği yer";
+"createOptions" = "Seçenekler";
+"createFormat" = "Biçim";
+"createLevel" = "Sıkıştırma düzeyi";
+"createEncryption" = "Şifreleme";
+"createPassword" = "Parola";
+"createPasswordConfirm" = "Parolayı doğrula";
+"createEncryptNames" = "Dosya adlarını da şifrele";
+"createPasswordMismatch" = "Parolalar eşleşmiyor.";
+"createEncryptionUnsupported" = "Bu biçim şifrelemeyi desteklemiyor.";
+"createSplit" = "Parçalara böl";
+"createSplitNone" = "Bölme";
+"createSingleFileOnly" = "Bu biçim yalnızca tek bir dosyayı sıkıştırabilir. Birden fazla öğe için 7z veya ZIP kullanın.";
+"createExistsWarning" = "Bu adda bir arşiv zaten var. Yeni dosyalar ona eklenecek.";
+"createButton" = "Arşivi Oluştur";
+
+"levelStore" = "Depola (sıkıştırma yok)";
+"levelFastest" = "En hızlı";
+"levelFast" = "Hızlı";
+"levelNormal" = "Normal";
+"levelMaximum" = "Yüksek";
+"levelUltra" = "Ultra";
+
+"buttonCancel" = "Vazgeç";
+"buttonOK" = "Tamam";
+"buttonChoose" = "Seç…";
+"buttonShowInFinder" = "Finder'da Göster";
+"buttonOpenSettings" = "Ayarları Aç";
+"buttonUnlock" = "Kilidi Aç";
+
+"panelOpenArchive" = "Açmak için bir arşiv seçin";
+"panelChooseDestination" = "Dosyaların çıkarılacağı yeri seçin";
+"panelExtract" = "Çıkar";
+"panelAdd" = "Ekle";
+
+"progressReading" = "Arşiv okunuyor…";
+"progressCreating" = "Arşiv oluşturuluyor…";
+"progressExtracting" = "Dosyalar çıkarılıyor…";
+"progressTesting" = "Arşiv test ediliyor…";
+
+"toastExtracted" = "Dosyalar %@ konumuna çıkarıldı";
+"toastCreated" = "%@ oluşturuldu";
+"toastTestPassed" = "%@ içinde hata bulunamadı";
+
+"passwordTitle" = "Parola Gerekli";
+"passwordMessage" = "“%@” parola korumalı. Devam etmek için parolasını girin.";
+"passwordWrong" = "Parola yanlış. Lütfen tekrar deneyin.";
+
+"errorTitle" = "Bir sorun oluştu";
+"warningTitle" = "Uyarılarla tamamlandı";
+"errorEngineNotFound" = "7zz programı bulunamadı ya da başlatılamadı.";
+"errorEngineTimeout" = "7zz zamanında yanıt vermedi. macOS onu engelliyor olabilir; Sistem Ayarları › Gizlilik ve Güvenlik bölümünden izin verin.";
+"errorCancelled" = "İşlem iptal edildi.";
+"errorWrongPassword" = "Parola yanlış.";
+"errorNotArchive" = "Bu dosya arşiv olarak açılamıyor.";
+"errorFailed" = "7-Zip %ld hata koduyla durdu.";
+
+"settingsGeneral" = "Genel";
+"settingsCompression" = "Sıkıştırma";
+"settingsAdvanced" = "Gelişmiş";
+"settingsLanguage" = "Dil";
+"settingsLanguageNote" = "Arhivar hemen değişir. Sistem menüleri bir sonraki açılışta güncellenir.";
+"languageSystem" = "Sistem varsayılanı";
+"settingsAppearance" = "Görünüm";
+"appearanceSystem" = "Otomatik";
+"appearanceLight" = "Açık";
+"appearanceDark" = "Koyu";
+"settingsExtraction" = "Çıkarma";
+"settingsExtractTo" = "Çıkarma konumu";
+"extractToAsk" = "Her seferinde sor";
+"extractToNextTo" = "Arşivin yanına";
+"extractToCustom" = "Sabit bir klasöre";
+"settingsCustomFolder" = "Klasör";
+"settingsSubfolder" = "Arşiv adıyla bir klasör oluştur";
+"settingsReveal" = "Bittiğinde sonucu Finder'da göster";
+"settingsOverwrite" = "Dosya zaten varsa";
+"overwriteReplace" = "Üzerine yaz";
+"overwriteSkip" = "Atla";
+"overwriteRename" = "İkisini de sakla";
+"settingsDefaults" = "Yeni arşiv varsayılanları";
+"settingsDefaultFormat" = "Biçim";
+"settingsDefaultLevel" = "Sıkıştırma düzeyi";
+"settingsMultithread" = "Tüm işlemci çekirdeklerini kullan";
+"settingsEngine" = "7-Zip motoru";
+"settingsEnginePath" = "Konum";
+"settingsEngineVersion" = "Sürüm";
+"settingsEngineCheck" = "Yeniden Denetle";
+"settingsEngineNotFound" = "Bulunamadı";
+"settingsEngineUseCustom" = "Özel bir 7zz kullan";
+"settingsReset" = "Tüm Ayarları Sıfırla";
+"settingsResetConfirm" = "Tüm ayarlar varsayılana döndürülsün mü?";
+
+"updateSection" = "7-Zip güncellemeleri";
+"updateCheck" = "Güncellemeleri Denetle";
+"updateInstall" = "7-Zip %@ Kur";
+"updateChecking" = "Güncellemeler denetleniyor…";
+"updateInstalling" = "7-Zip %@ indiriliyor ve kuruluyor…";
+"updateAvailable" = "7-Zip %1$@ yayımlandı (kurulu: %2$@).";
+"updateUpToDate" = "7-Zip güncel (%@).";
+"updateInstalled" = "7-Zip %@ kuruldu.";
+"updateFailed" = "Güncelleme başarısız";
+"updateAutoCheck" = "Açılışta güncellemeleri denetle";
+"updateSource" = "github.com/ip7z/7zip adresinden indirilir ve SHA-256 ile doğrulanır.";
+
+"aboutVersion" = "Sürüm %1$@ (%2$@)";
+"aboutPoweredBy" = "7-Zip %@ ile güçlendirilmiştir";
+"aboutEngineCredit" = "7-Zip © Igor Pavlov; GNU LGPL ve unRAR lisans kısıtlaması altında dağıtılır.";
+"aboutLicense" = "7-Zip Lisansı";
+"aboutAppLicense" = "Arhivar Lisansı (MIT)";
+"aboutNotices" = "Üçüncü Taraf Bildirimleri";
+"aboutCopyright" = "© %@ Babadogan Tech and Edu";
+"unknown" = "bilinmiyor";
+
+"viewFolders" = "Klasörler";
+"viewTree" = "Ağaç";
+"viewModeLabel" = "Liste biçimi";
+"navUp" = "Üst Klasör";
+"contextQuickLook" = "Hızlı Bakış";
+"toolbarAdd" = "Ekle";
+"editAddFiles" = "Arşive Dosya Ekle…";
+"editDelete" = "Sil…";
+"editRename" = "Yeniden Adlandır…";
+"buttonAdd" = "Ekle";
+"buttonDelete" = "Sil";
+"buttonRename" = "Yeniden Adlandır";
+"deleteConfirmTitle" = "Arşivden %ld öğe silinsin mi?";
+"deleteConfirmMessage" = "Bu işlem geri alınamaz.";
+"renameTitle" = "Yeniden Adlandır";
+"renameField" = "Yeni ad";
+"addConfirmTitle" = "“%2$@” arşivine %1$ld öğe eklensin mi?";
+"progressUpdating" = "Arşiv güncelleniyor…";
+"toastUpdated" = "Arşiv güncellendi";
+"readOnlyArchive" = "Bu arşiv türü düzenlenemez. Çıkarıp yeni bir arşiv oluşturun.";
