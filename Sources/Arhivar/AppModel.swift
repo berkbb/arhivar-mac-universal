@@ -919,6 +919,32 @@ final class AppModel {
         }
     }
 
+    /// Bir metin alanı (arama, ad, parola) düzenleniyor mu? Düzen menüsü komutları o zaman metne gider.
+    static var isEditingText: Bool { NSApp?.keyWindow?.firstResponder is NSText }
+
+    /// Düzen › Kopyala (⌘C). SwiftUI'nin `onCopyCommand`'ı hiyerarşik tabloda çağrılmadığı için menü komutu
+    /// yönlendirir: metin düzenleniyorsa sistem kopyalaması, değilse seçili arşiv öğeleri dosya olarak.
+    func copyCommand(editingText: Bool = AppModel.isEditingText, pasteboard: NSPasteboard = .general) {
+        if !editingText, listing != nil, operation == nil, !selection.isEmpty {
+            copyItems(to: pasteboard)
+        } else {
+            NSApp?.sendAction(#selector(NSText.copy(_:)), to: nil, from: nil)
+        }
+    }
+
+    /// Düzen › Yapıştır (⌘V): metin düzenleniyorsa sistem yapıştırması, değilse panodaki dosyaları arşive ekleme.
+    func pasteCommand(editingText: Bool = AppModel.isEditingText, pasteboard: NSPasteboard = .general) {
+        if !editingText, listing != nil, isEditable, operation == nil, Self.hasFiles(pasteboard) {
+            pasteFiles(from: pasteboard)
+        } else {
+            NSApp?.sendAction(#selector(NSText.paste(_:)), to: nil, from: nil)
+        }
+    }
+
+    private static func hasFiles(_ pasteboard: NSPasteboard) -> Bool {
+        pasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
+    }
+
     /// ⌘V: panodaki dosyaları (onay sorarak) düzenlenebilir arşivin açık klasörüne ekler.
     func pasteFiles(from pasteboard: NSPasteboard = .general) {
         guard listing != nil, isEditable, operation == nil else { return }

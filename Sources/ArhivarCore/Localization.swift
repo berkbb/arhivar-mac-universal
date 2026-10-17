@@ -120,6 +120,7 @@ public enum LKey: String, CaseIterable, Sendable {
     case settingsSandbox, settingsSandboxNote
     case subfolderSmart, subfolderAlways, subfolderNever, excludeMacMetadata, settingsStoreSymlinks, settingsStoreSymlinksNote
     case duplicateNames, createPasswordConfirmHint, warningRemovedLinks
+    case editCut, editPaste, editPasteMatchStyle, editSelectAll
     case contextCopy, toastCopied, contextBrowse, navParentArchive, progressCopying
     case contextChecksums, checksumsTitle, buttonCopy, infoComment, infoBlocks, infoVolumes, progressChecksums
     case unknown

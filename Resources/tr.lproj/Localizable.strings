@@ -255,3 +255,7 @@
 "infoVolumes" = "Parçalar";
 "progressChecksums" = "Sağlama değerleri hesaplanıyor…";
 "progressCopying" = "Kopyalanacak öğeler hazırlanıyor…";
+"editCut" = "Kes";
+"editPaste" = "Yapıştır";
+"editPasteMatchStyle" = "Yapıştır ve Stili Eşleştir";
+"editSelectAll" = "Tümünü Seç";

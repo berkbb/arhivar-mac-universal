@@ -13,7 +13,7 @@ struct ArchiveBrowserView: View {
         Table(model.displayNodes, children: \.children, selection: $model.selection, sortOrder: $model.sortOrder) {
             // Finder sıralaması: "dosya2" < "dosya10", büyük/küçük harf duyarsız, yerele uygun ("Çanta" < "Zebra").
             TableColumn(settings.t(.columnName), value: \.name, comparator: .localizedStandard) { node in
-                NameCell(node: node)
+                NameCell(node: node, model: model, settings: settings)
             }
             .width(min: 220, ideal: 380)
 
@@ -57,14 +57,6 @@ struct ArchiveBrowserView: View {
         .onKeyPress(.return) {
             model.primaryAction(model.selection)
             return .handled
-        }
-        // ⌘C seçili öğeleri çıkarıp dosya olarak panoya koyar (iş bitince); ⌘V panodaki dosyaları ekler.
-        .onCopyCommand {
-            model.copyItems()
-            return []
-        }
-        .onPasteCommand(of: [.fileURL]) { _ in
-            model.pasteFiles()
         }
         .quickLookPreview($model.quickLookURL)
         .overlay {
@@ -126,10 +118,13 @@ struct ArchiveBrowserView: View {
     }
 }
 
+/// Satır hücresi. Model ve ayarlar ortamdan (@Environment) okunmaz, doğrudan verilir: hiyerarşik `Table`, klasörden
+/// çıkınca yeniden eklenen satırların hücrelerini ortam nesneleri olmadan güncelliyor ve uygulama
+/// "No Observable object of type AppModel found" ile çöküyordu.
 private struct NameCell: View {
     let node: ArchiveNode
-    @Environment(AppModel.self) private var model
-    @Environment(AppSettings.self) private var settings
+    let model: AppModel
+    let settings: AppSettings
 
     var body: some View {
         let content = HStack(spacing: 7) {

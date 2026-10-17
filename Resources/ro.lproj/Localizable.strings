@@ -255,3 +255,7 @@
 "infoVolumes" = "Volume";
 "progressChecksums" = "Se calculează sumele de control…";
 "progressCopying" = "Se pregătesc elementele de copiat…";
+"editCut" = "Decupează";
+"editPaste" = "Lipește";
+"editPasteMatchStyle" = "Lipește și potrivește stilul";
+"editSelectAll" = "Selectează tot";

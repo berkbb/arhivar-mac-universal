@@ -255,3 +255,7 @@
 "infoVolumes" = "Volumes";
 "progressChecksums" = "Calculating checksums…";
 "progressCopying" = "Preparing items to copy…";
+"editCut" = "Cut";
+"editPaste" = "Paste";
+"editPasteMatchStyle" = "Paste and Match Style";
+"editSelectAll" = "Select All";

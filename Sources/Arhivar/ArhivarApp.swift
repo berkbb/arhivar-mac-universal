@@ -98,6 +98,21 @@ struct AppCommands: Commands {
                 .disabled(model.listing == nil)
         }
 
+        // ⌘C / ⌘V arşiv tablosunda dosya kopyalar ve ekler; metin alanlarında her zamanki gibi çalışır.
+        // Standart grup değiştirildiği için Kes, Yapıştır ve Stili Eşleştir, Tümünü Seç de odaktaki öğeye iletilir.
+        CommandGroup(replacing: .pasteboard) {
+            Button(settings.t(.editCut)) { NSApp.sendAction(#selector(NSText.cut(_:)), to: nil, from: nil) }
+                .keyboardShortcut("x")
+            Button(settings.t(.contextCopy)) { model.copyCommand() }
+                .keyboardShortcut("c")
+            Button(settings.t(.editPaste)) { model.pasteCommand() }
+                .keyboardShortcut("v")
+            Button(settings.t(.editPasteMatchStyle)) { NSApp.sendAction(#selector(NSTextView.pasteAsPlainText(_:)), to: nil, from: nil) }
+                .keyboardShortcut("v", modifiers: [.command, .option, .shift])
+            Button(settings.t(.editSelectAll)) { NSApp.sendAction(#selector(NSText.selectAll(_:)), to: nil, from: nil) }
+                .keyboardShortcut("a")
+        }
+
         CommandMenu(settings.t(.menuArchive)) {
             Button(settings.t(.menuExtractAll)) { model.extract(selectedOnly: false) }
                 .keyboardShortcut("e")
