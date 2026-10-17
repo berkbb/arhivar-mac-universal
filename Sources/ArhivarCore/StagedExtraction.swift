@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 /// Çıkarmayı önce hedefle aynı birimdeki bir hazırlık klasörüne yapar, başarıda hedefe taşır.
@@ -18,6 +19,32 @@ public enum StagedExtraction {
         let fallback = anchor.appendingPathComponent(".arhivar-staging-\(UUID().uuidString)", isDirectory: true)
         try fileManager.createDirectory(at: fallback, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         return fallback
+    }
+
+    /// Hazırlık klasöründe taşınacak içeriğin kökü. Klasör görünümünde bir alt klasördeyken seçilen öğeler
+    /// 7zz tarafından tam iç yollarıyla ("a/b/c/dosya.txt") yazılır; hedefe o klasörün yolu olmadan gitmeleri için
+    /// içerik "a/b/c" altından alınır.
+    public static func contentRoot(in staging: URL, stripping folder: String, fileManager: FileManager = .default) -> URL {
+        let components = folder.split(separator: "/").filter { $0 != "." }
+        guard !components.isEmpty else { return staging }
+        let candidate = components.reduce(staging) { $0.appendingPathComponent(String($1), isDirectory: true) }
+        return itemType(candidate, fileManager: fileManager) == .typeDirectory ? candidate : staging
+    }
+
+    /// İçeriğin taşınacağı klasör: alt klasör kuralına göre hedefin kendisi ya da arşiv adıyla bir alt klasörü.
+    /// "Akıllı" kural, tek kök öğeli arşivlerde "Ad/Ad/…" iç içe klasörünü önler; çok öğeli arşivlerin
+    /// ("tarbomb") içeriği hedefe dağılmaz, arşiv adıyla bir klasörde toplanır.
+    public static func destination(
+        for content: URL, base: URL, archiveName: String, mode: SubfolderMode, fileManager: FileManager = .default
+    ) -> URL {
+        let subfolder = base.appendingPathComponent(archiveName, isDirectory: true)
+        switch mode {
+        case .always: return subfolder
+        case .never: return base
+        case .smart:
+            let roots = (try? fileManager.contentsOfDirectory(atPath: content.path)) ?? []
+            return roots.count > 1 ? subfolder : base
+        }
     }
 
     /// Hazırlık klasöründeki öğeleri hedefe taşır ve üzerine yazma politikasını uygular.
@@ -56,12 +83,15 @@ public enum StagedExtraction {
             return nil
         case .replace:
             if targetType == .typeRegular, itemType(source, fileManager: fileManager) == .typeRegular {
-                // Dosyadan dosyaya: yerinde, tek adımda değiştir.
-                _ = try fileManager.replaceItemAt(target, withItemAt: source)
-            } else {
-                try fileManager.removeItem(at: target)
-                try fileManager.moveItem(at: source, to: target)
+                // Dosyadan dosyaya: yerinde, tek adımda değiştir. Eski dosyanın üst verisi (karantina dahil)
+                // yeni içeriğe taşınmasın; yeni dosyanın karantina işareti ayrıca yeniden denetlenir.
+                let mark = Quarantine.value(of: source)
+                let result = try fileManager.replaceItemAt(target, withItemAt: source, options: .usingNewMetadataOnly) ?? target
+                Quarantine.ensure(mark, on: result)
+                return result
             }
+            try fileManager.removeItem(at: target)
+            try fileManager.moveItem(at: source, to: target)
             return target
         case .rename:
             let unique = uniqueURL(for: target, fileManager: fileManager)
@@ -69,6 +99,103 @@ public enum StagedExtraction {
             return unique
         }
     }
+
+    // MARK: - Sembolik bağlantılar
+
+    /// Klasördeki sembolik bağlantıları denetler: hedef ağacın dışını gösterenleri siler, 7zz'nin mutlak yollu
+    /// bağlantıları güvenli kılmak için çıkarma klasörüne göre yazdığı hedefleri göreli yapar.
+    ///
+    /// 7zz mutlak bir bağlantıyı (ör. "/etc/hosts") çıkarma klasörünün içine yönlendirir ("<hazırlık>/etc/hosts");
+    /// hazırlık klasörü taşınıp silinince bu bağlantı ağacın dışını gösterirdi. Göreli yapılınca hedefte de
+    /// aynı yeri (hedef/etc/hosts) gösterir.
+    /// - Returns: Silinen bağlantıların klasöre göre yolları.
+    @discardableResult
+    public static func secureSymlinks(in root: URL, fileManager: FileManager = .default) -> [String] {
+        guard let enumerator = fileManager.enumerator(atPath: root.path) else { return [] }
+        var links: [String] = []
+        while let relative = enumerator.nextObject() as? String {
+            if enumerator.fileAttributes?[.type] as? FileAttributeType == .typeSymbolicLink { links.append(relative) }
+        }
+        guard !links.isEmpty else { return [] }
+
+        let rootPath = root.standardizedFileURL.path
+        let realRoot = resolvedPath(rootPath)
+        // 7zz hedefi bizim verdiğimiz yazımla ("/var/…") ya da gerçek yolla ("/private/var/…") yazabilir.
+        let bases = Array(Set([rootPath, realRoot, (rootPath as NSString).standardizingPath, (realRoot as NSString).standardizingPath]))
+            .sorted { $0.count > $1.count }
+        func inside(_ path: String, of base: String) -> Bool { path == base || path.hasPrefix(base + "/") }
+
+        // Önce tüm kararlar özgün ağaç üzerinde verilir, sonra uygulanır: bir bağlantının kararı,
+        // daha önce silinen başka bir bağlantıya bağlı olmasın.
+        var removals: [String] = []
+        var rewrites: [(String, String)] = []
+        for relative in links {
+            let link = (rootPath as NSString).appendingPathComponent(relative)
+            guard let target = try? fileManager.destinationOfSymbolicLink(atPath: link) else { continue }
+            if target.hasPrefix("/") {
+                let normalized = lexicallyNormalized(target)
+                if let base = bases.first(where: { inside(normalized, of: $0) }) {
+                    let targetRelative = String(normalized.dropFirst(base.count)).split(separator: "/").map(String.init)
+                    rewrites.append((relative, relativePath(from: relative, to: targetRelative)))
+                } else {
+                    removals.append(relative)
+                }
+                continue
+            }
+            let resolved = resolvedPath(((link as NSString).deletingLastPathComponent as NSString).appendingPathComponent(target))
+            if !inside(resolved, of: realRoot) { removals.append(relative) }
+        }
+        for relative in removals {
+            try? fileManager.removeItem(atPath: (rootPath as NSString).appendingPathComponent(relative))
+        }
+        for (relative, target) in rewrites {
+            let link = (rootPath as NSString).appendingPathComponent(relative)
+            try? fileManager.removeItem(atPath: link)
+            try? fileManager.createSymbolicLink(atPath: link, withDestinationPath: target)
+        }
+        return removals.sorted()
+    }
+
+    /// `link` (köke göre göreli bağlantı yolu) konumundan, köke göre `target` bileşenlerine giden göreli yol.
+    static func relativePath(from link: String, to target: [String]) -> String {
+        let directory = link.split(separator: "/").dropLast().map(String.init)
+        var common = 0
+        while common < directory.count, common < target.count, directory[common] == target[common] { common += 1 }
+        let parts = Array(repeating: "..", count: directory.count - common) + target[common...]
+        return parts.isEmpty ? "." : parts.joined(separator: "/")
+    }
+
+    /// "." ve ".." bileşenlerini metin üzerinde çözer (`standardizingPath`'in aksine "/private" önekini silmez).
+    static func lexicallyNormalized(_ path: String) -> String {
+        var parts: [Substring] = []
+        for component in path.split(separator: "/") {
+            switch component {
+            case ".": continue
+            case "..": if !parts.isEmpty { parts.removeLast() }
+            default: parts.append(component)
+            }
+        }
+        return "/" + parts.joined(separator: "/")
+    }
+
+    /// Yolu sembolik bağlantıları izleyerek çözer (realpath). Var olmayan son bileşenler, var olan en yakın
+    /// üst klasör çözüldükten sonra sırayla eklenir ("..", bir üst klasöre çıkar).
+    static func resolvedPath(_ path: String) -> String {
+        if let real = realpath(path, nil) {
+            defer { free(real) }
+            return String(cString: real)
+        }
+        let parent = (path as NSString).deletingLastPathComponent
+        guard !parent.isEmpty, parent != path else { return path }
+        let base = resolvedPath(parent)
+        switch (path as NSString).lastPathComponent {
+        case "..": return (base as NSString).deletingLastPathComponent
+        case ".", "": return base
+        case let name: return (base as NSString).appendingPathComponent(name)
+        }
+    }
+
+    // MARK: - Yardımcılar
 
     /// 7-Zip'in "-aou" adlandırmasıyla aynı: "ad_1.uzanti", "ad_2.uzanti", …
     public static func uniqueURL(for url: URL, fileManager: FileManager = .default) -> URL {
@@ -116,13 +243,43 @@ public enum DiskSpace {
         return required <= max(0, available - reserve)
     }
 
-    /// Seçili öğelerin (boşsa tüm arşivin) açılmış toplam boyutu.
+    /// Seçili öğelerin (boşsa tüm arşivin) açılmış toplam boyutu. Uydurma boyutlar (zip bombası) taşma yerine Int64.max'ta durur.
     public static func requiredBytes(for items: [String], in entries: [ArchiveEntry]) -> Int64 {
         entries.reduce(0) { total, entry in
             guard !entry.isDirectory else { return total }
             let selected = items.isEmpty || items.contains { entry.path == $0 || entry.path.hasPrefix($0 + "/") }
-            return selected ? total + (entry.size ?? 0) : total
+            return selected ? total.saturatingAdding(entry.size ?? 0) : total
         }
+    }
+
+    /// Dosya ve klasörlerin (alt öğeleri dahil) diskteki toplam mantıksal boyutu. Sembolik bağlantılar izlenmez.
+    public static func totalSize(of urls: [URL], fileManager: FileManager = .default) -> Int64 {
+        var total: Int64 = 0
+        for url in urls {
+            guard let type = StagedExtraction.itemType(url, fileManager: fileManager) else { continue }
+            if type == .typeRegular {
+                total = total.saturatingAdding(size(of: url, fileManager: fileManager))
+            } else if type == .typeDirectory, let enumerator = fileManager.enumerator(atPath: url.path) {
+                while enumerator.nextObject() != nil {
+                    guard enumerator.fileAttributes?[.type] as? FileAttributeType == .typeRegular else { continue }
+                    total = total.saturatingAdding((enumerator.fileAttributes?[.size] as? NSNumber)?.int64Value ?? 0)
+                }
+            }
+        }
+        return total
+    }
+
+    static func size(of url: URL, fileManager: FileManager) -> Int64 {
+        ((try? fileManager.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.int64Value ?? 0
+    }
+
+    /// Arşiv oluşturma ya da yerinde düzenleme için gereken en az alan.
+    ///
+    /// Sıkıştırılan biçimlerde sonuç boyutu önceden bilinemez; yanlışlıkla engellememek için kaynaklar sayılmaz.
+    /// Sıkıştırmasız biçimler (tar, wim, "saklama") kaynakların tamamını yazar. Yerinde düzenlemede 7zz
+    /// arşivin geçici bir kopyasını yazıp eskisiyle değiştirir; bu yüzden mevcut arşiv boyutu da gerekir.
+    public static func requiredForWriting(sourceBytes: Int64, compresses: Bool, existingArchiveBytes: Int64 = 0) -> Int64 {
+        existingArchiveBytes.saturatingAdding(compresses ? 0 : sourceBytes)
     }
 }
 

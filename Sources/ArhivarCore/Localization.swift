@@ -118,5 +118,9 @@ public enum LKey: String, CaseIterable, Sendable {
     case consentTitle, consentMessage, consentAllow, consentDeny, aboutRepository
     case errorDiskSpace
     case settingsSandbox, settingsSandboxNote
+    case subfolderSmart, subfolderAlways, subfolderNever, excludeMacMetadata, settingsStoreSymlinks, settingsStoreSymlinksNote
+    case duplicateNames, createPasswordConfirmHint, warningRemovedLinks
+    case contextCopy, toastCopied, contextBrowse, navParentArchive, progressCopying
+    case contextChecksums, checksumsTitle, buttonCopy, infoComment, infoBlocks, infoVolumes, progressChecksums
     case unknown
 }

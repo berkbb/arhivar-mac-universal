@@ -95,14 +95,18 @@ public struct EngineUpdater: Sendable {
     public let scriptURL: URL
     /// Boşsa betik hedefi kendisi seçer: uygulamanın içindeyse o uygulamanın 7zz'si güncellenir.
     public let targets: [String]
+    /// Uygulamanın kullandığı 7zz'nin sürümü. Betik yazılamayan bir paketten yedek klasöre geçtiğinde
+    /// (henüz orada 7zz yokken) kurulu sürümü "yok" sanıp sahte güncelleme bildirmesin.
+    public let currentVersion: String?
 
-    public init(scriptURL: URL, targets: [String] = []) {
+    public init(scriptURL: URL, targets: [String] = [], currentVersion: String? = nil) {
         self.scriptURL = scriptURL
         self.targets = targets
+        self.currentVersion = currentVersion
     }
 
     public func arguments(command: String) -> [String] {
-        [scriptURL.path, command] + targets
+        [scriptURL.path, command] + targets + (currentVersion.map { ["--current", $0] } ?? [])
     }
 
     public func check() async throws -> EngineUpdateResult {
@@ -151,6 +155,38 @@ public enum ArchiveNaming {
 
     public static func isArchive(_ url: URL) -> Bool {
         isArchiveExtension(url.pathExtension)
+    }
+
+    /// Arşiv içindeyken çift tıklayınca Arhivar'da açılacak (iç içe gezinilecek) öğeler: arşivler ve yükleyici paketleri.
+    /// .docx, .jar gibi zip tabanlı belgeler kendi uygulamalarıyla açılmaya devam eder.
+    public static func isBrowsable(_ name: String) -> Bool {
+        let ext = (name as NSString).pathExtension
+        return isArchiveExtension(ext) || ext.lowercased() == "pkg"
+    }
+
+    /// Bölünmüş arşivin bir parçası verilirse ilk parçası: 7zz yalnızca ilk parçadan açar.
+    /// "veri.7z.002" → "veri.7z.001", "film.part3.rar" → "film.part1.rar" (ya da "part01"). İlk parça yoksa olduğu gibi döner.
+    public static func firstVolume(of url: URL, fileManager: FileManager = .default) -> URL {
+        let directory = url.deletingLastPathComponent()
+        let name = url.lastPathComponent
+        var candidate: String?
+        let ext = url.pathExtension
+        if ext.count == 3, ext.allSatisfy(\.isASCII), ext.allSatisfy(\.isNumber), ext != "001" {
+            candidate = url.deletingPathExtension().lastPathComponent + ".001"
+        } else if ext.lowercased() == "rar" {
+            let stem = url.deletingPathExtension().lastPathComponent as NSString
+            let part = stem.pathExtension
+            if part.lowercased().hasPrefix("part") {
+                let digits = part.dropFirst(4)
+                if !digits.isEmpty, digits.allSatisfy({ $0.isASCII && $0.isNumber }), Int(digits) != 1 {
+                    let first = String(repeating: "0", count: max(0, digits.count - 1)) + "1"
+                    candidate = stem.deletingPathExtension + "." + part.prefix(4) + first + ".rar"
+                }
+            }
+        }
+        guard let candidate, candidate != name else { return url }
+        let first = directory.appendingPathComponent(candidate)
+        return fileManager.fileExists(atPath: first.path) ? first : url
     }
 
     /// Tek akışlı arşivin (xz, bzip2, gzip) içindeki öğenin adı: "yedek.tar.xz" → "yedek.tar", "a.txz" → "a.tar".

@@ -2,7 +2,7 @@ import Foundation
 
 /// Tabloda gösterilen, klasör hiyerarşisine dönüştürülmüş arşiv öğesi.
 public struct ArchiveNode: Identifiable, Sendable, Equatable {
-    /// 7zz'ye verilecek tam yol.
+    /// Normalleştirilmiş tam yol ("a/b/c.txt"); seçim, gezinme ve yol çubuğu bunu kullanır.
     public let id: String
     public var name: String
     public let isDirectory: Bool
@@ -12,10 +12,12 @@ public struct ArchiveNode: Identifiable, Sendable, Equatable {
     public let isEncrypted: Bool
     public let method: String?
     public var children: [ArchiveNode]?
+    /// 7zz'ye verilecek ham yol (ör. "./a/b/c.txt"); çoğu arşivde `id` ile aynıdır.
+    public let archivePath: String
 
     public init(
         id: String, name: String, isDirectory: Bool, size: Int64, packedSize: Int64?,
-        modified: Date?, isEncrypted: Bool, method: String?, children: [ArchiveNode]?
+        modified: Date?, isEncrypted: Bool, method: String?, children: [ArchiveNode]?, archivePath: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -26,6 +28,7 @@ public struct ArchiveNode: Identifiable, Sendable, Equatable {
         self.isEncrypted = isEncrypted
         self.method = method
         self.children = children
+        self.archivePath = archivePath ?? id
     }
 
     public var fileExtension: String { (id as NSString).pathExtension.lowercased() }
@@ -39,14 +42,17 @@ public struct ArchiveNode: Identifiable, Sendable, Equatable {
 private final class TreeBuilderNode {
     let path: String
     let name: String
+    /// 7zz'nin bu düğümü tanıdığı ham yol (ara klasörlerde bir alt girdinin ham yolundan türetilir).
+    var archivePath: String
     var entry: ArchiveEntry?
     var isDirectory: Bool
     var children: [String: TreeBuilderNode] = [:]
     var order: [String] = []
 
-    init(path: String, name: String, isDirectory: Bool) {
+    init(path: String, name: String, archivePath: String, isDirectory: Bool) {
         self.path = path
         self.name = name
+        self.archivePath = archivePath
         self.isDirectory = isDirectory
     }
 }
@@ -54,10 +60,12 @@ private final class TreeBuilderNode {
 public enum ArchiveTree {
     /// Düz girdi listesini klasör ağacına çevirir; arşivde açıkça bulunmayan ara klasörleri de oluşturur.
     public static func build(from entries: [ArchiveEntry]) -> [ArchiveNode] {
-        let root = TreeBuilderNode(path: "", name: "", isDirectory: true)
+        let root = TreeBuilderNode(path: "", name: "", archivePath: "", isDirectory: true)
         for entry in entries {
             let components = entry.path.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
             guard !components.isEmpty else { continue }
+            // Ham yol normalden farklıysa (ör. "./a/b") ara klasörlerin ham yolu da ondan türetilir.
+            let raw = entry.archivePath == entry.path ? nil : entry.archivePath
             var current = root
             var currentPath = ""
             for (index, component) in components.enumerated() {
@@ -66,13 +74,16 @@ public enum ArchiveTree {
                 if let existing = current.children[component] {
                     current = existing
                 } else {
-                    let node = TreeBuilderNode(path: currentPath, name: component, isDirectory: !isLast || entry.isDirectory)
+                    let archivePath = isLast ? entry.archivePath : raw.map { rawPrefix($0, components: index + 1) } ?? currentPath
+                    let node = TreeBuilderNode(path: currentPath, name: component, archivePath: archivePath, isDirectory: !isLast || entry.isDirectory)
                     current.children[component] = node
                     current.order.append(component)
                     current = node
                 }
                 if isLast {
                     current.entry = entry
+                    // Kendi girdisi olan düğümde 7zz'nin yazdığı yol türetilmiş olandan önceliklidir.
+                    current.archivePath = entry.archivePath
                     if entry.isDirectory { current.isDirectory = true }
                 } else {
                     current.isDirectory = true
@@ -82,24 +93,44 @@ public enum ArchiveTree {
         return root.order.compactMap { root.children[$0].map(convert) }
     }
 
+    /// Ham yolun ilk `count` anlamlı bileşenini (boş ve "." bileşenler sayılmaz) yazıldığı gibi döndürür:
+    /// "./a//b/c.txt", 2 → "./a//b".
+    static func rawPrefix(_ raw: String, components count: Int) -> String {
+        var seen = 0
+        var index = raw.startIndex
+        while index < raw.endIndex {
+            let end = raw[index...].firstIndex(of: "/") ?? raw.endIndex
+            let component = raw[index..<end]
+            if !component.isEmpty && component != "." {
+                seen += 1
+                if seen == count { return String(raw[..<end]) }
+            }
+            guard end < raw.endIndex else { break }
+            index = raw.index(after: end)
+        }
+        return raw
+    }
+
     private static func convert(_ node: TreeBuilderNode) -> ArchiveNode {
+        // Kimlik her zaman normalleştirilmiş yoldur; ham yol (sondaki "/" ya da "./" ile) yol çubuğuyla eşleşmezdi.
         if node.isDirectory {
             let children = node.order.compactMap { node.children[$0].map(convert) }
             let packed = children.compactMap(\.packedSize)
             return ArchiveNode(
-                id: node.entry?.path ?? node.path,
+                id: node.path,
                 name: node.name,
                 isDirectory: true,
-                size: children.reduce(0) { $0 + $1.size },
-                packedSize: packed.isEmpty ? nil : packed.reduce(0, +),
+                size: children.lazy.map(\.size).saturatingSum(),
+                packedSize: packed.isEmpty ? nil : packed.saturatingSum(),
                 modified: node.entry?.modified,
                 isEncrypted: node.entry?.isEncrypted ?? false,
                 method: nil,
-                children: children
+                children: children,
+                archivePath: node.archivePath
             )
         }
         return ArchiveNode(
-            id: node.entry?.path ?? node.path,
+            id: node.path,
             name: node.name,
             isDirectory: false,
             size: node.entry?.size ?? 0,
@@ -107,9 +138,13 @@ public enum ArchiveTree {
             modified: node.entry?.modified,
             isEncrypted: node.entry?.isEncrypted ?? false,
             method: node.entry?.method,
-            children: nil
+            children: nil,
+            archivePath: node.archivePath
         )
     }
+
+    /// Ad sütunu için Finder sıralaması: büyük/küçük harf duyarsız, sayılar sayı olarak ("dosya2" < "dosya10"), yerele uygun ("Çanta" < "Zebra").
+    public static let nameComparator = KeyPathComparator(\ArchiveNode.name, comparator: .localizedStandard)
 
     /// Klasörler önce gelecek şekilde, alt düzeyler dahil sıralar.
     public static func sorted(_ nodes: [ArchiveNode], using comparators: [KeyPathComparator<ArchiveNode>]) -> [ArchiveNode] {

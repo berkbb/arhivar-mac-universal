@@ -12,7 +12,16 @@ public enum OpenSafety {
         "com.apple.mobileconfig",
         "com.apple.terminal.settings",
         "com.apple.automator-workflow",
+        "com.apple.applescript.script",
+        "com.apple.applescript.text",
+        "com.apple.applescript.script-bundle",
+        "com.apple.shortcut",
+        "com.apple.systempreference.prefpane",
+        "com.apple.quicklook.generator",
     ].compactMap { UTType($0) }
+
+    /// Sistemin tür tanımı olmayabilen (dinamik UTI) riskli uzantılar: AppleScript, Kestirmeler, sistem eklentileri.
+    static let riskyExtensions: Set<String> = ["scpt", "scptd", "applescript", "shortcut", "prefpane", "qlgenerator"]
 
     /// Dosya çalıştırılabilir ya da riskli bir türdeyse türün okunur adını (yoksa tanımlayıcısını) döndürür.
     public static func executableKind(of url: URL) -> String? {
@@ -20,6 +29,9 @@ public enum OpenSafety {
         let values = try? resolved.resourceValues(forKeys: [.contentTypeKey, .isRegularFileKey])
         if let type = values?.contentType, riskyTypes.contains(where: { type.conforms(to: $0) }) {
             return type.localizedDescription ?? type.identifier
+        }
+        if riskyExtensions.contains(resolved.pathExtension.lowercased()) {
+            return values?.contentType?.localizedDescription ?? resolved.pathExtension
         }
         // Uzantısız Mach-O ya da betikler: çalıştırma (x) biti olan sıradan dosyalar.
         if values?.isRegularFile == true,
@@ -49,7 +61,12 @@ public enum OpenSafety {
         return result
     }
 
+    /// Görünmeyen ama "harf" ya da "sembol" sayılan doldurma karakterleri: Braille boşluğu, Hangul dolgu harfleri.
+    /// Bir adın sonundaki gerçek uzantıyı boşlukla itip gizleyebilirler ("fatura.pdf⠀⠀⠀⠀.app").
+    static let blankFillers: Set<UInt32> = [0x2800, 0x3164, 0x115F, 0x1160, 0xFFA0]
+
     static func isDeceptive(_ scalar: Unicode.Scalar) -> Bool {
+        if blankFillers.contains(scalar.value) { return true }
         switch scalar.properties.generalCategory {
         case .format, .control, .lineSeparator, .paragraphSeparator:
             return true

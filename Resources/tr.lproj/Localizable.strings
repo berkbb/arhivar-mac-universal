@@ -154,7 +154,7 @@
 "extractToNextTo" = "Arşivin yanına";
 "extractToCustom" = "Sabit bir klasöre";
 "settingsCustomFolder" = "Klasör";
-"settingsSubfolder" = "Arşiv adıyla bir klasör oluştur";
+"settingsSubfolder" = "Arşiv adıyla klasör";
 "settingsReveal" = "Bittiğinde sonucu Finder'da göster";
 "settingsOverwrite" = "Dosya zaten varsa";
 "overwriteReplace" = "Üzerine yaz";
@@ -233,3 +233,25 @@
 "progressUpdating" = "Arşiv güncelleniyor…";
 "toastUpdated" = "Arşiv güncellendi";
 "readOnlyArchive" = "Bu arşiv türü düzenlenemez. Çıkarıp yeni bir arşiv oluşturun.";
+
+"subfolderSmart" = "Birden çok öğe varsa";
+"subfolderAlways" = "Her zaman";
+"subfolderNever" = "Hiçbir zaman";
+"excludeMacMetadata" = "macOS üst verisini dışarıda bırak (.DS_Store, ._*, __MACOSX)";
+"settingsStoreSymlinks" = "Sembolik bağlantıları bağlantı olarak sakla";
+"settingsStoreSymlinksNote" = ".app paketleri ve framework'ler bozulmadan ve imzalı kalır. Kapatılırsa bağlantıların gösterdiği dosyalar saklanır.";
+"duplicateNames" = "Aynı adlı öğeler arşivde aynı klasörde bulunamaz: %@";
+"createPasswordConfirmHint" = "Onaylamak için parolayı yeniden girin.";
+"warningRemovedLinks" = "Hedefin dışını gösteren sembolik bağlantılar atlandı: %@";
+"contextCopy" = "Kopyala";
+"toastCopied" = "%ld öğe kopyalandı";
+"contextBrowse" = "Arhivar'da Aç";
+"navParentArchive" = "%@ arşivine dön";
+"contextChecksums" = "Sağlama Değerleri…";
+"checksumsTitle" = "“%@” sağlama değerleri";
+"buttonCopy" = "Kopyala";
+"infoComment" = "Yorum";
+"infoBlocks" = "Katı bloklar";
+"infoVolumes" = "Parçalar";
+"progressChecksums" = "Sağlama değerleri hesaplanıyor…";
+"progressCopying" = "Kopyalanacak öğeler hazırlanıyor…";

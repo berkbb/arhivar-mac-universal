@@ -154,7 +154,7 @@
 "extractToNextTo" = "Lângă arhivă";
 "extractToCustom" = "Un dosar fix";
 "settingsCustomFolder" = "Dosar";
-"settingsSubfolder" = "Creează un dosar cu numele arhivei";
+"settingsSubfolder" = "Dosar cu numele arhivei";
 "settingsReveal" = "Arată rezultatul în Finder la final";
 "settingsOverwrite" = "Dacă fișierul există deja";
 "overwriteReplace" = "Înlocuiește-l";
@@ -233,3 +233,25 @@
 "progressUpdating" = "Se actualizează arhiva…";
 "toastUpdated" = "Arhiva a fost actualizată";
 "readOnlyArchive" = "Acest tip de arhivă nu poate fi editat. Extrage-o și creează o arhivă nouă.";
+
+"subfolderSmart" = "Când există mai multe elemente";
+"subfolderAlways" = "Întotdeauna";
+"subfolderNever" = "Niciodată";
+"excludeMacMetadata" = "Exclude metadatele macOS (.DS_Store, ._*, __MACOSX)";
+"settingsStoreSymlinks" = "Stochează legăturile simbolice ca legături";
+"settingsStoreSymlinksNote" = "Pachetele .app și framework-urile rămân intacte și semnate. Dezactivați pentru a stoca fișierele indicate de legături.";
+"duplicateNames" = "Elementele cu același nume nu pot fi în același dosar al arhivei: %@";
+"createPasswordConfirmHint" = "Introduceți parola din nou pentru a o confirma.";
+"warningRemovedLinks" = "Legăturile simbolice care indică în afara destinației au fost omise: %@";
+"contextCopy" = "Copiază";
+"toastCopied" = "%ld elemente copiate";
+"contextBrowse" = "Deschide în Arhivar";
+"navParentArchive" = "Înapoi la %@";
+"contextChecksums" = "Sume de control…";
+"checksumsTitle" = "Sumele de control pentru „%@”";
+"buttonCopy" = "Copiază";
+"infoComment" = "Comentariu";
+"infoBlocks" = "Blocuri solide";
+"infoVolumes" = "Volume";
+"progressChecksums" = "Se calculează sumele de control…";
+"progressCopying" = "Se pregătesc elementele de copiat…";

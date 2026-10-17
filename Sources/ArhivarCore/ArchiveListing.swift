@@ -2,7 +2,10 @@ import Foundation
 
 public struct ArchiveEntry: Sendable, Equatable, Identifiable {
     public var id: String { path }
+    /// Normalleştirilmiş yol ("./a//b/" → "a/b"); ağaç, gezinme ve görünüm bunu kullanır.
     public var path: String
+    /// 7zz'nin listede yazdığı ham yol. 7zz öğeleri yalnızca bu yazımla eşleştirir; komutlara bu verilir.
+    public var archivePath: String
     public var size: Int64?
     public var packedSize: Int64?
     public var modified: Date?
@@ -12,10 +15,11 @@ public struct ArchiveEntry: Sendable, Equatable, Identifiable {
     public var crc: String?
 
     public init(
-        path: String, size: Int64? = nil, packedSize: Int64? = nil, modified: Date? = nil,
+        path: String, archivePath: String? = nil, size: Int64? = nil, packedSize: Int64? = nil, modified: Date? = nil,
         isDirectory: Bool = false, isEncrypted: Bool = false, method: String? = nil, crc: String? = nil
     ) {
         self.path = path
+        self.archivePath = archivePath ?? path
         self.size = size
         self.packedSize = packedSize
         self.modified = modified
@@ -31,14 +35,27 @@ public struct ArchiveInfo: Sendable, Equatable {
     public var type: String?
     public var method: String?
     public var isSolid: Bool
+    /// Arşivin diskteki boyutu; bölünmüş arşivlerde tüm parçaların toplamı.
     public var physicalSize: Int64?
+    /// Arşiv yorumu (zip, rar, 7z), varsa.
+    public var comment: String?
+    /// Katı (solid) blok sayısı (7z).
+    public var blocks: Int?
+    /// Bölünmüş arşivin parça sayısı.
+    public var volumes: Int?
 
-    public init(path: String? = nil, type: String? = nil, method: String? = nil, isSolid: Bool = false, physicalSize: Int64? = nil) {
+    public init(
+        path: String? = nil, type: String? = nil, method: String? = nil, isSolid: Bool = false, physicalSize: Int64? = nil,
+        comment: String? = nil, blocks: Int? = nil, volumes: Int? = nil
+    ) {
         self.path = path
         self.type = type
         self.method = method
         self.isSolid = isSolid
         self.physicalSize = physicalSize
+        self.comment = comment
+        self.blocks = blocks
+        self.volumes = volumes
     }
 }
 
@@ -56,18 +73,10 @@ public struct ArchiveListing: Sendable, Equatable {
 public enum ListingParser {
     /// - Parameter fallbackName: Tek akışlı biçimlerde (xz, bzip2) 7zz öğe adı yazmaz; bu ad kullanılır.
     public static func parse(_ output: String, timeZone: TimeZone = .current, fallbackName: String? = nil) -> ArchiveListing {
-        // Bayt düzeyinde böl (karakter düzeyinde bölmekten çok daha hızlı); "\r\n" sonundaki \r atılır.
-        let lines: [Substring] = output.utf8.split(separator: 0x0A, omittingEmptySubsequences: false).map { bytes in
-            let line = Substring(bytes)
-            return line.utf8.last == 0x0D ? line.dropLast() : line
-        }
-
-        guard let separator = lines.firstIndex(where: { isMarker($0, "----------") }) else {
-            // Girdi listesi yoksa (boş arşiv) yalnızca başlık okunur.
-            return ArchiveListing(info: parseInfo(lines[...]), entries: [])
-        }
-
-        let info = parseInfo(lines[..<separator])
+        // Satırlar bayt düzeyinde ve tembel okunur: 200 bin girdide milyonlarca öğelik ara dizi oluşmaz.
+        // Başlık bölümü küçüktür; yalnızca o saklanır, girdi blokları okunurken işlenir.
+        var header: [Substring] = []
+        var inEntries = false
         var entries: [ArchiveEntry] = []
         // Alanlar satırın kendisini gösteren Substring'lerdir; yalnızca girdi oluşturulurken kopyalanır.
         var block = Block()
@@ -80,15 +89,37 @@ public enum ListingParser {
             block = Block()
         }
 
-        for line in lines[(separator + 1)...] {
-            if line.utf8.allSatisfy({ $0 == 0x20 || $0 == 0x09 }) {
+        forEachLine(of: output) { line in
+            if !inEntries {
+                if isMarker(line, "----------") {
+                    inEntries = true
+                } else {
+                    header.append(line)
+                }
+            } else if line.utf8.allSatisfy({ $0 == 0x20 || $0 == 0x09 }) {
                 flush()
             } else if let (key, value) = keyValue(line) {
                 block.set(key, value)
             }
         }
+        // Girdi listesi yoksa (boş arşiv) yalnızca başlık okunur.
+        guard inEntries else { return ArchiveListing(info: parseInfo(header[...]), entries: []) }
         flush()
-        return ArchiveListing(info: info, entries: entries)
+        return ArchiveListing(info: parseInfo(header[...]), entries: entries)
+    }
+
+    /// Metnin satırlarını ara dizi oluşturmadan sırayla verir; "\r\n" sonundaki \r atılır.
+    static func forEachLine(of text: String, _ body: (Substring) -> Void) {
+        let utf8 = text.utf8
+        var start = utf8.startIndex
+        while start < utf8.endIndex {
+            let end = utf8[start...].firstIndex(of: 0x0A) ?? utf8.endIndex
+            var line = Substring(utf8[start..<end])
+            if line.utf8.last == 0x0D { line = line.dropLast() }
+            body(line)
+            guard end < utf8.endIndex else { return }
+            start = utf8.index(after: end)
+        }
     }
 
     static func parseInfo(_ lines: ArraySlice<Substring>) -> ArchiveInfo {
@@ -97,15 +128,27 @@ public enum ListingParser {
             return ArchiveInfo()
         }
         var values: [String: String] = [:]
+        var lastKey: String?
         for line in lines[(start + 1)...] {
-            if let (key, value) = keyValue(line) { values[String(key)] = String(value) }
+            if let (key, value) = keyValue(line) {
+                lastKey = String(key)
+                values[String(key)] = String(value)
+            } else if lastKey == "Comment", !isMarker(line, "--"), !isMarker(line, "----") {
+                // Çok satırlı yorumun devam satırları.
+                values["Comment", default: ""] += "\n" + line
+            }
         }
+        let comment = values["Comment"]?.trimmingCharacters(in: .whitespacesAndNewlines)
         return ArchiveInfo(
             path: values["Path"],
             type: values["Type"],
             method: values["Method"].flatMap { $0.isEmpty ? nil : $0 },
             isSolid: values["Solid"] == "+",
-            physicalSize: values["Physical Size"].flatMap { Int64($0) }
+            // Bölünmüş arşivde "Physical Size" yalnızca ilk parçanın boyutudur.
+            physicalSize: (values["Total Physical Size"] ?? values["Physical Size"]).flatMap { Int64($0) },
+            comment: comment?.isEmpty == false ? comment : nil,
+            blocks: values["Blocks"].flatMap { Int($0) },
+            volumes: values["Volumes"].flatMap { Int($0) }
         )
     }
 
@@ -145,15 +188,42 @@ public enum ListingParser {
         }
     }
 
+    /// Arşiv içi yolu ağaç için normalleştirir: baştaki "./", "." bileşenleri, yinelenen ve sondaki "/" atılır.
+    /// `tar -czf a.tgz .` ile oluşturulan arşivler "./src/main.swift" gibi yollar saklar.
+    public static func normalizedPath<S: StringProtocol>(_ raw: S) -> String {
+        // Hızlı yol: neredeyse tüm yollar zaten normaldir; tek bayt taramasıyla anlaşılır, kopya yapılmaz.
+        guard needsNormalization(raw) else { return String(raw) }
+        return raw.split(separator: "/", omittingEmptySubsequences: true)
+            .filter { $0 != "." }
+            .joined(separator: "/")
+    }
+
+    /// Yolda boş ("//", baştaki ya da sondaki "/") veya "." bileşeni var mı?
+    static func needsNormalization<S: StringProtocol>(_ raw: S) -> Bool {
+        // Başlangıç bir "/" sonrası gibi ele alınır: baştaki "/" ya da "./" da yakalanır.
+        var previous: UInt8 = 0x2F
+        var beforePrevious: UInt8 = 0
+        for byte in raw.utf8 {
+            if byte == 0x2F, previous == 0x2F || (previous == 0x2E && beforePrevious == 0x2F) { return true }
+            beforePrevious = previous
+            previous = byte
+        }
+        return previous == 0x2F || (previous == 0x2E && beforePrevious == 0x2F)
+    }
+
     static func makeEntry(_ block: Block, timeZone: TimeZone) -> ArchiveEntry? {
-        guard let path = block.path, !path.isEmpty else { return nil }
+        guard let raw = block.path, !raw.isEmpty else { return nil }
+        let path = normalizedPath(raw)
+        // "." (arşivin kendi kök klasörü) gibi boş kalan yollar ağaçta gösterilmez.
+        guard !path.isEmpty else { return nil }
         let isDirectory = block.folder == "+" || (block.attributes?.hasPrefix("D") ?? false)
         var modified: Date?
-        if let raw = block.modified, raw.utf8.count >= 19 {
-            modified = parseTimestamp(raw, timeZone: timeZone)
+        if let value = block.modified, value.utf8.count >= 19 {
+            modified = parseTimestamp(value, timeZone: timeZone)
         }
         return ArchiveEntry(
-            path: String(path),
+            path: path,
+            archivePath: String(raw),
             size: block.size.flatMap { Int64($0) },
             packedSize: block.packedSize.flatMap { Int64($0) },
             modified: modified,
@@ -162,6 +232,23 @@ public enum ListingParser {
             method: block.method.flatMap { $0.isEmpty ? nil : String($0) },
             crc: block.crc.flatMap { $0.isEmpty ? nil : String($0) }
         )
+    }
+}
+
+extension Int64 {
+    /// Taşmada çökmek yerine sınırda durur. Kötü niyetli bir arşiv (zip bombası) toplamı Int64.max'ı aşan
+    /// boyutlar bildirebilir; denetimsiz `+` uygulamayı anında çökertir.
+    public func saturatingAdding(_ other: Int64) -> Int64 {
+        let (sum, overflow) = addingReportingOverflow(other)
+        guard overflow else { return sum }
+        return other > 0 ? .max : .min
+    }
+}
+
+extension Sequence where Element == Int64 {
+    /// Taşmaya dayanıklı toplam.
+    public func saturatingSum() -> Int64 {
+        reduce(0) { $0.saturatingAdding($1) }
     }
 }
 
@@ -178,13 +265,34 @@ public struct ArchiveStatistics: Sendable, Equatable {
     }
 
     public init(listing: ArchiveListing) {
-        let files = listing.entries.filter { !$0.isDirectory }
-        fileCount = files.count
-        folderCount = listing.entries.count - files.count
-        totalSize = files.reduce(0) { $0 + ($1.size ?? 0) }
-        let packedSum = listing.entries.reduce(0) { $0 + ($1.packedSize ?? 0) }
+        var files = 0
+        var total: Int64 = 0
+        var packedSum: Int64 = 0
+        var encrypted = false
+        // Açık klasör girdileri ile dosya yollarından çıkan ara klasörler: birçok zip/tar klasör girdisi saklamaz.
+        var folders = Set<Substring>()
+        for entry in listing.entries {
+            packedSum = packedSum.saturatingAdding(entry.packedSize ?? 0)
+            if entry.isEncrypted { encrypted = true }
+            let path = entry.path[...]
+            if entry.isDirectory {
+                guard folders.insert(path).inserted else { continue }
+            } else {
+                files += 1
+                total = total.saturatingAdding(entry.size ?? 0)
+            }
+            // Üst klasörleri ekle; zaten bilinen bir üste gelince onun üstleri de bilinir.
+            var parent = path
+            while let slash = parent.lastIndex(of: "/") {
+                parent = parent[..<slash]
+                guard folders.insert(parent).inserted else { break }
+            }
+        }
+        fileCount = files
+        folderCount = folders.count
+        totalSize = total
         packedSize = listing.info.physicalSize ?? packedSum
-        isEncrypted = listing.entries.contains(where: \.isEncrypted)
+        isEncrypted = encrypted
     }
 }
 

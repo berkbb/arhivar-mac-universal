@@ -154,7 +154,7 @@
 "extractToNextTo" = "Next to the archive";
 "extractToCustom" = "A fixed folder";
 "settingsCustomFolder" = "Folder";
-"settingsSubfolder" = "Create a folder named after the archive";
+"settingsSubfolder" = "Folder named after the archive";
 "settingsReveal" = "Show results in Finder when finished";
 "settingsOverwrite" = "If a file already exists";
 "overwriteReplace" = "Replace it";
@@ -233,3 +233,25 @@
 "progressUpdating" = "Updating archive…";
 "toastUpdated" = "Archive updated";
 "readOnlyArchive" = "This archive type can’t be edited. Extract it and create a new archive instead.";
+
+"subfolderSmart" = "When there is more than one item";
+"subfolderAlways" = "Always";
+"subfolderNever" = "Never";
+"excludeMacMetadata" = "Exclude macOS metadata (.DS_Store, ._*, __MACOSX)";
+"settingsStoreSymlinks" = "Store symbolic links as links";
+"settingsStoreSymlinksNote" = "Keeps .app bundles and frameworks intact and signed. Turn off to store the files that links point to.";
+"duplicateNames" = "Items with the same name can't be in the same folder of an archive: %@";
+"createPasswordConfirmHint" = "Enter the password again to confirm it.";
+"warningRemovedLinks" = "Symbolic links pointing outside the destination were skipped: %@";
+"contextCopy" = "Copy";
+"toastCopied" = "%ld items copied";
+"contextBrowse" = "Open in Arhivar";
+"navParentArchive" = "Back to %@";
+"contextChecksums" = "Checksums…";
+"checksumsTitle" = "Checksums of “%@”";
+"buttonCopy" = "Copy";
+"infoComment" = "Comment";
+"infoBlocks" = "Solid blocks";
+"infoVolumes" = "Volumes";
+"progressChecksums" = "Calculating checksums…";
+"progressCopying" = "Preparing items to copy…";

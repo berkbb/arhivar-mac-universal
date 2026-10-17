@@ -100,7 +100,8 @@ Method = LZMA2:24
     let listing = ListingParser.parse(sampleListing)
     let statistics = ArchiveStatistics(listing: listing)
     #expect(statistics.fileCount == 2)
-    #expect(statistics.folderCount == 1)
+    // "belgeler" açık girdi; "resimler" ve "resimler/tatil" yalnızca dosya yolundan çıkar (P2-18).
+    #expect(statistics.folderCount == 3)
     #expect(statistics.totalSize == 6200)
     #expect(statistics.packedSize == 4096)
     #expect(statistics.isEncrypted)

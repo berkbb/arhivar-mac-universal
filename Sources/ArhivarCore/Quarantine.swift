@@ -33,6 +33,12 @@ public enum Quarantine {
         _ = setxattr(url.path, attributeName, bytes, bytes.count, 0, XATTR_NOFOLLOW)
     }
 
+    /// Öğe beklenen karantina değerini taşımıyorsa yeniden yazar (ör. dosya değiştirme eski üst veriyi geri getirdiyse).
+    static func ensure(_ value: String?, on url: URL) {
+        guard let value, self.value(of: url) != value else { return }
+        set(value, on: url)
+    }
+
     /// Hedefteki, `since` anından sonra yazılmış öğeleri işaretler.
     ///
     /// - Parameters:

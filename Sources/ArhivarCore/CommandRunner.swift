@@ -27,16 +27,25 @@ public enum SevenZipError: Error, Equatable, Sendable {
     public static func check(_ result: ProcessResult) throws -> String? {
         if result.exitCode == 0 { return nil }
         let combined = result.stdout + "\n" + result.stderr
-        // "Enter password" istemi parola doğru verilse de çıktıda görünür; yanlış parola sayılmaz.
-        // Parola bilinmiyorsa stdin boştur ve 7zz "Break signaled" ile durur: parola gerekli demektir.
+        // "Enter password" istemi parola doğru verilse de çıktıda görünür; tek başına yanlış parola sayılmaz.
+        // Parola bilinmiyorsa stdin boştur ve 7zz istemden sonra "Break signaled" ile durur: parola gerekli demektir.
+        // İstem olmadan gelen "Break signaled" dışarıdan gönderilen SIGINT/SIGTERM'dir; parola hatası değildir.
         // (Kullanıcının iptali CommandRunner'da ayrıca .cancelled olarak ele alınır.)
+        let passwordAborted = combined.range(of: "Break signaled", options: .caseInsensitive) != nil
+            && combined.range(of: "Enter password", options: .caseInsensitive) != nil
         if combined.range(of: "wrong password", options: .caseInsensitive) != nil
             || combined.range(of: "Cannot open encrypted archive", options: .caseInsensitive) != nil
-            || combined.range(of: "Break signaled", options: .caseInsensitive) != nil {
+            || passwordAborted {
             throw SevenZipError.wrongPassword
         }
         // 7zz çıkış kodları: 1 = uyarı, 2 = ölümcül hata, 7 = komut satırı, 8 = bellek, 255 = kullanıcı durdurdu.
         if result.exitCode == 1 { return diagnostic(from: combined) }
+        // 7zz hedef dışını gösteren bağlantıları yazmaz ve 2 ile çıkar; geri kalan her şey çıkarılmıştır.
+        // Tek hata buysa işlem uyarıyla tamamlanmış sayılır.
+        let errors = combined.split(whereSeparator: \.isNewline).filter { $0.contains("ERROR:") }
+        if result.exitCode == 2, !errors.isEmpty, errors.allSatisfy({ $0.contains("Dangerous link path was ignored") }) {
+            return diagnostic(from: combined)
+        }
         // "Cannot open the file as archive", "Cannot open the file as [7z] archive", "Is not archive"
         if combined.range(of: "open the file as", options: .caseInsensitive) != nil
             || combined.range(of: "is not archive", options: .caseInsensitive) != nil {
@@ -44,6 +53,17 @@ public enum SevenZipError: Error, Equatable, Sendable {
         }
         if result.exitCode == 255 { throw SevenZipError.cancelled }
         throw SevenZipError.failed(code: result.exitCode, message: diagnostic(from: combined))
+    }
+
+    /// Sonuç, parola bilinmediği (ya da yanlış olduğu) için mi başarısız oldu?
+    /// `try? check(...)` kullanılmaz: başarıda `check` nil döndürdüğü için `try?` sonucu da nil olur (SE-0230).
+    public static func needsPassword(_ result: ProcessResult) -> Bool {
+        do {
+            try check(result)
+            return false
+        } catch {
+            return error as? SevenZipError == .wrongPassword
+        }
     }
 
     /// Çıktıdaki hata/uyarı satırlarını kısa bir özete indirger.
@@ -187,8 +207,17 @@ private final class ProcessBox: @unchecked Sendable {
 
     var isRunning: Bool { process.isRunning }
 
+    /// SIGTERM'i yok sayan (ör. bozuk başlıkta takılan) süreç bu süre sonunda SIGKILL ile durdurulur.
+    static let killGracePeriod: TimeInterval = 2
+
     func terminate() {
-        if process.isRunning { process.terminate() }
+        guard process.isRunning else { return }
+        process.terminate()
+        let pid = process.processIdentifier
+        DispatchQueue.global().asyncAfter(deadline: .now() + Self.killGracePeriod) { [self] in
+            // Süreç hâlâ çalışıyorsa zorla durdur; böylece sonlanma işleyicisi çalışır ve bekleyen devam (continuation) döner.
+            if process.isRunning { kill(pid, SIGKILL) }
+        }
     }
 
     func drain(_ pipe: Pipe, _ consume: (Data) -> Void) {

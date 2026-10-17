@@ -23,9 +23,16 @@ public struct SandboxProfile: Sendable, Equatable {
     /// Arşiv okunurken erişilmemesi gereken kişisel veri klasörleri.
     public static func personalDataDirectories(home: URL) -> [URL] {
         [
-            ".ssh", ".gnupg", ".aws", ".config/gh", ".netrc",
+            // Kimlik bilgileri ve erişim belirteçleri
+            ".ssh", ".gnupg", ".aws", ".config/gh", ".netrc", ".kube", ".docker", ".npmrc", ".pypirc", ".git-credentials",
+            // Sistem ve iletişim verileri
             "Library/Keychains", "Library/Cookies", "Library/Mail", "Library/Messages",
             "Library/Application Support/AddressBook", "Library/Safari", "Library/Accounts",
+            // Tarayıcı profilleri (çerezler, kayıtlı parolalar, oturumlar)
+            "Library/Application Support/Google/Chrome", "Library/Application Support/Firefox",
+            "Library/Application Support/BraveSoftware", "Library/Application Support/Microsoft Edge",
+            "Library/Application Support/Arc", "Library/Application Support/Vivaldi",
+            "Library/Application Support/com.operasoftware.Opera",
         ].map { home.appendingPathComponent($0) }
     }
 

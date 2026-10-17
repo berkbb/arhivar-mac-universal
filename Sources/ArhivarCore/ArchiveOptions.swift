@@ -9,6 +9,11 @@ public enum ArchiveFormat: String, CaseIterable, Identifiable, Sendable, Codable
     case gzip
     case bzip2
     case xz
+    /// Klasörler ve birden çok dosya için tek adımda .tar.gz / .tar.xz / .tar.bz2: önce geçici bir tar yazılır,
+    /// ardından sıkıştırılır. (Resmî 7zz zstd sıkıştıramaz; .zst / .tar.zst yalnızca açılabilir.)
+    case tarGzip = "tar.gz"
+    case tarXz = "tar.xz"
+    case tarBzip2 = "tar.bz2"
 
     public var id: String { rawValue }
 
@@ -21,6 +26,9 @@ public enum ArchiveFormat: String, CaseIterable, Identifiable, Sendable, Codable
         case .gzip: "GZIP"
         case .bzip2: "BZIP2"
         case .xz: "XZ"
+        case .tarGzip: "TAR.GZ"
+        case .tarXz: "TAR.XZ"
+        case .tarBzip2: "TAR.BZ2"
         }
     }
 
@@ -33,18 +41,35 @@ public enum ArchiveFormat: String, CaseIterable, Identifiable, Sendable, Codable
         case .gzip: "gz"
         case .bzip2: "bz2"
         case .xz: "xz"
+        case .tarGzip: "tar.gz"
+        case .tarXz: "tar.xz"
+        case .tarBzip2: "tar.bz2"
         }
     }
 
-    /// 7zz -t anahtarının değeri.
-    public var typeSwitch: String { "-t" + rawValue }
+    /// tar.* biçimlerinde ikinci adımın (tar'ı sıkıştırma) biçimi.
+    public var tarCompression: ArchiveFormat? {
+        switch self {
+        case .tarGzip: .gzip
+        case .tarXz: .xz
+        case .tarBzip2: .bzip2
+        default: nil
+        }
+    }
+
+    /// 7zz -t anahtarının değeri (tar.* için ilk adım: tar).
+    public var typeSwitch: String { "-t" + (tarCompression == nil ? rawValue : ArchiveFormat.tar.rawValue) }
 
     public var supportsEncryption: Bool { self == .sevenZip || self == .zip }
     public var supportsHeaderEncryption: Bool { self == .sevenZip }
     public var supportsCompressionLevel: Bool { self != .tar && self != .wim }
-    public var supportsMultithreading: Bool { [.sevenZip, .zip, .xz, .bzip2].contains(self) }
+    public var supportsMultithreading: Bool { [.sevenZip, .zip, .xz, .bzip2, .tarXz, .tarBzip2].contains(self) }
     /// gzip/bzip2/xz yalnızca tek bir dosyayı sıkıştırabilir.
     public var singleFileOnly: Bool { [.gzip, .bzip2, .xz].contains(self) }
+    /// Bölünmüş (çok parçalı) arşiv yazılabilir mi? tar.* iki adımda üretildiği için bölünemez.
+    public var supportsVolumes: Bool { !singleFileOnly && tarCompression == nil }
+    /// Sembolik bağlantıları bağlantı olarak saklayabilen biçimler (-snl).
+    public var supportsSymlinks: Bool { [.sevenZip, .zip, .tar, .wim, .tarGzip, .tarXz, .tarBzip2].contains(self) }
 }
 
 /// 7zz -mx düzeyleri.
@@ -95,6 +120,24 @@ public enum OverwriteMode: String, CaseIterable, Identifiable, Sendable, Codable
     }
 }
 
+/// Çıkarırken arşiv adıyla bir klasör oluşturma kuralı.
+public enum SubfolderMode: String, CaseIterable, Identifiable, Sendable, Codable {
+    /// Arşivin kökünde birden fazla öğe varsa klasör oluştur; tek öğe doğrudan hedefe çıkar.
+    case smart
+    case always
+    case never
+
+    public var id: String { rawValue }
+
+    public var titleKey: LKey {
+        switch self {
+        case .smart: .subfolderSmart
+        case .always: .subfolderAlways
+        case .never: .subfolderNever
+        }
+    }
+}
+
 /// Hazır bölüm (volume) boyutları, MB cinsinden.
 public enum VolumeSize {
     public static let presetsMB = [10, 100, 700, 1024, 4092]
@@ -112,10 +155,15 @@ public struct CreateOptions: Sendable, Equatable {
     public var encryptFileNames: Bool
     public var volumeSizeMB: Int?
     public var multithreaded: Bool
+    /// Sembolik bağlantıları bağlantı olarak sakla (.app ve .framework paketleri için gerekli).
+    public var storeSymlinks: Bool
+    /// .DS_Store, ._* ve __MACOSX dosyalarını arşive alma.
+    public var excludeMacMetadata: Bool
 
     public init(
         sources: [URL], destination: URL, format: ArchiveFormat, level: CompressionLevel,
-        password: String? = nil, encryptFileNames: Bool = false, volumeSizeMB: Int? = nil, multithreaded: Bool = true
+        password: String? = nil, encryptFileNames: Bool = false, volumeSizeMB: Int? = nil, multithreaded: Bool = true,
+        storeSymlinks: Bool = true, excludeMacMetadata: Bool = false
     ) {
         self.sources = sources
         self.destination = destination
@@ -125,7 +173,18 @@ public struct CreateOptions: Sendable, Equatable {
         self.encryptFileNames = encryptFileNames
         self.volumeSizeMB = volumeSizeMB
         self.multithreaded = multithreaded
+        self.storeSymlinks = storeSymlinks
+        self.excludeMacMetadata = excludeMacMetadata
     }
+
+    /// Bölünmüş arşivde 7zz "ad.7z" yerine "ad.7z.001", "ad.7z.002", … yazar.
+    public var isSplit: Bool { (volumeSizeMB ?? 0) > 0 && format.supportsVolumes }
+
+    /// Diskte oluşan (açılabilir) ilk dosya.
+    public var firstOutput: URL { isSplit ? destination.appendingPathExtension("001") : destination }
+
+    /// Sonuç boyutu kaynaklardan küçük olabilir mi? (Boş alan tahmini için.)
+    public var compresses: Bool { format.supportsCompressionLevel && level != .store }
 }
 
 public struct ExtractOptions: Sendable, Equatable {
@@ -186,13 +245,34 @@ public enum SevenZipCommand {
         return args
     }
 
-    public static func create(_ options: CreateOptions) -> [String] {
+    /// macOS üst veri dosyaları: Finder görünüm ayarları, AppleDouble kopyaları ve Arşiv İzlencesi klasörü.
+    public static let macMetadataExclusions = ["-xr!.DS_Store", "-xr!._*", "-xr!__MACOSX"]
+
+    /// Adlarında "*" ya da "?" geçen kaynaklar joker karakter sanılmasın diye `-spd` verilir.
+    /// `-spd` hariç tutma kalıplarındaki jokerleri de kapattığı için yalnızca gerektiğinde eklenir;
+    /// böyle bir kaynakta "._*" kalıbı uygulanamaz (".DS_Store" ve "__MACOSX" tam adla yine çalışır).
+    static func wildcardSafety(for names: [String]) -> [String] {
+        names.contains { $0.contains("*") || $0.contains("?") } ? ["-spd"] : []
+    }
+
+    /// Ekleme ve oluşturmada ortak seçenekler: joker güvenliği, bağlantılar ve üst veri dışlama.
+    static func sourceSwitches(names: [String], storeSymlinks: Bool, excludeMacMetadata: Bool) -> [String] {
+        var args = wildcardSafety(for: names)
+        if storeSymlinks { args.append("-snl") }
+        if excludeMacMetadata { args += macMetadataExclusions }
+        return args
+    }
+
+    /// - Parameter tarStage: tar.* biçimlerinde ilk adımın yazacağı geçici tar dosyası (bkz. `tarStage(for:in:)`).
+    public static func create(_ options: CreateOptions, tarStage: URL? = nil) -> [String] {
         let format = options.format
+        let isTarStage = format.tarCompression != nil
         var args = ["a", format.typeSwitch, "-bsp1", "-bb0", "-y"] + common
-        if format.supportsCompressionLevel {
+        // tar.* biçimlerinde bu komut ilk adımdır (sıkıştırmasız tar); düzey ve iş parçacığı ikinci adımda kullanılır.
+        if format.supportsCompressionLevel, !isTarStage {
             args.append("-mx=\(options.level.rawValue)")
         }
-        if format.supportsMultithreading {
+        if format.supportsMultithreading, !isTarStage {
             args.append(options.multithreaded ? "-mmt=on" : "-mmt=1")
         }
         if format.supportsEncryption, let password = options.password, !password.isEmpty {
@@ -200,11 +280,36 @@ public enum SevenZipCommand {
             if format == .sevenZip && options.encryptFileNames { args.append("-mhe=on") }
             if format == .zip { args.append("-mem=AES256") }
         }
-        if let volume = options.volumeSizeMB, volume > 0 {
+        if options.isSplit, let volume = options.volumeSizeMB {
             args.append("-v\(volume)m")
         }
-        args += ["--", options.destination.path]
+        args += sourceSwitches(
+            names: options.sources.map(\.path),
+            storeSymlinks: options.storeSymlinks && format.supportsSymlinks,
+            excludeMacMetadata: options.excludeMacMetadata
+        )
+        let output = isTarStage ? (tarStage ?? Self.tarStage(for: options.destination, in: options.destination.deletingLastPathComponent())) : options.destination
+        args += ["--", output.path]
         args += options.sources.map(\.path)
         return args
+    }
+
+    /// tar.* için ilk adımın geçici tar dosyası: "yedek.tar.gz" → "<klasör>/yedek.tar".
+    /// gzip içteki dosyanın adını saklar; açıldığında doğru adla ("yedek.tar") çıkması için ad hedeften türetilir,
+    /// klasör ise çağıranın oluşturduğu geçici bir klasördür (var olan bir "yedek.tar" ezilmesin).
+    public static func tarStage(for destination: URL, in directory: URL) -> URL {
+        let name = destination.deletingPathExtension().lastPathComponent
+        return directory.appendingPathComponent(name.lowercased().hasSuffix(".tar") ? name : name + ".tar")
+    }
+
+    /// tar.* için ikinci adım: geçici tar'ı gzip/xz/bzip2 ile hedefe sıkıştırır.
+    public static func compressTarStage(_ options: CreateOptions, tarStage: URL) -> [String]? {
+        guard let compression = options.format.tarCompression else { return nil }
+        var args = ["a", compression.typeSwitch, "-bsp1", "-bb0", "-y"] + common
+        args.append("-mx=\(options.level.rawValue)")
+        if compression.supportsMultithreading {
+            args.append(options.multithreaded ? "-mmt=on" : "-mmt=1")
+        }
+        return args + wildcardSafety(for: [tarStage.path]) + ["--", options.destination.path, tarStage.path]
     }
 }

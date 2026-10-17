@@ -6,7 +6,7 @@ private let archive = URL(fileURLWithPath: "/tmp/ornek.7z")
 
 @Test func editCommands() {
     #expect(SevenZipCommand.add(archive: archive, names: ["a", "-b"], password: "p", encryptHeaders: true)
-        == ["a", "-bsp1", "-bb0", "-y", "-sccUTF-8", "-p", "-mhe=on", "--", "/tmp/ornek.7z", "a", "-b"])
+        == ["a", "-bsp1", "-bb0", "-y", "-sccUTF-8", "-p", "-mhe=on", "-snl", "--", "/tmp/ornek.7z", "a", "-b"])
     #expect(!SevenZipCommand.add(archive: archive, names: ["a"], encryptHeaders: true).contains("-mhe=on"))
     #expect(SevenZipCommand.delete(archive: archive, items: ["x/y"])
         == ["d", "-bsp1", "-bb0", "-y", "-spd", "-sccUTF-8", "--", "/tmp/ornek.7z", "x/y"])
