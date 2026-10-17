@@ -730,6 +730,63 @@ struct AppModelTests {
         #expect(!FileManager.default.fileExists(atPath: nestedFile.path))
     }
 
+    /// Çıkışta (⌘Q) iç içe gezinmedeki tüm geçici klasörler silinir: iç arşivin kopyası ve üstteki arşivin önizlemeleri dahil.
+    @Test func quittingInsideNestedArchiveRemovesAllSessions() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let inner = try await fixture.makeArchive("ic.zip", format: .zip)
+        let outer = fixture.workspace.appendingPathComponent("dis.7z")
+        let options = CreateOptions(sources: [inner, fixture.workspace.appendingPathComponent("kaynak")], destination: outer, format: .sevenZip, level: .fast)
+        try SevenZipError.check(try await fixture.runner.run(SevenZipCommand.create(options)))
+        let model = fixture.model
+        model.browserMode = .folders
+        model.openArchive(outer)
+        await fixture.settle()
+
+        // Üstteki arşivde bir önizleme, sonra iç arşive giriş ve orada bir önizleme.
+        model.toggleQuickLook("kaynak/not.txt")
+        await fixture.settle()
+        let outerPreview = try #require(model.quickLookURL)
+        model.quickLookURL = nil
+        model.primaryAction(["ic.zip"])
+        await fixture.settle()
+        let nestedCopy = try #require(model.archiveURL)
+        #expect(model.archiveStack.count == 1)
+        model.toggleQuickLook("kaynak/not.txt")
+        await fixture.settle()
+        let innerPreview = try #require(model.quickLookURL)
+        for file in [outerPreview, nestedCopy, innerPreview] {
+            #expect(FileManager.default.fileExists(atPath: file.path))
+        }
+
+        model.discardTemporaryFiles()
+        for file in [outerPreview, nestedCopy, innerPreview] {
+            #expect(!FileManager.default.fileExists(atPath: file.path), "\(file.lastPathComponent)")
+        }
+        #expect(model.archiveStack.isEmpty)
+    }
+
+    /// Model doğrudan çağrıldığında da aynı adlı kaynaklar 7zz'ye verilmeden anlaşılır bir iletiyle reddedilir.
+    @Test func createArchiveRejectsDuplicateNames() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let other = fixture.workspace.appendingPathComponent("baska", isDirectory: true)
+        try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+        try "x".write(to: other.appendingPathComponent("not.txt"), atomically: true, encoding: .utf8)
+        let destination = fixture.workspace.appendingPathComponent("ayni.zip")
+
+        fixture.model.createArchive(CreateOptions(
+            sources: [fixture.workspace.appendingPathComponent("kaynak/not.txt"), other.appendingPathComponent("not.txt")],
+            destination: destination, format: .zip, level: .fast
+        ))
+        await fixture.settle()
+        #expect(fixture.model.alert?.message == fixture.settings.t(.duplicateNames, "not.txt"))
+        #expect(!FileManager.default.fileExists(atPath: destination.path))
+        #expect(fixture.model.recentArchives.isEmpty)
+    }
+
     /// Özellik 6: sağlama değerleri uyarıda gösterilir.
     @Test func showsChecksums() async throws {
         let fixture = try Fixture()

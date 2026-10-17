@@ -393,6 +393,9 @@ struct ProgressOverlay: View {
         case .progressCreating: "archivebox"
         case .progressTesting: "checkmark.seal"
         case .progressUpdating: "arrow.triangle.2.circlepath"
+        // Bağlam menüsündeki "Kopyala" ve "Sağlama Değerleri…" simgeleriyle aynı.
+        case .progressCopying: "doc.on.doc"
+        case .progressChecksums: "number"
         default: "shippingbox"
         }
     }

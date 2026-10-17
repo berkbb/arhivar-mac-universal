@@ -54,6 +54,10 @@ public struct AddPlan: Sendable, Equatable {
     /// Farklı klasörlerden aynı adlı öğeler aynı arşiv yoluna düşerdi.
     public struct DuplicateNameError: Error, Equatable, Sendable {
         public let names: [String]
+
+        public init(names: [String]) {
+            self.names = names
+        }
     }
 
     /// Aynı son yol bileşenini (adı) paylaşan kaynakların adları (büyük/küçük harf duyarsız, APFS gibi).

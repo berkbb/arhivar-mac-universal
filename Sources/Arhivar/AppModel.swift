@@ -880,8 +880,9 @@ final class AppModel {
     }
 
     /// Uygulamadan çıkarken çağrılır: çözülmüş önizleme dosyaları diskte kalmasın.
+    /// İç içe gezinmede üstteki arşivlerin geçici klasörleri (iç arşivin kopyası, önizlemeler) de silinir.
     func discardTemporaryFiles() {
-        discardSessionDirectory()
+        discardAllSessions()
     }
 
     /// Listeden Finder'a sürüklenecek öğe; parola gerekiyorsa ve bilinmiyorsa sürükleme kapalıdır.
@@ -1207,6 +1208,10 @@ final class AppModel {
 
     func createArchive(_ options: CreateOptions) {
         perform(.progressCreating, archive: nil, retry: nil) { runner, progress in
+            // Oluşturma sayfası aynı adlı kaynakları zaten engeller; model doğrudan çağrıldığında da 7zz'nin
+            // "Duplicate filename on disk" hatası yerine anlaşılır bir ileti verilsin.
+            let duplicates = AddPlan.duplicateNames(in: options.sources)
+            guard duplicates.isEmpty else { throw AddPlan.DuplicateNameError(names: duplicates) }
             let fileManager = FileManager.default
             let directory = options.destination.deletingLastPathComponent()
             let isTwoStep = options.format.tarCompression != nil
