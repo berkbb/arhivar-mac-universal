@@ -181,6 +181,56 @@ struct AppModelTests {
         #expect(fixture.model.archiveURL == nil)
     }
 
+    /// Madde 15: internetten inmiş arşivden çıkan dosyalar karantina işaretini taşımalı.
+    @Test func extractHerePropagatesQuarantine() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let archive = try await fixture.makeArchive("indirilen.zip", format: .zip)
+        let value = "00c3;6ad350b0;Safari;3012A7DC-83D1-445D-AFFE-844654688EFB"
+        #expect(setxattr(archive.path, "com.apple.quarantine", Array(value.utf8), value.utf8.count, 0, 0) == 0)
+
+        fixture.model.extractHere([archive])
+        await fixture.model.serviceQueueTask?.value
+
+        let extracted = fixture.workspace.appendingPathComponent("indirilen/kaynak/alt/b.txt")
+        #expect(Quarantine.value(of: extracted) == "0083;6ad350b0;Safari;3012A7DC-83D1-445D-AFFE-844654688EFB")
+    }
+
+    /// Madde 18: önizleme dosyaları arşiv oturumunun klasöründe tutulur ve arşiv kapanınca silinir.
+    @Test func previewFilesAreRemovedOnClose() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let archive = try await fixture.makeArchive("onizleme.7z", format: .sevenZip, password: "gizli")
+        fixture.model.openArchive(archive)
+        await fixture.settle()
+
+        fixture.model.toggleQuickLook("kaynak/not.txt")
+        await fixture.settle()
+        fixture.model.submitPassword("gizli")
+        await fixture.settle()
+        let preview = try #require(fixture.model.quickLookURL)
+        #expect(FileManager.default.fileExists(atPath: preview.path))
+        let permissions = try FileManager.default.attributesOfItem(atPath: preview.deletingLastPathComponent().deletingLastPathComponent().path)[.posixPermissions] as? NSNumber
+        #expect(permissions?.uint16Value == 0o700)
+
+        fixture.model.closeArchive()
+        #expect(!FileManager.default.fileExists(atPath: preview.path))
+    }
+
+    /// Madde 19: çalıştırılabilir ya da adı yanıltıcı dosyalar sormadan açılmamalı.
+    @Test func riskyFilesNeedConfirmation() throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        let script = fixture.workspace.appendingPathComponent("kur.command")
+        try Data("#!/bin/sh\n".utf8).write(to: script)
+        #expect(fixture.model.openRisk(for: script, path: "kur.command") != nil)
+        let text = fixture.workspace.appendingPathComponent("kaynak/not.txt")
+        #expect(fixture.model.openRisk(for: text, path: "kaynak/not.txt") == nil)
+        #expect(fixture.model.openRisk(for: text, path: "fatura\u{202E}txt.command") != nil)
+    }
+
     @Test func folderNavigationAndEditing() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanUp() }

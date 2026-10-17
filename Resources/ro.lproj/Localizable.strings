@@ -192,6 +192,11 @@
 "aboutNotices" = "Notificări terți";
 "aboutCopyright" = "© %@ Babadogan Tech and Edu";
 "unknown" = "necunoscut";
+"openRiskyTitle" = "Deschizi acest fișier?";
+"openRiskyMessage" = "„%1$@” poate rula cod pe Mac (%2$@). Deschide-l doar dacă ai încredere în sursa arhivei.";
+"openAnyway" = "Deschide oricum";
+"deceptiveNameReason" = "numele conține caractere ascunse care îi pot masca tipul real";
+"deceptiveNameHelp" = "Acest nume conține caractere ascunse care pot masca tipul real al fișierului.";
 
 "viewFolders" = "Dosare";
 "viewTree" = "Arbore";

@@ -115,15 +115,23 @@ struct ArchiveBrowserView: View {
 private struct NameCell: View {
     let node: ArchiveNode
     @Environment(AppModel.self) private var model
+    @Environment(AppSettings.self) private var settings
 
     var body: some View {
         let content = HStack(spacing: 7) {
             Image(nsImage: FileIcons.icon(for: node))
                 .resizable()
                 .frame(width: 18, height: 18)
-            Text(node.name)
+            // Gizli yön/biçim karakterleri görünür yer tutucularla gösterilir.
+            Text(OpenSafety.visibleName(node.name))
                 .lineLimit(1)
                 .truncationMode(.middle)
+            if OpenSafety.hasDeceptiveCharacters(node.name) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .help(settings.t(.deceptiveNameHelp))
+                    .accessibilityLabel(settings.t(.deceptiveNameHelp))
+            }
             if node.isEncrypted {
                 Image(systemName: "lock.fill")
                     .font(.caption)

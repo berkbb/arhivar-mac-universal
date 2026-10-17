@@ -35,7 +35,7 @@ Terminalden aynı işler:
 ./Scripts/update-7zip.sh check        # yeni 7-Zip sürümü var mı?
 ./Scripts/update-7zip.sh install      # Vendor/7-Zip'i güncelle
 ./Scripts/update-7zip.sh install --app build/Arhivar.app
-swift test                            # 57 test
+swift test                            # 69 test
 ```
 
 Gereken: Xcode 26 veya üstü. Ayrıntılar için [DEVELOPMENT.md](DEVELOPMENT.md), sürüm notları için [CHANGELOG.md](CHANGELOG.md).

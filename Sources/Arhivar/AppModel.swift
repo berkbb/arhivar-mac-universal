@@ -141,6 +141,8 @@ final class AppModel {
     @ObservationIgnored private var didLaunch = false
     @ObservationIgnored private var headersEncrypted = false
     @ObservationIgnored private var serviceQueue: [URL] = []
+    /// Açık arşivin önizleme ve sürükleme dosyaları; arşiv kapanınca ve uygulamadan çıkışta silinir.
+    @ObservationIgnored private var sessionRoot: URL?
     @ObservationIgnored private var serviceTask: Task<Void, Never>?
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var previewCache: [String: URL] = [:]
@@ -177,6 +179,8 @@ final class AppModel {
         guard !didLaunch else { return }
         didLaunch = true
         settings.applyAppearance()
+        // Önceki çalıştırmalardan (ör. çökme sonrası) kalan geçici klasörleri temizle.
+        ItemExtractor.sweepStale(olderThan: 6 * 3600)
         await refreshEngine()
         if settings.checkUpdatesAtLaunch {
             await checkForUpdates(interactive: false)
@@ -310,6 +314,8 @@ final class AppModel {
         }
 
         let folder = currentFolder
+        // Başka bir arşive geçiliyorsa öncekinin geçici dosyalarını sil.
+        if url != archiveURL { discardSessionDirectory() }
         archiveURL = url
         password = currentPassword
         self.listing = listing
@@ -334,6 +340,7 @@ final class AppModel {
         password = nil
         headersEncrypted = false
         isEditable = false
+        discardSessionDirectory()
         previewCache = [:]
         quickLookURL = nil
         showInfo = false
@@ -420,10 +427,14 @@ final class AppModel {
             archive: archive, destination: destination, items: items,
             password: password, overwrite: settings.overwriteMode
         )
+        // Karantina aktarımı için incelenecek kök adlar: seçili öğeler ya da açık arşivin kökleri.
+        let roots = !items.isEmpty ? items : (archive == archiveURL ? tree.map(\.id) : [])
         perform(.progressExtracting, archive: archive, retry: .extract(items: items, destination: destination), usedPassword: password != nil) { runner, progress in
             try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+            let start = Date()
             let result = try await runner.run(SevenZipCommand.extract(options), workingDirectory: options.workingDirectory, onProgress: progress)
             let warning = try SevenZipError.check(result)
+            Quarantine.propagate(from: archive, to: destination, roots: roots, since: start)
             self.finish(message: self.t(.toastExtracted, destination.lastPathComponent), reveal: destination, warning: warning)
         }
     }
@@ -449,7 +460,26 @@ final class AppModel {
     /// Bir dosyayı geçici klasöre çıkarıp varsayılan uygulamasıyla açar.
     func openItem(_ path: String) {
         guard node(path)?.isDirectory == false else { return }
-        withExtractedItem(path, retry: .openItem(path: path)) { NSWorkspace.shared.open($0) }
+        withExtractedItem(path, retry: .openItem(path: path)) { url in
+            if let reason = self.openRisk(for: url, path: path) {
+                // Çalıştırılabilir ya da adı yanıltıcı dosyalar sormadan Terminal'e / Yükleyici'ye verilmez.
+                let name = OpenSafety.visibleName((path as NSString).lastPathComponent)
+                self.alert = AlertItem(
+                    title: self.t(.openRiskyTitle),
+                    message: self.t(.openRiskyMessage, name, reason),
+                    actionTitle: self.t(.openAnyway),
+                    action: { NSWorkspace.shared.open(url) }
+                )
+            } else {
+                NSWorkspace.shared.open(url)
+            }
+        }
+    }
+
+    /// Açmadan önce onay gerektiren bir durum varsa nedenini döndürür.
+    func openRisk(for url: URL, path: String) -> String? {
+        if OpenSafety.hasDeceptiveCharacters(path) { return t(.deceptiveNameReason) }
+        return OpenSafety.executableKind(of: url)
     }
 
     /// Boşluk tuşu: seçili dosyayı Hızlı Bakış ile önizler; açıksa kapatır.
@@ -475,17 +505,41 @@ final class AppModel {
         }
         let currentPassword = password
         perform(.progressExtracting, archive: archive, retry: retry) { runner, progress in
-            let extractor = ItemExtractor(runner: runner, archive: archive, password: currentPassword)
+            let extractor = ItemExtractor(runner: runner, archive: archive, password: currentPassword, root: self.sessionDirectory())
             let url = try await extractor.extract(path, onProgress: progress)
             self.previewCache[path] = url
             completion(url)
         }
     }
 
+    /// Açık arşivin geçici klasörü (yalnızca kullanıcıya açık, 0700).
+    private func sessionDirectory() -> URL {
+        if let sessionRoot { return sessionRoot }
+        let fileManager = FileManager.default
+        let root = ItemExtractor.temporaryRoot
+        try? fileManager.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        let url = root.appendingPathComponent("session-\(UUID().uuidString)", isDirectory: true)
+        try? fileManager.createDirectory(at: url, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        sessionRoot = url
+        return url
+    }
+
+    private func discardSessionDirectory() {
+        if let sessionRoot { try? FileManager.default.removeItem(at: sessionRoot) }
+        sessionRoot = nil
+        previewCache = [:]
+        quickLookURL = nil
+    }
+
+    /// Uygulamadan çıkarken çağrılır: çözülmüş önizleme dosyaları diskte kalmasın.
+    func discardTemporaryFiles() {
+        discardSessionDirectory()
+    }
+
     /// Listeden Finder'a sürüklenecek öğe; parola gerekiyorsa ve bilinmiyorsa sürükleme kapalıdır.
     func dragItem(for node: ArchiveNode) -> ArchiveItemTransfer? {
         guard let archive = archiveURL, let engineURL, !needsPassword(for: [node.id]) else { return nil }
-        let extractor = ItemExtractor(runner: CommandRunner(executableURL: engineURL), archive: archive, password: password)
+        let extractor = ItemExtractor(runner: CommandRunner(executableURL: engineURL), archive: archive, password: password, root: sessionDirectory())
         let name = (node.id as NSString).lastPathComponent
         return ArchiveItemTransfer(extractor: extractor, path: node.id, name: name)
     }

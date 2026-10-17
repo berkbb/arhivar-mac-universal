@@ -192,6 +192,11 @@
 "aboutNotices" = "Üçüncü Taraf Bildirimleri";
 "aboutCopyright" = "© %@ Babadogan Tech and Edu";
 "unknown" = "bilinmiyor";
+"openRiskyTitle" = "Bu dosya açılsın mı?";
+"openRiskyMessage" = "“%1$@” Mac’inizde kod çalıştırabilir (%2$@). Yalnızca arşivin kaynağına güveniyorsanız açın.";
+"openAnyway" = "Yine de Aç";
+"deceptiveNameReason" = "adı, gerçek türünü gizleyebilen görünmez karakterler içeriyor";
+"deceptiveNameHelp" = "Bu ad, dosyanın gerçek türünü gizleyebilen görünmez karakterler içeriyor.";
 
 "viewFolders" = "Klasörler";
 "viewTree" = "Ağaç";

@@ -68,35 +68,64 @@ public struct ItemExtractor: Sendable {
     public let runner: CommandRunner
     public let archive: URL
     public let password: String?
+    /// Çıkarılan öğelerin konacağı klasör (arşiv oturumunun geçici klasörü).
+    public let root: URL
 
-    public init(runner: CommandRunner, archive: URL, password: String?) {
+    public init(runner: CommandRunner, archive: URL, password: String?, root: URL = ItemExtractor.temporaryRoot) {
         self.runner = runner
         self.archive = archive
         self.password = password
+        self.root = root
     }
 
     public static var temporaryRoot: URL {
         FileManager.default.temporaryDirectory.appendingPathComponent("Arhivar", isDirectory: true)
     }
 
+    /// Önceki çalıştırmalardan kalan, `age` saniyeden eski geçici klasörleri siler.
+    @discardableResult
+    public static func sweepStale(olderThan age: TimeInterval, root: URL = temporaryRoot, now: Date = Date()) -> Int {
+        let fileManager = FileManager.default
+        guard let entries = try? fileManager.contentsOfDirectory(at: root, includingPropertiesForKeys: [.contentModificationDateKey]) else {
+            return 0
+        }
+        var removed = 0
+        for entry in entries {
+            let modified = (try? entry.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            if now.timeIntervalSince(modified) > age, (try? fileManager.removeItem(at: entry)) != nil {
+                removed += 1
+            }
+        }
+        return removed
+    }
+
     public func extract(
-        _ path: String, into root: URL = ItemExtractor.temporaryRoot,
+        _ path: String, into root: URL? = nil,
         onProgress: (@Sendable (Double) -> Void)? = nil
     ) async throws -> URL {
-        let directory = root.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let fileManager = FileManager.default
+        let directory = (root ?? self.root).appendingPathComponent(UUID().uuidString, isDirectory: true)
         let target = directory.appendingPathComponent(path).standardizedFileURL
         // Arşivdeki "../" gibi yollar geçici klasörün dışına çıkamasın.
         guard target.path.hasPrefix(directory.standardizedFileURL.path + "/") else {
             throw SevenZipError.failed(code: 0, message: path)
         }
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let options = ExtractOptions(archive: archive, destination: directory, items: [path], password: password, overwrite: .replace)
-        let result = try await runner.run(SevenZipCommand.extract(options), workingDirectory: options.workingDirectory, onProgress: onProgress)
-        try SevenZipError.check(result)
-        guard FileManager.default.fileExists(atPath: target.path) else {
-            throw SevenZipError.failed(code: result.exitCode, message: path)
+        // Çözülmüş (belki şifreli arşivden gelen) içerik yalnızca kullanıcıya açık olsun.
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        do {
+            let start = Date()
+            let options = ExtractOptions(archive: archive, destination: directory, items: [path], password: password, overwrite: .replace)
+            let result = try await runner.run(SevenZipCommand.extract(options), workingDirectory: options.workingDirectory, onProgress: onProgress)
+            try SevenZipError.check(result)
+            guard fileManager.fileExists(atPath: target.path) else {
+                throw SevenZipError.failed(code: result.exitCode, message: path)
+            }
+            Quarantine.propagate(from: archive, to: directory, since: start)
+            return target
+        } catch {
+            try? fileManager.removeItem(at: directory)
+            throw error
         }
-        return target
     }
 }
 

@@ -14,6 +14,17 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/tr/1.1.0/) biçimini ve
 - Adında `*` geçen bir klasöre çıkarma artık doğru klasöre yazıyor (7zz `-o` yolundaki `*` karakterini arşiv adıyla değiştiriyordu)
 - "Buraya Çıkar" açık arşivin parolasını silmiyor; kuyruktaki şifreli arşiv parola beklerken sıradakine geçilmiyor
 
+### Güvenlik
+
+- İnternetten inmiş bir arşivden çıkarılan dosyalar arşivin karantina (Gatekeeper) işaretini taşıyor. "Kullanıcı onayladı" biti aktarılmıyor. Bu, Çıkar, Buraya Çıkar, Hızlı Bakış, çift tıkla açma ve Finder'a sürükleme için geçerli.
+- Çalıştırılabilir ya da sistemi değiştirebilen dosyalar (`.command`, `.pkg`, `.mobileconfig`, uzantısız Unix programları…) açılmadan önce onay soruluyor.
+- Gerçek uzantıyı gizleyebilen görünmez ya da yön değiştiren karakterler (ör. U+202E) listede `⟦U+202E⟧` olarak, uyarı simgesiyle gösteriliyor.
+- Önizleme ve sürükleme dosyaları arşiv başına `0700` izinli bir klasörde tutuluyor. Bu klasör arşiv kapanınca, başka arşive geçince ve uygulamadan çıkınca siliniyor; önceki çalıştırmalardan kalanlar açılışta temizleniyor.
+
+### Değişenler
+
+- Büyük arşivlerde liste ayrıştırma yaklaşık 11 kat hızlandı: 200 bin girdi release derlemede 13,8 saniyeden 1,25 saniyeye indi.
+
 ### Eklenenler
 
 - Uygulama modeli için `ArhivarAppTests` test hedefi (gerçek 7zz ile)

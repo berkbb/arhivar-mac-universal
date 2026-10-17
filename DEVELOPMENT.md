@@ -47,6 +47,10 @@ Arhivar/
 - **Düzenleme:**
   - `7zz rn` ve `7zz d` klasör yolunu önek olarak eşleştirir. Bu yüzden tek komut, açık klasör kaydı olmasa bile alt öğelerin hepsini kapsar (testlerle doğrulandı).
   - Alt klasöre ekleme: `AddPlan` dosyaları geçici bir klasörde hedef yol yapısına kopyalar (APFS'de anlık) ve 7zz'yi orada göreli yollarla çalıştırır.
+- **Karantina:** `Quarantine.propagate` arşivin `com.apple.quarantine` değerini, çıkarmanın başladığı andan sonra yazılmış (ctime) öğelere uygular. "Kullanıcı onayladı" biti (0x40) temizlenir. 7zz bunu kendisi yapmaz.
+- **Açma güvenliği:** `OpenSafety.executableKind` riskli türleri ve çalıştırma bitini, `hasDeceptiveCharacters` görünmez ve yön değiştiren karakterleri bulur.
+- **Geçici dosyalar:** `$TMPDIR/Arhivar/session-<UUID>` (0700) arşiv başına tutulur ve arşiv kapanınca silinir. `ItemExtractor.sweepStale` açılışta 6 saatten eski klasörleri temizler.
+- **Liste ayrıştırma:** satırlar bayt düzeyinde bölünür, blok alanları `Substring` olarak tutulur ve tarih `ListingParser.parseTimestamp` ile okunur (DateFormatter kullanılmaz). Yaz saati geçişlerinde sonuç DateFormatter ile aynıdır; bunu testler denetler.
 - **Motor seçimi:** Ayarlarda özel bir 7zz seçildiyse o kullanılır. Yoksa uygulama paketindeki, yedek klasördeki (`~/Library/Application Support/Arhivar/engine`) ve Homebrew'daki kopyalar çalıştırılıp **en yeni sürüm** seçilir.
 
 ## Metin ekleme (yerelleştirme)
@@ -61,7 +65,7 @@ Arhivar/
 
 ```bash
 swift build                      # hızlı geliştirme derlemesi
-swift test                       # 57 test (ArhivarCoreTests + ArhivarAppTests); gerçek 7zz testleri Vendor/7-Zip/7zz kullanır
+swift test                       # 69 test (ArhivarCoreTests + ArhivarAppTests); gerçek 7zz testleri Vendor/7-Zip/7zz kullanır
 ./Scripts/build_app.sh           # evrensel build/Arhivar.app (ARCHS=native ile yalnızca bu Mac)
 ./Scripts/package.sh             # testler + .app + dist/Arhivar-<sürüm>.{dmg,zip,sha256}
 ./Scripts/package.sh --update-7zip   # önce Vendor/7-Zip'i güncelle, sonra paketle

@@ -113,5 +113,6 @@ public enum LKey: String, CaseIterable, Sendable {
     case toolbarAdd, editAddFiles, editDelete, editRename, buttonAdd, buttonDelete, buttonRename
     case deleteConfirmTitle, deleteConfirmMessage, renameTitle, renameField, addConfirmTitle
     case progressUpdating, toastUpdated, readOnlyArchive
+    case openRiskyTitle, openRiskyMessage, openAnyway, deceptiveNameReason, deceptiveNameHelp
     case unknown
 }

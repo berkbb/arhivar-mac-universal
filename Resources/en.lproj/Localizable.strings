@@ -192,6 +192,11 @@
 "aboutNotices" = "Third-Party Notices";
 "aboutCopyright" = "© %@ Babadogan Tech and Edu";
 "unknown" = "unknown";
+"openRiskyTitle" = "Open this file?";
+"openRiskyMessage" = "“%1$@” can run code on your Mac (%2$@). Open it only if you trust where the archive came from.";
+"openAnyway" = "Open Anyway";
+"deceptiveNameReason" = "its name contains hidden characters that can disguise its real type";
+"deceptiveNameHelp" = "This name contains hidden characters that can disguise the file’s real type.";
 
 "viewFolders" = "Folders";
 "viewTree" = "Tree";

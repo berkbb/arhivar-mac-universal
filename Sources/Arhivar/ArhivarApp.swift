@@ -52,6 +52,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppModel.shared.handleOpenRequest(urls)
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        AppModel.shared.discardTemporaryFiles()
+    }
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
     }
