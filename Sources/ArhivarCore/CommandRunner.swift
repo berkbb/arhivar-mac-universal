@@ -27,8 +27,12 @@ public enum SevenZipError: Error, Equatable, Sendable {
     public static func check(_ result: ProcessResult) throws -> String? {
         if result.exitCode == 0 { return nil }
         let combined = result.stdout + "\n" + result.stderr
+        // "Enter password" istemi parola doğru verilse de çıktıda görünür; yanlış parola sayılmaz.
+        // Parola bilinmiyorsa stdin boştur ve 7zz "Break signaled" ile durur: parola gerekli demektir.
+        // (Kullanıcının iptali CommandRunner'da ayrıca .cancelled olarak ele alınır.)
         if combined.range(of: "wrong password", options: .caseInsensitive) != nil
-            || combined.range(of: "enter password", options: .caseInsensitive) != nil {
+            || combined.range(of: "Cannot open encrypted archive", options: .caseInsensitive) != nil
+            || combined.range(of: "Break signaled", options: .caseInsensitive) != nil {
             throw SevenZipError.wrongPassword
         }
         // 7zz çıkış kodları: 1 = uyarı, 2 = ölümcül hata, 7 = komut satırı, 8 = bellek, 255 = kullanıcı durdurdu.
@@ -87,14 +91,16 @@ public struct CommandRunner: Sendable {
     /// - Parameters:
     ///   - timeout: Saniye; aşılırsa süreç sonlandırılır ve `timedOut` fırlatılır.
     ///   - workingDirectory: Göreli yollar için çalışma klasörü.
+    ///   - input: stdin'e yazılacak veri (ör. parola). Yoksa stdin boştur; parola sorulursa 7zz takılmaz, durur.
     ///   - onProgress: 0...1 aralığında ilerleme (stdout'taki yüzdelerden).
     public func run(
         _ arguments: [String],
         timeout: TimeInterval? = nil,
         workingDirectory: URL? = nil,
+        input: Data? = nil,
         onProgress: (@Sendable (Double) -> Void)? = nil
     ) async throws -> ProcessResult {
-        let box = ProcessBox(executableURL: executableURL, arguments: arguments)
+        let box = try ProcessBox(executableURL: executableURL, arguments: arguments, input: input)
         if let workingDirectory { box.process.currentDirectoryURL = workingDirectory }
         let state = RunState(onProgress: onProgress)
 
@@ -152,11 +158,20 @@ private final class ProcessBox: @unchecked Sendable {
     let stdoutPipe = Pipe()
     let stderrPipe = Pipe()
 
-    init(executableURL: URL, arguments: [String]) {
+    init(executableURL: URL, arguments: [String], input: Data?) throws {
         process.executableURL = executableURL
         process.arguments = arguments
-        // Parola sorulursa 7zz takılmasın; boş girdi alır ve hata verir.
-        process.standardInput = FileHandle.nullDevice
+        if let input {
+            // Veri süreç başlamadan boruya yazılıp yazma ucu kapatılır: çocuk süreç veriyi ve ardından EOF okur.
+            // Böylece kapanmış boruya yazma (SIGPIPE) olamaz. Veri küçüktür, boru tamponuna sığar.
+            let stdinPipe = Pipe()
+            try stdinPipe.fileHandleForWriting.write(contentsOf: input)
+            try stdinPipe.fileHandleForWriting.close()
+            process.standardInput = stdinPipe
+        } else {
+            // Parola sorulursa 7zz takılmasın; boş girdi alır ve "Break signaled" ile durur.
+            process.standardInput = FileHandle.nullDevice
+        }
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
     }

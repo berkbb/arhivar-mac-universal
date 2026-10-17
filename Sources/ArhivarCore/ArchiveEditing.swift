@@ -18,17 +18,19 @@ public enum ArchiveCapabilities {
 extension SevenZipCommand {
     /// Var olan arşive dosya ekler. `names`, `workingDirectory`'ye göre göreli yollardır.
     public static func add(archive: URL, names: [String], password: String? = nil, encryptHeaders: Bool = false) -> [String] {
-        var args = ["a", "-bsp1", "-bb0", "-y"] + common + passwordSwitch(password)
-        if encryptHeaders, password?.isEmpty == false { args.append("-mhe=on") }
+        // Parola stdin'den verilir (bkz. passwordInput); burada yalnızca sorulması istenir.
+        let hasPassword = password?.isEmpty == false
+        var args = ["a", "-bsp1", "-bb0", "-y"] + common + (hasPassword ? ["-p"] : [])
+        if encryptHeaders, hasPassword { args.append("-mhe=on") }
         return args + ["--", archive.path] + names
     }
 
-    public static func delete(archive: URL, items: [String], password: String? = nil) -> [String] {
-        ["d", "-bsp1", "-bb0", "-y", "-spd"] + common + passwordSwitch(password) + ["--", archive.path] + items
+    public static func delete(archive: URL, items: [String]) -> [String] {
+        ["d", "-bsp1", "-bb0", "-y", "-spd"] + common + ["--", archive.path] + items
     }
 
-    public static func rename(archive: URL, from oldPath: String, to newPath: String, password: String? = nil) -> [String] {
-        ["rn", "-bb0", "-y", "-spd"] + common + passwordSwitch(password) + ["--", archive.path, oldPath, newPath]
+    public static func rename(archive: URL, from oldPath: String, to newPath: String) -> [String] {
+        ["rn", "-bb0", "-y", "-spd"] + common + ["--", archive.path, oldPath, newPath]
     }
 }
 
@@ -115,7 +117,7 @@ public struct ItemExtractor: Sendable {
         do {
             let start = Date()
             let options = ExtractOptions(archive: archive, destination: directory, items: [path], password: password, overwrite: .replace)
-            let result = try await runner.run(SevenZipCommand.extract(options), workingDirectory: options.workingDirectory, onProgress: onProgress)
+            let result = try await runner.run(SevenZipCommand.extract(options), workingDirectory: options.workingDirectory, input: options.input, onProgress: onProgress)
             try SevenZipError.check(result)
             guard fileManager.fileExists(atPath: target.path) else {
                 throw SevenZipError.failed(code: result.exitCode, message: path)

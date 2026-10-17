@@ -377,7 +377,7 @@ final class AppModel {
     /// Listeyi 7zz'den okur ve görünüm durumunu günceller.
     private func readListing(of url: URL, runner: CommandRunner, keepFolder: Bool, password candidate: String?) async throws {
         let currentPassword = candidate
-        let result = try await runner.run(SevenZipCommand.list(archive: url, password: currentPassword))
+        let result = try await runner.run(SevenZipCommand.list(archive: url), input: SevenZipCommand.passwordInput(currentPassword))
         try SevenZipError.check(result)
         let listing = ListingParser.parse(result.stdout, fallbackName: ArchiveNaming.streamItemName(for: url))
 
@@ -507,7 +507,7 @@ final class AppModel {
         perform(.progressExtracting, archive: archive, retry: .extract(items: items, destination: destination), usedPassword: password != nil) { runner, progress in
             try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
             let start = Date()
-            let result = try await runner.run(SevenZipCommand.extract(options), workingDirectory: options.workingDirectory, onProgress: progress)
+            let result = try await runner.run(SevenZipCommand.extract(options), workingDirectory: options.workingDirectory, input: options.input, onProgress: progress)
             let warning = try SevenZipError.check(result)
             Quarantine.propagate(from: archive, to: destination, roots: roots, since: start)
             self.finish(message: self.t(.toastExtracted, destination.lastPathComponent), reveal: destination, warning: warning)
@@ -522,7 +522,7 @@ final class AppModel {
         }
         let currentPassword = password
         perform(.progressTesting, archive: archive, retry: .test) { runner, progress in
-            let result = try await runner.run(SevenZipCommand.test(archive: archive, password: currentPassword), onProgress: progress)
+            let result = try await runner.run(SevenZipCommand.test(archive: archive), input: SevenZipCommand.passwordInput(currentPassword), onProgress: progress)
             let warning = try SevenZipError.check(result)
             if let warning {
                 self.alert = AlertItem(title: self.t(.warningTitle), message: warning)
@@ -657,7 +657,7 @@ final class AppModel {
                 if let staging = plan.stagingDirectory { try? FileManager.default.removeItem(at: staging) }
             }
             let command = SevenZipCommand.add(archive: archive, names: plan.names, password: currentPassword, encryptHeaders: encryptHeaders)
-            let result = try await runner.run(command, workingDirectory: plan.workingDirectory, onProgress: progress)
+            let result = try await runner.run(command, workingDirectory: plan.workingDirectory, input: SevenZipCommand.passwordInput(currentPassword), onProgress: progress)
             let warning = try SevenZipError.check(result)
             try await self.readListing(of: archive, runner: runner, keepFolder: true, password: currentPassword)
             self.finishEdit(warning: warning)
@@ -684,7 +684,7 @@ final class AppModel {
         }
         let currentPassword = password
         perform(.progressUpdating, archive: archive, retry: .delete(items: items)) { runner, progress in
-            let result = try await runner.run(SevenZipCommand.delete(archive: archive, items: items, password: currentPassword), onProgress: progress)
+            let result = try await runner.run(SevenZipCommand.delete(archive: archive, items: items), input: SevenZipCommand.passwordInput(currentPassword), onProgress: progress)
             let warning = try SevenZipError.check(result)
             try await self.readListing(of: archive, runner: runner, keepFolder: true, password: currentPassword)
             self.finishEdit(warning: warning)
@@ -709,7 +709,7 @@ final class AppModel {
         }
         let currentPassword = password
         perform(.progressUpdating, archive: archive, retry: .rename(path: path, newName: name)) { runner, _ in
-            let result = try await runner.run(SevenZipCommand.rename(archive: archive, from: path, to: newPath, password: currentPassword))
+            let result = try await runner.run(SevenZipCommand.rename(archive: archive, from: path, to: newPath), input: SevenZipCommand.passwordInput(currentPassword))
             let warning = try SevenZipError.check(result)
             try await self.readListing(of: archive, runner: runner, keepFolder: true, password: currentPassword)
             self.selection = [newPath]
@@ -800,7 +800,7 @@ final class AppModel {
 
     func createArchive(_ options: CreateOptions) {
         perform(.progressCreating, archive: nil, retry: nil) { runner, progress in
-            let result = try await runner.run(SevenZipCommand.create(options), onProgress: progress)
+            let result = try await runner.run(SevenZipCommand.create(options), input: options.input, onProgress: progress)
             let warning = try SevenZipError.check(result)
             let exists = FileManager.default.fileExists(atPath: options.destination.path)
             if exists { self.addRecent(options.destination) }

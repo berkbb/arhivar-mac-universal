@@ -51,7 +51,7 @@ private final class Fixture {
             sources: [workspace.appendingPathComponent("kaynak")], destination: url, format: format,
             level: .fast, password: password, encryptFileNames: encryptNames
         )
-        try SevenZipError.check(try await runner.run(SevenZipCommand.create(options)))
+        try SevenZipError.check(try await runner.run(SevenZipCommand.create(options), input: options.input))
         return url
     }
 

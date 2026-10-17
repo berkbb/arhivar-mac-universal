@@ -101,6 +101,9 @@ public enum VolumeSize {
 }
 
 public struct CreateOptions: Sendable, Equatable {
+    /// 7zz'nin stdin'ine yazılacak parola (biçim şifrelemeyi destekliyorsa).
+    public var input: Data? { format.supportsEncryption ? SevenZipCommand.passwordInput(password) : nil }
+
     public var sources: [URL]
     public var destination: URL
     public var format: ArchiveFormat
@@ -134,6 +137,9 @@ public struct ExtractOptions: Sendable, Equatable {
     public var overwrite: OverwriteMode
 
     /// 7zz'nin çalışması gereken klasör; yalnızca hedef yolunda "*" varsa doludur.
+    /// 7zz'nin stdin'ine yazılacak parola (yoksa nil).
+    public var input: Data? { SevenZipCommand.passwordInput(password) }
+
     public var workingDirectory: URL? {
         destination.path.contains("*") ? destination : nil
     }
@@ -151,17 +157,21 @@ public struct ExtractOptions: Sendable, Equatable {
 public enum SevenZipCommand {
     static let common = ["-sccUTF-8"]
 
-    static func passwordSwitch(_ password: String?) -> [String] {
-        guard let password, !password.isEmpty else { return [] }
-        return ["-p" + password]
+    /// Parola hiçbir zaman komut satırına yazılmaz (`ps` ile okunabilirdi); 7zz'nin stdin'ine verilir.
+    /// l/t/x/d/rn şifreli girdide parolayı kendisi sorar; `a` için çıplak `-p` sorulmasını sağlar.
+    /// Ad şifreli (-mhe) arşive eklemede birden fazla istem gelebildiği için satır birkaç kez yazılır.
+    public static func passwordInput(_ password: String?) -> Data? {
+        guard let password, !password.isEmpty else { return nil }
+        let line = password.split(whereSeparator: \.isNewline).first.map(String.init) ?? password
+        return Data(String(repeating: line + "\n", count: 4).utf8)
     }
 
-    public static func list(archive: URL, password: String? = nil) -> [String] {
-        ["l", "-slt", "-bd"] + common + passwordSwitch(password) + ["--", archive.path]
+    public static func list(archive: URL) -> [String] {
+        ["l", "-slt", "-bd"] + common + ["--", archive.path]
     }
 
-    public static func test(archive: URL, password: String? = nil) -> [String] {
-        ["t", "-bsp1", "-bb0"] + common + passwordSwitch(password) + ["--", archive.path]
+    public static func test(archive: URL) -> [String] {
+        ["t", "-bsp1", "-bb0"] + common + ["--", archive.path]
     }
 
     public static func extract(_ options: ExtractOptions) -> [String] {
@@ -169,7 +179,6 @@ public enum SevenZipCommand {
         let output = options.workingDirectory == nil ? options.destination.path : "."
         var args = ["x", "-o" + output, options.overwrite.switchValue, "-bsp1", "-bb0", "-y"]
         args += common
-        args += passwordSwitch(options.password)
         // Seçili öğelerin adları joker karakter olarak yorumlanmasın.
         if !options.items.isEmpty { args.append("-spd") }
         args += ["--", options.archive.path]
@@ -187,7 +196,7 @@ public enum SevenZipCommand {
             args.append(options.multithreaded ? "-mmt=on" : "-mmt=1")
         }
         if format.supportsEncryption, let password = options.password, !password.isEmpty {
-            args += passwordSwitch(password)
+            args.append("-p")
             if format == .sevenZip && options.encryptFileNames { args.append("-mhe=on") }
             if format == .zip { args.append("-mem=AES256") }
         }

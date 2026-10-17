@@ -15,7 +15,8 @@ private let destination = URL(fileURLWithPath: "/tmp/cikti")
         archive: archive, destination: destination, items: ["a*b.txt", "-klasor"], password: "gizli", overwrite: .replace
     ))
     #expect(args.contains("-spd"))
-    #expect(args.contains("-pgizli"))
+    // Parola komut satırında görünmemeli (ps ile okunabilirdi); stdin'den verilir.
+    #expect(!args.contains { $0.contains("gizli") || $0.hasPrefix("-p") })
     #expect(args.contains("-aoa"))
     // Dosya adları "--" ayıracından sonra gelmeli; "-" ile başlayan ad anahtar sanılmasın.
     let separator = try! #require(args.firstIndex(of: "--"))
@@ -32,7 +33,8 @@ private let destination = URL(fileURLWithPath: "/tmp/cikti")
     #expect(args.starts(with: ["a", "-t7z"]))
     #expect(args.contains("-mx=9"))
     #expect(args.contains("-mmt=1"))
-    #expect(args.contains("-pp"))
+    #expect(args.contains("-p"))
+    #expect(!args.contains("-pp"))
     #expect(args.contains("-mhe=on"))
     #expect(args.contains("-v100m"))
     #expect(!args.contains("-mem=AES256"))
@@ -56,7 +58,7 @@ private let destination = URL(fileURLWithPath: "/tmp/cikti")
 
 @Test func listAndTestArguments() {
     #expect(SevenZipCommand.list(archive: archive) == ["l", "-slt", "-bd", "-sccUTF-8", "--", "/tmp/ornek.7z"])
-    #expect(SevenZipCommand.test(archive: archive, password: "x").contains("-px"))
+    #expect(!SevenZipCommand.test(archive: archive).contains { $0.hasPrefix("-p") })
 }
 
 @Test func classifiesResults() throws {
@@ -129,4 +131,30 @@ private let destination = URL(fileURLWithPath: "/tmp/cikti")
     #expect(ArchiveNaming.suggestedName(for: [file], isDirectory: { _ in false }) == "notlar")
     #expect(ArchiveNaming.suggestedName(for: [file, URL(fileURLWithPath: "/x/Proje/b.txt")], isDirectory: { _ in false }) == "Proje")
     #expect(ArchiveNaming.suggestedName(for: [], isDirectory: { _ in false }) == "Archive")
+}
+
+@Test func passwordsGoToStandardInput() throws {
+    let input = try #require(SevenZipCommand.passwordInput("Gizli Şifre"))
+    #expect(String(decoding: input, as: UTF8.self) == String(repeating: "Gizli Şifre\n", count: 4))
+    #expect(SevenZipCommand.passwordInput(nil) == nil)
+    #expect(SevenZipCommand.passwordInput("") == nil)
+    // Satır sonu içeren parola ilk satırla sınırlanır; ek satırlar sahte yanıt gibi okunamaz.
+    #expect(String(decoding: try #require(SevenZipCommand.passwordInput("a\nb")), as: UTF8.self).hasPrefix("a\na\n"))
+    let options = ExtractOptions(archive: archive, destination: destination, password: "x", overwrite: .replace)
+    #expect(options.input == SevenZipCommand.passwordInput("x"))
+    #expect(CreateOptions(sources: [], destination: archive, format: .tar, level: .normal, password: "x").input == nil)
+}
+
+@Test func passwordPromptIsNotAnError() throws {
+    // Doğru parola stdin'den verildiğinde istem metni çıktıda kalır; başka bir hata parola hatası sayılmamalı.
+    #expect(throws: SevenZipError.failed(code: 2, message: "ERROR: CRC Failed : a.txt")) {
+        try SevenZipError.check(ProcessResult(exitCode: 2, stdout: "Enter password (will not be echoed):\nERROR: CRC Failed : a.txt", stderr: ""))
+    }
+    // Parola bilinmiyorsa stdin boştur; 7zz "Break signaled" ile durur.
+    #expect(throws: SevenZipError.wrongPassword) {
+        try SevenZipError.check(ProcessResult(exitCode: 255, stdout: "Enter password (will not be echoed):", stderr: "\n\nBreak signaled"))
+    }
+    #expect(throws: SevenZipError.wrongPassword) {
+        try SevenZipError.check(ProcessResult(exitCode: 2, stdout: "ERROR: t.7z : Cannot open encrypted archive. Wrong password?", stderr: ""))
+    }
 }

@@ -34,30 +34,30 @@ struct EngineIntegrationTests {
             sources: [workspace.appendingPathComponent("kaynak")], destination: archive,
             format: .sevenZip, level: .maximum, password: "Gizli-123", encryptFileNames: true
         )
-        try SevenZipError.check(try await runner.run(SevenZipCommand.create(create)))
+        try SevenZipError.check(try await runner.run(SevenZipCommand.create(create), input: create.input))
 
         // Adlar şifreli olduğu için parolasız liste parola hatası vermeli.
         await #expect(throws: SevenZipError.wrongPassword) {
             try SevenZipError.check(try await runner.run(SevenZipCommand.list(archive: archive)))
         }
         await #expect(throws: SevenZipError.wrongPassword) {
-            try SevenZipError.check(try await runner.run(SevenZipCommand.list(archive: archive, password: "yanlis")))
+            try SevenZipError.check(try await runner.run(SevenZipCommand.list(archive: archive), input: SevenZipCommand.passwordInput("yanlis")))
         }
 
-        let result = try await runner.run(SevenZipCommand.list(archive: archive, password: "Gizli-123"))
+        let result = try await runner.run(SevenZipCommand.list(archive: archive), input: SevenZipCommand.passwordInput("Gizli-123"))
         try SevenZipError.check(result)
         let listing = ListingParser.parse(result.stdout)
         #expect(listing.info.type == "7z")
         #expect(Set(listing.entries.map(\.path)) == ["kaynak", "kaynak/alt", "kaynak/not.txt", "kaynak/alt/çok-büyük.txt"])
         #expect(listing.entries.contains { $0.isEncrypted })
 
-        try SevenZipError.check(try await runner.run(SevenZipCommand.test(archive: archive, password: "Gizli-123")))
+        try SevenZipError.check(try await runner.run(SevenZipCommand.test(archive: archive), input: SevenZipCommand.passwordInput("Gizli-123")))
 
         // Yalnızca seçili klasör çıkarılır.
         let output = workspace.appendingPathComponent("cikti", isDirectory: true)
         let progress = ProgressBox()
         let extract = ExtractOptions(archive: archive, destination: output, items: ["kaynak/alt"], password: "Gizli-123", overwrite: .replace)
-        try SevenZipError.check(try await runner.run(SevenZipCommand.extract(extract)) { progress.last = $0 })
+        try SevenZipError.check(try await runner.run(SevenZipCommand.extract(extract), input: extract.input) { progress.last = $0 })
         let extracted = output.appendingPathComponent("kaynak/alt/çok-büyük.txt")
         #expect(FileManager.default.fileExists(atPath: extracted.path))
         #expect(!FileManager.default.fileExists(atPath: output.appendingPathComponent("kaynak/not.txt").path))
