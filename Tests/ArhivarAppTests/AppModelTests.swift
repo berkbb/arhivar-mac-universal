@@ -261,6 +261,37 @@ struct AppModelTests {
         #expect(fixture.model.appUpdateState == .idle)
     }
 
+    /// Madde 17: bozuk arşiv "üzerine yaz" ile çıkarılırken hata olursa mevcut dosya bozulmadan kalmalı.
+    @Test func failedExtractionLeavesExistingFilesUntouched() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        fixture.settings.overwriteMode = .replace
+        fixture.settings.extractIntoSubfolder = false
+
+        // Saklama (sıkıştırmasız) zip: içerik düz metin olarak durur; değiştirince CRC hatası verir.
+        let archive = fixture.workspace.appendingPathComponent("bozuk.zip")
+        let options = CreateOptions(
+            sources: [fixture.workspace.appendingPathComponent("kaynak")], destination: archive, format: .zip, level: .store
+        )
+        try SevenZipError.check(try await fixture.runner.run(SevenZipCommand.create(options)))
+        var bytes = try Data(contentsOf: archive)
+        let range = try #require(bytes.range(of: Data("merhaba".utf8)))
+        bytes.replaceSubrange(range, with: Data("MERHABA".utf8))
+        try bytes.write(to: archive)
+
+        // Hedef, kaynağın kendisi: kaynak/not.txt zaten var.
+        fixture.model.extractHere([archive])
+        await fixture.model.serviceQueueTask?.value
+
+        let original = try String(contentsOf: fixture.workspace.appendingPathComponent("kaynak/not.txt"), encoding: .utf8)
+        #expect(original == "merhaba\n")
+        #expect(fixture.model.alert != nil)
+        // Hazırlık klasörü kalmamalı.
+        let leftovers = try FileManager.default.contentsOfDirectory(atPath: fixture.workspace.path).filter { $0.hasPrefix(".arhivar-staging") }
+        #expect(leftovers.isEmpty)
+    }
+
     @Test func folderNavigationAndEditing() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanUp() }

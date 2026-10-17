@@ -102,7 +102,7 @@ public struct ItemExtractor: Sendable {
     }
 
     public func extract(
-        _ path: String, into root: URL? = nil,
+        _ path: String, into root: URL? = nil, expectedSize: Int64? = nil,
         onProgress: (@Sendable (Double) -> Void)? = nil
     ) async throws -> URL {
         let fileManager = FileManager.default
@@ -112,6 +112,8 @@ public struct ItemExtractor: Sendable {
         guard target.path.hasPrefix(directory.standardizedFileURL.path + "/") else {
             throw SevenZipError.failed(code: 0, message: path)
         }
+        // Geçici klasör sistem diskindedir; büyük bir öğe diski doldurmasın.
+        if let expectedSize { try InsufficientSpaceError.check(required: expectedSize, at: root ?? self.root) }
         // Çözülmüş (belki şifreli arşivden gelen) içerik yalnızca kullanıcıya açık olsun.
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         do {
@@ -136,16 +138,18 @@ public struct ArchiveItemTransfer: Transferable, Sendable {
     public let extractor: ItemExtractor
     public let path: String
     public let name: String
+    public let size: Int64?
 
-    public init(extractor: ItemExtractor, path: String, name: String) {
+    public init(extractor: ItemExtractor, path: String, name: String, size: Int64? = nil) {
         self.extractor = extractor
         self.path = path
         self.name = name
+        self.size = size
     }
 
     public static var transferRepresentation: some TransferRepresentation {
         FileRepresentation(exportedContentType: .item) { item in
-            SentTransferredFile(try await item.extractor.extract(item.path))
+            SentTransferredFile(try await item.extractor.extract(item.path, expectedSize: item.size))
         }
         .suggestedFileName { $0.name }
     }

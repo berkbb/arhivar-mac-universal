@@ -498,18 +498,32 @@ final class AppModel {
     }
 
     private func runExtract(archive: URL, items: [String], destination: URL, password: String?) {
-        let options = ExtractOptions(
-            archive: archive, destination: destination, items: items,
-            password: password, overwrite: settings.overwriteMode
-        )
-        // Karantina aktarımı için incelenecek kök adlar: seçili öğeler ya da açık arşivin kökleri.
-        let roots = !items.isEmpty ? items : (archive == archiveURL ? tree.map(\.id) : [])
+        let policy = settings.overwriteMode
+        let knownEntries = archive == archiveURL ? listing?.entries : nil
         perform(.progressExtracting, archive: archive, retry: .extract(items: items, destination: destination), usedPassword: password != nil) { runner, progress in
-            try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
-            let start = Date()
-            let result = try await runner.run(SevenZipCommand.extract(options), workingDirectory: options.workingDirectory, input: options.input, onProgress: progress)
+            let fileManager = FileManager.default
+
+            // 1. Boş alan. Açık arşivin listesi yoksa (ör. Buraya Çıkar) önce listelenir; parola gerekirse burada sorulur.
+            var entries = knownEntries
+            if entries == nil {
+                let listed = try await runner.run(SevenZipCommand.list(archive: archive), input: SevenZipCommand.passwordInput(password))
+                try SevenZipError.check(listed)
+                entries = ListingParser.parse(listed.stdout, fallbackName: ArchiveNaming.streamItemName(for: archive)).entries
+            }
+            try InsufficientSpaceError.check(required: DiskSpace.requiredBytes(for: items, in: entries ?? []), at: destination)
+
+            // 2. Hedefle aynı birimdeki hazırlık klasörüne çıkar; iptal ya da hata hedefi değiştirmez.
+            let staging = try StagedExtraction.makeStagingDirectory(for: destination)
+            defer { try? fileManager.removeItem(at: staging) }
+            let options = ExtractOptions(archive: archive, destination: staging, items: items, password: password, overwrite: .replace)
+            let result = try await runner.run(
+                SevenZipCommand.extract(options), workingDirectory: options.workingDirectory, input: options.input, onProgress: progress
+            )
             let warning = try SevenZipError.check(result)
-            Quarantine.propagate(from: archive, to: destination, roots: roots, since: start)
+
+            // 3. Karantina işaretini aktar, 4. seçilen kurala göre hedefe taşı.
+            Quarantine.propagate(from: archive, to: staging, since: .distantPast)
+            try StagedExtraction.merge(from: staging, into: destination, policy: policy)
             self.finish(message: self.t(.toastExtracted, destination.lastPathComponent), reveal: destination, warning: warning)
         }
     }
@@ -581,7 +595,7 @@ final class AppModel {
         let currentPassword = password
         perform(.progressExtracting, archive: archive, retry: retry) { runner, progress in
             let extractor = ItemExtractor(runner: runner, archive: archive, password: currentPassword, root: self.sessionDirectory())
-            let url = try await extractor.extract(path, onProgress: progress)
+            let url = try await extractor.extract(path, expectedSize: self.node(path)?.size, onProgress: progress)
             self.previewCache[path] = url
             completion(url)
         }
@@ -616,7 +630,7 @@ final class AppModel {
         guard let archive = archiveURL, let engineURL, !needsPassword(for: [node.id]) else { return nil }
         let extractor = ItemExtractor(runner: CommandRunner(executableURL: engineURL), archive: archive, password: password, root: sessionDirectory())
         let name = (node.id as NSString).lastPathComponent
-        return ArchiveItemTransfer(extractor: extractor, path: node.id, name: name)
+        return ArchiveItemTransfer(extractor: extractor, path: node.id, name: name, size: node.size)
     }
 
     // MARK: - Arşivi düzenleme
@@ -906,6 +920,9 @@ final class AppModel {
     }
 
     private func message(for error: Error) -> String {
+        if let space = error as? InsufficientSpaceError {
+            return t(.errorDiskSpace, settings.bytes(space.required), settings.bytes(space.available))
+        }
         guard let error = error as? SevenZipError else { return error.localizedDescription }
         switch error {
         case .engineNotFound: return t(.errorEngineNotFound)

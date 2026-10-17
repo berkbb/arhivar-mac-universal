@@ -192,6 +192,7 @@
 "aboutNotices" = "Üçüncü Taraf Bildirimleri";
 "aboutCopyright" = "© %@ Babadogan Tech and Edu";
 "unknown" = "bilinmiyor";
+"errorDiskSpace" = "Yetersiz disk alanı: %1$@ gerekiyor, %2$@ boş. Hiçbir şey yazılmadı.";
 "appUpdateSection" = "Arhivar güncellemeleri";
 "appUpdateAvailable" = "Arhivar %1$@ yayımlandı (sizdeki: %2$@).";
 "appUpdateUpToDate" = "Arhivar güncel (%@).";
