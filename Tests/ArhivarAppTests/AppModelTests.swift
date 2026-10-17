@@ -1,3 +1,5 @@
+import AppKit
+import CryptoKit
 import Foundation
 import Testing
 @testable import Arhivar
@@ -34,7 +36,8 @@ private final class Fixture {
         settings = AppSettings(defaults: defaults, bundle: .main)
         settings.customEnginePath = engineURL?.path
         settings.revealAfterOperation = false
-        settings.extractIntoSubfolder = true
+        // Mevcut senaryolar arşiv adıyla klasör bekler; akıllı kural ayrıca sınanır.
+        settings.subfolderMode = .always
         model = AppModel(settings: settings, defaults: defaults)
         runner = CommandRunner(executableURL: engineURL ?? URL(fileURLWithPath: "/usr/bin/false"))
     }
@@ -56,7 +59,19 @@ private final class Fixture {
     }
 
     func settle() async {
-        await model.operationTask?.value
+        while model.operation != nil { await model.operationTask?.value }
+    }
+
+    /// Çıkarma hedefini sabitler (panel açılmasın) ve hedef klasörü döndürür.
+    func useExtractFolder(_ name: String = "cikti") -> URL {
+        let folder = workspace.appendingPathComponent(name, isDirectory: true)
+        settings.extractLocation = .custom
+        settings.customExtractFolder = folder.path
+        return folder
+    }
+
+    func exists(_ path: String) -> Bool {
+        FileManager.default.fileExists(atPath: workspace.appendingPathComponent(path).path)
     }
 }
 
@@ -269,7 +284,7 @@ struct AppModelTests {
         defer { fixture.cleanUp() }
         await fixture.model.refreshEngine()
         fixture.settings.overwriteMode = .replace
-        fixture.settings.extractIntoSubfolder = false
+        fixture.settings.subfolderMode = .never
 
         // Saklama (sıkıştırmasız) zip: içerik düz metin olarak durur; değiştirince CRC hatası verir.
         let archive = fixture.workspace.appendingPathComponent("bozuk.zip")
@@ -363,5 +378,371 @@ struct AppModelTests {
         model.goUp()
         #expect(model.currentFolder == "")
         #expect(model.selection == ["kaynak"])
+    }
+
+    // MARK: - ROADMAP.md
+
+    /// P0-1: adları açık, parolalı 7z'ye parolayla eklemek adları şifrelememeli (önceden -mhe=on veriliyordu).
+    @Test func addingWithPasswordKeepsHeadersPlain() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let archive = try await fixture.makeArchive("parolali.7z", format: .sevenZip, password: "p", encryptNames: false)
+        let model = fixture.model
+        model.openArchive(archive)
+        await fixture.settle()
+
+        for name in ["ek1.txt", "ek2.txt"] {
+            let extra = fixture.workspace.appendingPathComponent(name)
+            try "ek".write(to: extra, atomically: true, encoding: .utf8)
+            model.addFiles([extra])
+            await fixture.settle()
+            if model.passwordRequest != nil {
+                model.submitPassword("p")
+                await fixture.settle()
+            }
+        }
+        #expect(model.node("ek2.txt") != nil)
+        // Parolasız liste hâlâ çalışmalı: adlar şifrelenmedi.
+        let plain = try await fixture.runner.run(SevenZipCommand.list(archive: archive))
+        #expect(!SevenZipError.needsPassword(plain))
+    }
+
+    /// P1-11: bölünmüş arşiv oluşturulunca ilk parça son kullanılanlara girer; ikinci parça ilk parçadan açılır.
+    @Test func splitArchivesOpenFromFirstVolume() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let big = fixture.workspace.appendingPathComponent("buyuk.bin")
+        var generator = SystemRandomNumberGenerator()
+        try Data((0..<2_500_000).map { _ in UInt8.random(in: 0...255, using: &generator) }).write(to: big)
+        let destination = fixture.workspace.appendingPathComponent("parca.7z")
+        fixture.model.createArchive(CreateOptions(sources: [big], destination: destination, format: .sevenZip, level: .store, volumeSizeMB: 1))
+        await fixture.settle()
+
+        #expect(fixture.model.alert == nil)
+        #expect(fixture.model.recentArchives.first?.lastPathComponent == "parca.7z.001")
+        #expect(fixture.exists("parca.7z.003"))
+        fixture.model.openArchive(fixture.workspace.appendingPathComponent("parca.7z.002"))
+        await fixture.settle()
+        #expect(fixture.model.archiveURL?.lastPathComponent == "parca.7z.001")
+        #expect(fixture.model.node("buyuk.bin") != nil)
+        #expect((fixture.model.statistics?.packedSize ?? 0) > 2_000_000)
+    }
+
+    /// P1-13: iptal "Buraya Çıkar" kuyruğunun geri kalanını da durdurur.
+    @Test func cancelStopsServiceQueue() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let first = try await fixture.makeArchive("birinci.zip", format: .zip)
+        let second = try await fixture.makeArchive("ikinci.zip", format: .zip)
+
+        fixture.model.extractHere([first, second])
+        for _ in 0..<500 where fixture.model.operation == nil { try await Task.sleep(for: .milliseconds(1)) }
+        fixture.model.cancelOperation()
+        await fixture.model.serviceQueueTask?.value
+        #expect(!fixture.exists("ikinci"))
+    }
+
+    /// P1-15 ve özellik 1: alt klasördeyken seçilen öğe klasör yolu olmadan, tek öğe olduğu için doğrudan hedefe çıkar.
+    @Test func extractingFromSubfolderStripsPath() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let archive = try await fixture.makeArchive("alt.7z", format: .sevenZip)
+        let output = fixture.useExtractFolder()
+        fixture.settings.subfolderMode = .smart
+        let model = fixture.model
+        model.browserMode = .folders
+        model.openArchive(archive)
+        await fixture.settle()
+
+        model.enterFolder("kaynak")
+        model.enterFolder("kaynak/alt")
+        model.extract(items: ["kaynak/alt/b.txt"])
+        await fixture.settle()
+        #expect(FileManager.default.fileExists(atPath: output.appendingPathComponent("b.txt").path))
+        #expect(!FileManager.default.fileExists(atPath: output.appendingPathComponent("kaynak").path))
+
+        // Arama sonuçlarından çıkarma tam yolu korur.
+        model.searchText = "not"
+        model.extract(items: ["kaynak/not.txt"])
+        await fixture.settle()
+        #expect(FileManager.default.fileExists(atPath: output.appendingPathComponent("kaynak/not.txt").path))
+    }
+
+    /// Özellik 1: tek kök klasörlü arşiv "Ad/Ad" iç içeliği olmadan, çok öğeli arşiv kendi klasörüne çıkar.
+    @Test func smartSubfolderAvoidsDoubleNesting() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let single = try await fixture.makeArchive("tek.zip", format: .zip)
+        let multiple = fixture.workspace.appendingPathComponent("cok.zip")
+        let options = CreateOptions(
+            sources: [fixture.workspace.appendingPathComponent("kaynak/not.txt"), fixture.workspace.appendingPathComponent("kaynak/alt")],
+            destination: multiple, format: .zip, level: .fast
+        )
+        try SevenZipError.check(try await fixture.runner.run(SevenZipCommand.create(options)))
+        let output = fixture.useExtractFolder()
+        fixture.settings.subfolderMode = .smart
+
+        for archive in [single, multiple] {
+            fixture.model.openArchive(archive)
+            await fixture.settle()
+            fixture.model.extract(selectedOnly: false)
+            await fixture.settle()
+        }
+        #expect(FileManager.default.fileExists(atPath: output.appendingPathComponent("kaynak/alt/b.txt").path))
+        #expect(!FileManager.default.fileExists(atPath: output.appendingPathComponent("tek").path))
+        #expect(FileManager.default.fileExists(atPath: output.appendingPathComponent("cok/alt/b.txt").path))
+    }
+
+    /// P1-16: yol çubuğuna bırakılan dosyalar onaylanana kadar açık klasör değişmez; hedef klasör istekte taşınır.
+    @Test func addRequestCarriesTargetFolder() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let archive = try await fixture.makeArchive("hedef.7z", format: .sevenZip)
+        let model = fixture.model
+        model.openArchive(archive)
+        await fixture.settle()
+        let extra = fixture.workspace.appendingPathComponent("ek.txt")
+        try "ek".write(to: extra, atomically: true, encoding: .utf8)
+
+        model.addRequest = AddRequest(sources: [extra], folder: "kaynak/alt")
+        #expect(model.currentFolder == "")
+        model.addRequest = nil
+        #expect(model.currentFolder == "")
+
+        model.addRequest = AddRequest(sources: [extra], folder: "kaynak/alt")
+        model.confirmAdd()
+        await fixture.settle()
+        #expect(model.node("kaynak/alt/ek.txt") != nil)
+        #expect(model.currentFolder == "")
+    }
+
+    /// P1-14: farklı klasörlerdeki aynı adlı dosyalar eklenmez; anlaşılır bir hata gösterilir.
+    @Test func addingDuplicateNamesShowsError() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let archive = try await fixture.makeArchive("ayni.7z", format: .sevenZip)
+        fixture.model.openArchive(archive)
+        await fixture.settle()
+        let other = fixture.workspace.appendingPathComponent("baska", isDirectory: true)
+        try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+        try "x".write(to: other.appendingPathComponent("not.txt"), atomically: true, encoding: .utf8)
+
+        fixture.model.addFiles([fixture.workspace.appendingPathComponent("kaynak/not.txt"), other.appendingPathComponent("not.txt")])
+        await fixture.settle()
+        #expect(fixture.model.alert?.message == fixture.settings.t(.duplicateNames, "not.txt"))
+        #expect(fixture.model.node("not.txt") == nil)
+    }
+
+    /// P2-20: "Birlikte Aç" ile soğuk açılışta güncelleme izni, arşiv açılırken değil, iş bitince sorulur.
+    @Test func consentWaitsForColdStartOperation() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        let archive = try await fixture.makeArchive("soguk.7z", format: .sevenZip)
+        fixture.model.openArchive(archive)
+        await fixture.model.launch()
+        #expect(fixture.model.alert == nil)
+        await fixture.settle()
+        for _ in 0..<50 where fixture.model.alert == nil { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(fixture.model.archiveURL == archive)
+        #expect(fixture.model.alert?.title == fixture.settings.t(.consentTitle))
+    }
+
+    /// P2-21: Dock'a arşivle birlikte başka dosyalar bırakılırsa hepsi yeni arşive gider; yalnızca arşivlerse ilki açılır.
+    @Test func openRequestWithMixedFilesCreatesArchive() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let first = try await fixture.makeArchive("a.zip", format: .zip)
+        let second = try await fixture.makeArchive("b.7z", format: .sevenZip)
+        let text = fixture.workspace.appendingPathComponent("kaynak/not.txt")
+
+        fixture.model.handleOpenRequest([first, text])
+        #expect(fixture.model.createRequest?.sources == [first, text])
+        #expect(fixture.model.archiveURL == nil)
+        fixture.model.createRequest = nil
+
+        fixture.model.handleOpenRequest([first, second])
+        await fixture.settle()
+        #expect(fixture.model.archiveURL == first)
+    }
+
+    /// P3-22: düzenlemeden sonra eski önizleme dosyaları silinir.
+    @Test func editDiscardsStalePreviews() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let archive = try await fixture.makeArchive("onizle.7z", format: .sevenZip)
+        let model = fixture.model
+        model.openArchive(archive)
+        await fixture.settle()
+        model.toggleQuickLook("kaynak/not.txt")
+        await fixture.settle()
+        let preview = try #require(model.quickLookURL)
+        model.quickLookURL = nil
+
+        model.rename("kaynak/alt/b.txt", to: "c.txt")
+        await fixture.settle()
+        #expect(model.node("kaynak/alt/c.txt") != nil)
+        #expect(!FileManager.default.fileExists(atPath: preview.path))
+    }
+
+    /// P3-22: sıfırlama ilk kurulumdaki gibi hiçbir tercih bırakmaz; eski alt klasör tercihi yeni kurala çevrilir.
+    @Test func resetRemovesAllPreferences() throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        // object(forKey:) genel alana (NSGlobalDomain) da bakar; yalnızca uygulamanın kendi alanı denetlenir.
+        let stored = { fixture.defaults.persistentDomain(forName: fixture.suiteName) ?? [:] }
+        fixture.settings.language = .en
+        fixture.model.browserMode = .tree
+        #expect(stored()["AppleLanguages"] != nil)
+
+        fixture.model.browserMode = .folders
+        fixture.settings.resetAll()
+        #expect(stored()["AppleLanguages"] == nil)
+        #expect(stored()["browserMode"] == nil)
+        #expect(stored()["language"] == nil)
+        #expect(fixture.settings.language == .tr)
+        #expect(fixture.settings.subfolderMode == .smart)
+        #expect(fixture.settings.storeSymlinks)
+
+        fixture.defaults.set(false, forKey: "extractIntoSubfolder")
+        #expect(AppSettings(defaults: fixture.defaults, bundle: .main).subfolderMode == .never)
+        fixture.defaults.set(true, forKey: "extractIntoSubfolder")
+        #expect(AppSettings(defaults: fixture.defaults, bundle: .main).subfolderMode == .smart)
+    }
+
+    /// P1-8: "./" önekli tar'da "." klasörü görünmez; seçili öğe ham yoluyla çıkarılır.
+    @Test func dotPrefixedTarBrowsesAndExtracts() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let archive = fixture.workspace.appendingPathComponent("nokta.tar")
+        let tar = Process()
+        tar.executableURL = URL(fileURLWithPath: "/usr/bin/tar")
+        tar.arguments = ["--no-mac-metadata", "-cf", archive.path, "-C", fixture.workspace.appendingPathComponent("kaynak").path, "."]
+        try tar.run()
+        tar.waitUntilExit()
+        let output = fixture.useExtractFolder()
+        fixture.settings.subfolderMode = .smart
+        let model = fixture.model
+        model.browserMode = .folders
+        model.openArchive(archive)
+        await fixture.settle()
+
+        #expect(Set(model.displayNodes.map(\.id)) == ["alt", "not.txt"])
+        model.primaryAction(["alt"])
+        #expect(model.breadcrumbs.map(\.path) == ["alt"])
+        #expect(model.displayNodes.map(\.id) == ["alt/b.txt"])
+        model.extract(items: ["alt/b.txt"])
+        await fixture.settle()
+        #expect(fixture.model.alert == nil)
+        #expect(try String(contentsOf: output.appendingPathComponent("b.txt"), encoding: .utf8) == "alt\n")
+    }
+
+    /// Özellik 3: ⌘C öğeleri dosya olarak panoya koyar; ⌘V panodaki dosyaları eklemeyi önerir.
+    @Test func copyAndPasteFiles() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let archive = try await fixture.makeArchive("pano.7z", format: .sevenZip)
+        let model = fixture.model
+        model.openArchive(archive)
+        await fixture.settle()
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("ArhivarTests-\(UUID().uuidString)"))
+        defer { pasteboard.releaseGlobally() }
+
+        model.copyItems(["kaynak/not.txt", "kaynak/alt"], to: pasteboard)
+        await fixture.settle()
+        let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] ?? []
+        #expect(urls.map(\.lastPathComponent) == ["not.txt", "alt"])
+        #expect(try String(contentsOf: urls[0], encoding: .utf8) == "merhaba\n")
+
+        let extra = fixture.workspace.appendingPathComponent("ek.txt")
+        try "ek".write(to: extra, atomically: true, encoding: .utf8)
+        pasteboard.clearContents()
+        pasteboard.writeObjects([extra as NSURL])
+        model.pasteFiles(from: pasteboard)
+        #expect(model.addRequest?.sources == [extra])
+    }
+
+    /// Özellik 4: .tar.gz tek adımda oluşur; geçici tar kalmaz.
+    @Test func createsTarGzInOneStep() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let destination = fixture.workspace.appendingPathComponent("yedek.tar.gz")
+        fixture.model.createArchive(CreateOptions(sources: [fixture.workspace.appendingPathComponent("kaynak")], destination: destination, format: .tarGzip, level: .normal))
+        await fixture.settle()
+        #expect(fixture.model.alert == nil)
+        #expect(fixture.model.recentArchives.first == destination)
+        #expect(!fixture.exists("yedek.tar"))
+
+        fixture.model.openArchive(destination)
+        await fixture.settle()
+        #expect(fixture.model.node("yedek.tar") != nil)
+    }
+
+    /// Özellik 5: arşivin içindeki arşive girilir, yol çubuğundan/⌘↑ ile geri dönülür; geçici dosyalar temizlenir.
+    @Test func browsesNestedArchives() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let inner = try await fixture.makeArchive("ic.zip", format: .zip)
+        let outer = fixture.workspace.appendingPathComponent("dis.7z")
+        try SevenZipError.check(try await fixture.runner.run(SevenZipCommand.create(CreateOptions(sources: [inner], destination: outer, format: .sevenZip, level: .fast))))
+        let model = fixture.model
+        model.browserMode = .folders
+        model.openArchive(outer)
+        await fixture.settle()
+        #expect(model.isEditable)
+
+        model.primaryAction(["ic.zip"])
+        await fixture.settle()
+        #expect(model.archiveURL?.lastPathComponent == "ic.zip")
+        #expect(model.archiveStack.map(\.url) == [outer])
+        #expect(model.rootArchiveURL == outer)
+        #expect(!model.isEditable)
+        #expect(model.displayNodes.map(\.id) == ["kaynak"])
+        let nestedFile = try #require(model.archiveURL)
+
+        model.toggleQuickLook("kaynak/not.txt")
+        await fixture.settle()
+        let preview = try #require(model.quickLookURL)
+        model.quickLookURL = nil
+
+        #expect(model.canGoUp)
+        model.goUp()
+        #expect(model.archiveURL == outer)
+        #expect(model.archiveStack.isEmpty)
+        #expect(model.isEditable)
+        #expect(model.node("ic.zip") != nil)
+        #expect(!FileManager.default.fileExists(atPath: preview.path))
+        #expect(FileManager.default.fileExists(atPath: nestedFile.path))
+
+        model.closeArchive()
+        #expect(!FileManager.default.fileExists(atPath: nestedFile.path))
+    }
+
+    /// Özellik 6: sağlama değerleri uyarıda gösterilir.
+    @Test func showsChecksums() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let archive = try await fixture.makeArchive("sagla.7z", format: .sevenZip)
+        fixture.model.openArchive(archive)
+        await fixture.settle()
+        fixture.model.showChecksums("kaynak/not.txt")
+        await fixture.settle()
+        let expected = SHA256.hash(data: Data("merhaba\n".utf8)).map { String(format: "%02x", $0) }.joined()
+        let message = try #require(fixture.model.alert?.message)
+        #expect(message.lowercased().contains("sha256: " + expected))
+        #expect(message.contains("CRC32: "))
     }
 }

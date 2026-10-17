@@ -11,7 +11,8 @@ struct ArchiveBrowserView: View {
     var body: some View {
         @Bindable var model = model
         Table(model.displayNodes, children: \.children, selection: $model.selection, sortOrder: $model.sortOrder) {
-            TableColumn(settings.t(.columnName), value: \.name) { node in
+            // Finder sıralaması: "dosya2" < "dosya10", büyük/küçük harf duyarsız, yerele uygun ("Çanta" < "Zebra").
+            TableColumn(settings.t(.columnName), value: \.name, comparator: .localizedStandard) { node in
                 NameCell(node: node)
             }
             .width(min: 220, ideal: 380)
@@ -57,6 +58,14 @@ struct ArchiveBrowserView: View {
             model.primaryAction(model.selection)
             return .handled
         }
+        // ⌘C seçili öğeleri çıkarıp dosya olarak panoya koyar (iş bitince); ⌘V panodaki dosyaları ekler.
+        .onCopyCommand {
+            model.copyItems()
+            return []
+        }
+        .onPasteCommand(of: [.fileURL]) { _ in
+            model.pasteFiles()
+        }
         .quickLookPreview($model.quickLookURL)
         .overlay {
             if model.displayNodes.isEmpty {
@@ -92,12 +101,17 @@ struct ArchiveBrowserView: View {
                     model.enterFolder(single.id)
                 }
             } else {
+                if ArchiveNaming.isBrowsable(single.name) {
+                    Button(settings.t(.contextBrowse), systemImage: "archivebox") { model.browseArchive(single.id) }
+                }
                 Button(settings.t(.contextQuickLook), systemImage: "eye") { model.toggleQuickLook(single.id) }
                 Button(settings.t(.contextOpen), systemImage: "arrow.up.forward.app") { model.openItem(single.id) }
+                Button(settings.t(.contextChecksums), systemImage: "number") { model.showChecksums(single.id) }
             }
         }
         if !ids.isEmpty {
             Button(settings.t(.contextExtract), systemImage: "arrow.up.bin") { model.extract(items: ids.sorted()) }
+            Button(settings.t(.contextCopy), systemImage: "doc.on.doc") { model.copyItems(ids.sorted()) }
         }
         if model.isEditable {
             Divider()
@@ -168,13 +182,20 @@ private struct PathBar: View {
                     .frame(width: 22, height: 22)
             }
             .buttonStyle(.borderless)
-            .disabled(model.currentFolder.isEmpty)
+            .disabled(!model.canGoUp)
             .help(settings.t(.navUp))
 
             Divider().frame(height: 16)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 2) {
+                    // İç içe açılmış arşivde üstteki arşivler: tıklayınca o arşive dönülür.
+                    ForEach(Array(model.archiveStack.enumerated()), id: \.offset) { level, context in
+                        parentCrumb(context.url, level: level)
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
                     crumb(
                         title: model.archiveURL?.lastPathComponent ?? settings.t(.appName),
                         icon: model.archiveURL.map(FileIcons.icon(for:)),
@@ -197,6 +218,24 @@ private struct PathBar: View {
         .glassEffect(.regular, in: .capsule)
     }
 
+    private func parentCrumb(_ url: URL, level: Int) -> some View {
+        Button {
+            model.returnToArchive(level: level)
+        } label: {
+            HStack(spacing: 5) {
+                Image(nsImage: FileIcons.icon(for: url)).resizable().frame(width: 16, height: 16)
+                Text(url.lastPathComponent).lineLimit(1)
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.borderless)
+        .foregroundStyle(.secondary)
+        .help(settings.t(.navParentArchive, url.lastPathComponent))
+        .disabled(model.operation != nil)
+    }
+
     private func crumb(title: String, icon: NSImage?, path: String, isLast: Bool) -> some View {
         Button {
             model.goTo(path)
@@ -216,10 +255,11 @@ private struct PathBar: View {
         .buttonStyle(.borderless)
         .foregroundStyle(isLast ? .primary : .secondary)
         .dropDestination(for: URL.self) { urls, _ in
-            // Dosyaları yoldaki bir klasörün üzerine bırakınca oraya ekle.
-            guard model.isEditable else { return false }
-            model.goTo(path)
-            model.addRequest = AddRequest(sources: urls.filter(\.isFileURL))
+            // Dosyaları yoldaki bir klasörün üzerine bırakınca oraya ekle. Hedef klasör isteğin içinde taşınır;
+            // onay penceresinde vazgeçilirse açık klasör değişmemiş olur.
+            let files = urls.filter(\.isFileURL)
+            guard model.isEditable, model.operation == nil, !files.isEmpty else { return false }
+            model.addRequest = AddRequest(sources: files, folder: path)
             return true
         }
     }
@@ -270,16 +310,25 @@ struct ArchiveInfoView: View {
                 .font(.headline)
             if let listing = model.listing, let statistics = model.statistics, let url = model.archiveURL {
                 Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 7) {
-                    row(.infoLocation, url.deletingLastPathComponent().path)
+                    row(.infoLocation, model.locationDescription ?? url.deletingLastPathComponent().path)
                     row(.infoType, listing.info.type ?? settings.t(.unknown))
                     row(.infoMethod, listing.info.method ?? "—")
                     row(.infoSolid, settings.t(listing.info.isSolid ? .yes : .no))
+                    if let blocks = listing.info.blocks {
+                        row(.infoBlocks, blocks.formatted(.number.locale(settings.locale)))
+                    }
+                    if let volumes = listing.info.volumes, volumes > 1 {
+                        row(.infoVolumes, volumes.formatted(.number.locale(settings.locale)))
+                    }
                     row(.infoArchiveSize, settings.bytes(statistics.packedSize))
                     row(.infoUnpackedSize, settings.bytes(statistics.totalSize))
                     row(.infoRatio, statistics.ratio.map(settings.percent) ?? "—")
                     row(.infoFiles, "\(statistics.fileCount)")
                     row(.infoFolders, "\(statistics.folderCount)")
                     row(.infoEncrypted, settings.t(statistics.isEncrypted ? .yes : .no))
+                    if let comment = listing.info.comment {
+                        row(.infoComment, comment, lines: 8)
+                    }
                 }
             }
         }
@@ -287,14 +336,14 @@ struct ArchiveInfoView: View {
         .frame(width: 380)
     }
 
-    private func row(_ key: LKey, _ value: String) -> some View {
-        GridRow {
+    private func row(_ key: LKey, _ value: String, lines: Int = 2) -> some View {
+        GridRow(alignment: .firstTextBaseline) {
             Text(settings.t(key))
                 .foregroundStyle(.secondary)
                 .gridColumnAlignment(.trailing)
             Text(value)
                 .textSelection(.enabled)
-                .lineLimit(2)
+                .lineLimit(lines)
                 .truncationMode(.middle)
         }
     }
@@ -379,7 +428,9 @@ struct ToastView: View {
 /// Finder'ın kendi dosya simgeleri; uzantı başına önbelleklenir.
 enum FileIcons {
     private static var byExtension: [String: NSImage] = [:]
+    /// Yol başına simgeler (son arşivler, oluşturma kaynakları, iç içe arşivler); sınırsız büyümesin.
     private static var byPath: [String: NSImage] = [:]
+    static let maxCachedPaths = 256
 
     static var folderIcon: NSImage {
         if let cached = byExtension["/folder"] { return cached }
@@ -399,6 +450,7 @@ enum FileIcons {
 
     static func icon(for url: URL) -> NSImage {
         if let cached = byPath[url.path] { return cached }
+        if byPath.count >= maxCachedPaths { byPath.removeAll(keepingCapacity: true) }
         let image = NSWorkspace.shared.icon(forFile: url.path)
         byPath[url.path] = image
         return image

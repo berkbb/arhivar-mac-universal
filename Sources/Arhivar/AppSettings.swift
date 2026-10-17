@@ -62,7 +62,11 @@ final class AppSettings {
         static let appearance = "appearance"
         static let extractLocation = "extractLocation"
         static let customExtractFolder = "customExtractFolder"
+        /// Eski (1.0.x) anahtar: Bool. `subfolderMode` yoksa geçiş için okunur.
         static let extractIntoSubfolder = "extractIntoSubfolder"
+        static let subfolderMode = "subfolderMode"
+        static let excludeMacMetadata = "excludeMacMetadata"
+        static let storeSymlinks = "storeSymlinks"
         static let revealAfterOperation = "revealAfterOperation"
         static let overwriteMode = "overwriteMode"
         static let defaultFormat = "defaultFormat"
@@ -72,9 +76,12 @@ final class AppSettings {
         static let checkUpdatesAtLaunch = "checkUpdatesAtLaunch"
         static let updateConsentAsked = "updateConsentAsked"
         static let sandboxEngine = "sandboxEngine"
+        /// AppModel'in kaydettiği görünüm tercihi; tümünü sıfırlarken o da silinir.
+        static let browserMode = "browserMode"
         static let all = [
-            language, appearance, extractLocation, customExtractFolder, extractIntoSubfolder, revealAfterOperation,
-            overwriteMode, defaultFormat, defaultLevel, multithreaded, customEnginePath, checkUpdatesAtLaunch, updateConsentAsked, sandboxEngine,
+            language, appearance, extractLocation, customExtractFolder, extractIntoSubfolder, subfolderMode, revealAfterOperation,
+            overwriteMode, defaultFormat, defaultLevel, multithreaded, excludeMacMetadata, storeSymlinks,
+            customEnginePath, checkUpdatesAtLaunch, updateConsentAsked, sandboxEngine, browserMode,
         ]
     }
 
@@ -95,12 +102,17 @@ final class AppSettings {
     }
     var extractLocation: ExtractLocation { didSet { defaults.set(extractLocation.rawValue, forKey: Key.extractLocation) } }
     var customExtractFolder: String? { didSet { defaults.set(customExtractFolder, forKey: Key.customExtractFolder) } }
-    var extractIntoSubfolder: Bool { didSet { defaults.set(extractIntoSubfolder, forKey: Key.extractIntoSubfolder) } }
+    /// Çıkarırken arşiv adıyla klasör oluşturma kuralı (varsayılan: akıllı).
+    var subfolderMode: SubfolderMode { didSet { defaults.set(subfolderMode.rawValue, forKey: Key.subfolderMode) } }
     var revealAfterOperation: Bool { didSet { defaults.set(revealAfterOperation, forKey: Key.revealAfterOperation) } }
     var overwriteMode: OverwriteMode { didSet { defaults.set(overwriteMode.rawValue, forKey: Key.overwriteMode) } }
     var defaultFormat: ArchiveFormat { didSet { defaults.set(defaultFormat.rawValue, forKey: Key.defaultFormat) } }
     var defaultLevel: CompressionLevel { didSet { defaults.set(defaultLevel.rawValue, forKey: Key.defaultLevel) } }
     var multithreaded: Bool { didSet { defaults.set(multithreaded, forKey: Key.multithreaded) } }
+    /// Yeni arşivlerde ve eklemelerde .DS_Store, ._* ve __MACOSX dosyalarını dışarıda bırak.
+    var excludeMacMetadata: Bool { didSet { defaults.set(excludeMacMetadata, forKey: Key.excludeMacMetadata) } }
+    /// Sembolik bağlantıları bağlantı olarak sakla (-snl); varsayılan açık.
+    var storeSymlinks: Bool { didSet { defaults.set(storeSymlinks, forKey: Key.storeSymlinks) } }
     var customEnginePath: String? { didSet { defaults.set(customEnginePath, forKey: Key.customEnginePath) } }
     /// Açılışta GitHub'a bağlanmak kullanıcının iznine bağlıdır; varsayılan kapalıdır.
     var checkUpdatesAtLaunch: Bool { didSet { defaults.set(checkUpdatesAtLaunch, forKey: Key.checkUpdatesAtLaunch) } }
@@ -116,35 +128,47 @@ final class AppSettings {
         appearance = AppAppearance(rawValue: defaults.string(forKey: Key.appearance) ?? "") ?? .system
         extractLocation = ExtractLocation(rawValue: defaults.string(forKey: Key.extractLocation) ?? "") ?? .ask
         customExtractFolder = defaults.string(forKey: Key.customExtractFolder)
-        extractIntoSubfolder = defaults.object(forKey: Key.extractIntoSubfolder) as? Bool ?? true
+        subfolderMode = Self.loadSubfolderMode(from: defaults)
         revealAfterOperation = defaults.object(forKey: Key.revealAfterOperation) as? Bool ?? true
         overwriteMode = OverwriteMode(rawValue: defaults.string(forKey: Key.overwriteMode) ?? "") ?? .rename
         defaultFormat = ArchiveFormat(rawValue: defaults.string(forKey: Key.defaultFormat) ?? "") ?? .sevenZip
         defaultLevel = CompressionLevel(rawValue: defaults.object(forKey: Key.defaultLevel) as? Int ?? -1) ?? .normal
         multithreaded = defaults.object(forKey: Key.multithreaded) as? Bool ?? true
+        excludeMacMetadata = defaults.object(forKey: Key.excludeMacMetadata) as? Bool ?? false
+        storeSymlinks = defaults.object(forKey: Key.storeSymlinks) as? Bool ?? true
         customEnginePath = defaults.string(forKey: Key.customEnginePath)
         checkUpdatesAtLaunch = defaults.object(forKey: Key.checkUpdatesAtLaunch) as? Bool ?? false
         updateConsentAsked = defaults.object(forKey: Key.updateConsentAsked) as? Bool ?? false
         sandboxEngine = defaults.object(forKey: Key.sandboxEngine) as? Bool ?? true
     }
 
+    /// Eski "extractIntoSubfolder" (Bool) tercihini yeni kurala çevirir: kapalı → hiçbir zaman, açık ya da yok → akıllı.
+    static func loadSubfolderMode(from defaults: UserDefaults) -> SubfolderMode {
+        if let mode = defaults.string(forKey: Key.subfolderMode).flatMap(SubfolderMode.init(rawValue:)) { return mode }
+        return defaults.object(forKey: Key.extractIntoSubfolder) as? Bool == false ? .never : .smart
+    }
+
     func resetAll() {
-        Key.all.forEach(defaults.removeObject(forKey:))
-        defaults.removeObject(forKey: "AppleLanguages")
         language = .tr
         appearance = .system
         extractLocation = .ask
         customExtractFolder = nil
-        extractIntoSubfolder = true
+        subfolderMode = .smart
         revealAfterOperation = true
         overwriteMode = .rename
         defaultFormat = .sevenZip
         defaultLevel = .normal
         multithreaded = true
+        excludeMacMetadata = false
+        storeSymlinks = true
         customEnginePath = nil
         checkUpdatesAtLaunch = false
         updateConsentAsked = false
         sandboxEngine = true
+        // Özellik gözlemcileri değerleri yeniden yazdı; ilk kurulumdaki gibi hiçbir tercih kalmasın.
+        // "AppleLanguages" en sonda silinir: dil atanırken yeniden yazılıyordu.
+        Key.all.forEach(defaults.removeObject(forKey:))
+        defaults.removeObject(forKey: "AppleLanguages")
     }
 
     /// Tüm pencerelere (Ayarlar ve Hakkında dahil) seçilen görünümü uygular.

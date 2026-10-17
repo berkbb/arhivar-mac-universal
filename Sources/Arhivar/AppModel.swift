@@ -55,13 +55,20 @@ enum AppUpdateState: Equatable {
 /// Parola sorulduktan sonra yeniden denenecek işlem.
 enum PendingAction {
     case open
-    case extract(items: [String], destination: URL?)
+    /// `destination`: alt klasör kuralı uygulanmadan önceki hedef; `stripping`: hedefe yazılırken atılacak iç klasör yolu.
+    case extract(items: [String], destination: URL?, stripping: String)
     case test
     case openItem(path: String)
     case quickLook(path: String)
-    case add(sources: [URL])
+    case add(sources: [URL], folder: String?)
     case delete(items: [String])
     case rename(path: String, newName: String)
+    /// Arşiv içindeki bir arşive girmek için önce öğenin çıkarılması (açık arşivin parolası).
+    case browse(path: String)
+    /// İç içe açılan arşivin kendi parolası.
+    case openNested
+    case copy(items: [String])
+    case checksums(path: String)
 }
 
 struct PasswordRequest: Identifiable {
@@ -92,6 +99,21 @@ struct DeleteRequest: Identifiable {
 struct AddRequest: Identifiable {
     let id = UUID()
     let sources: [URL]
+    /// Eklenecek arşiv klasörü (ör. yol çubuğundaki bir klasöre bırakıldıysa); nil ise o anki klasör.
+    var folder: String?
+}
+
+/// İç içe açılan bir arşivin üstündeki (geri dönülecek) arşivin durumu.
+struct ArchiveContext {
+    let url: URL
+    let password: String?
+    let listing: ArchiveListing
+    let headersEncrypted: Bool
+    let isEditable: Bool
+    let sessionRoot: URL?
+    let previewCache: [String: URL]
+    let currentFolder: String
+    let selection: Set<String>
 }
 
 struct CreateRequest: Identifiable {
@@ -130,14 +152,14 @@ final class AppModel {
             rebuildDisplay()
         }
     }
-    var sortOrder: [KeyPathComparator<ArchiveNode>] = [KeyPathComparator(\.name)] { didSet { rebuildDisplay() } }
+    var sortOrder: [KeyPathComparator<ArchiveNode>] = [ArchiveTree.nameComparator] { didSet { rebuildDisplay() } }
     var selection: Set<ArchiveNode.ID> = []
 
     private(set) var recentArchives: [URL] = []
     private(set) var operation: OperationState?
     var toast: Toast?
-    var alert: AlertItem?
-    var passwordRequest: PasswordRequest?
+    var alert: AlertItem? { didSet { if alert == nil { schedulePendingConsent() } } }
+    var passwordRequest: PasswordRequest? { didSet { if passwordRequest == nil { schedulePendingConsent() } } }
     var createRequest: CreateRequest?
     var isDropTargeted = false
     var showInfo = false
@@ -146,6 +168,8 @@ final class AppModel {
     var deleteRequest: DeleteRequest?
     var addRequest: AddRequest?
     private(set) var isEditable = false
+    /// İç içe açılan arşivlerde üstteki arşivler (en dıştaki ilk sırada); boşsa açık arşiv en üst düzeydedir.
+    private(set) var archiveStack: [ArchiveContext] = []
 
     @ObservationIgnored private var nodeIndex: [String: ArchiveNode] = [:]
     @ObservationIgnored private var password: String?
@@ -159,6 +183,8 @@ final class AppModel {
     @ObservationIgnored private var serviceTask: Task<Void, Never>?
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var previewCache: [String: URL] = [:]
+    /// Güncelleme izni, açılışta başka bir işlem ya da uyarı varken sorulamadıysa sonra sorulur.
+    @ObservationIgnored private var consentPending = false
 
     private static let recentsKey = "recentArchives"
     private static let maxRecents = 12
@@ -180,6 +206,20 @@ final class AppModel {
     var canOperate: Bool { listing != nil && operation == nil }
 
     func node(_ id: ArchiveNode.ID) -> ArchiveNode? { nodeIndex[id] }
+
+    /// Görünümdeki (normalleştirilmiş) kimliğin 7zz'nin tanıdığı ham yolu ("./a/b" gibi arşivler için).
+    func archivePath(for id: ArchiveNode.ID) -> String { node(id)?.archivePath ?? id }
+
+    /// İç içe gezinmede en dıştaki (diskteki gerçek) arşiv; değilse açık arşivin kendisi.
+    var rootArchiveURL: URL? { archiveStack.first?.url ?? archiveURL }
+
+    /// Bilgi panelindeki konum: iç içe arşivde "dış.zip › iç.tar".
+    var locationDescription: String? {
+        guard let archiveURL else { return nil }
+        guard let root = archiveStack.first?.url else { return archiveURL.deletingLastPathComponent().path }
+        let chain = archiveStack.dropFirst().map(\.url.lastPathComponent) + [archiveURL.lastPathComponent]
+        return ([root.path] + chain).joined(separator: " › ")
+    }
 
     private func t(_ key: LKey) -> String { settings.t(key) }
     private func t(_ key: LKey, _ arguments: any CVarArg...) -> String {
@@ -224,11 +264,26 @@ final class AppModel {
         ItemExtractor.sweepStale(olderThan: 6 * 3600)
         await refreshEngine()
         if !settings.updateConsentAsked {
-            askUpdateConsent()
+            // "Birlikte Aç" ile soğuk açılışta arşivin uyarısı ya da parola isteğiyle çakışmasın; boşta kalınca sorulur.
+            consentPending = true
+            presentPendingConsentIfIdle()
         } else if settings.checkUpdatesAtLaunch {
             await checkForUpdates(interactive: false)
             await checkForAppUpdate(interactive: false)
         }
+    }
+
+    /// Bekleyen izin sorusunu, ekranda başka bir işlem, uyarı ya da sayfa yoksa gösterir.
+    private func presentPendingConsentIfIdle() {
+        guard consentPending, operation == nil, passwordRequest == nil, alert == nil, createRequest == nil else { return }
+        consentPending = false
+        askUpdateConsent()
+    }
+
+    /// Bir uyarı ya da sayfa kapanırken yenisi aynı anda gösterilemez; bir sonraki turda dener.
+    private func schedulePendingConsent() {
+        guard consentPending else { return }
+        Task { @MainActor in self.presentPendingConsentIfIdle() }
     }
 
     /// İlk açılışta, GitHub'a bağlanmadan önce bir kez izin ister.
@@ -353,7 +408,10 @@ final class AppModel {
     // MARK: - Güncelleme
 
     private var updater: EngineUpdater? {
-        Bundle.main.url(forResource: "update-7zip", withExtension: "sh").map { EngineUpdater(scriptURL: $0) }
+        // Kullanılan 7zz'nin sürümü betiğe verilir: paket yazılamadığında betik henüz boş olan yedek klasöre bakıp
+        // "kurulu değil" sanmasın. Kullanıcının seçtiği 7zz güncellenmediği için onun sürümü verilmez.
+        let current = settings.customEnginePath == nil ? engineVersion : nil
+        return Bundle.main.url(forResource: "update-7zip", withExtension: "sh").map { EngineUpdater(scriptURL: $0, currentVersion: current) }
     }
 
     func checkForUpdates(interactive: Bool) async {
@@ -418,6 +476,8 @@ final class AppModel {
     }
 
     func openArchive(_ url: URL) {
+        // Bölünmüş arşivin herhangi bir parçası seçildiyse ilk parçadan açılır.
+        let url = ArchiveNaming.firstVolume(of: url)
         loadArchive(url, password: url == archiveURL ? password : nil)
     }
 
@@ -428,38 +488,61 @@ final class AppModel {
         }
     }
 
-    /// Listeyi 7zz'den okur ve görünüm durumunu günceller.
-    private func readListing(of url: URL, runner: CommandRunner, keepFolder: Bool, password candidate: String?) async throws {
-        let currentPassword = candidate
+    /// 7zz'den okunmuş, henüz görünüme uygulanmamış liste.
+    private struct LoadedListing {
+        let url: URL
+        let password: String?
+        let listing: ArchiveListing
+        let headersEncrypted: Bool
+    }
+
+    private func fetchListing(of url: URL, runner: CommandRunner, password currentPassword: String?) async throws -> LoadedListing {
         let runner = confined(runner, archive: url)
         let result = try await runner.run(SevenZipCommand.list(archive: url), input: SevenZipCommand.passwordInput(currentPassword))
         try SevenZipError.check(result)
         let listing = ListingParser.parse(result.stdout, fallbackName: ArchiveNaming.streamItemName(for: url))
 
-        // Adlar şifreliyse (7z -mhe) parolasız liste başarısız olur; eklemelerde de korunmalı.
+        // Adlar şifreliyse (7z -mhe) parolasız liste parola ister; eklemelerde de korunmalı.
+        // Parolasız liste başarılıysa adlar açıktır (-mhe=off).
         var encryptedHeaders = false
-        if currentPassword != nil, listing.info.type == "7z" {
-            let plain = try? await runner.run(SevenZipCommand.list(archive: url))
-            encryptedHeaders = plain.map { (try? SevenZipError.check($0)) == nil } ?? false
+        if currentPassword != nil, listing.info.type == "7z",
+           let plain = try? await runner.run(SevenZipCommand.list(archive: url)) {
+            encryptedHeaders = SevenZipError.needsPassword(plain)
         }
+        return LoadedListing(url: url, password: currentPassword, listing: listing, headersEncrypted: encryptedHeaders)
+    }
 
+    /// Listeyi 7zz'den okur ve görünüm durumunu günceller.
+    private func readListing(of url: URL, runner: CommandRunner, keepFolder: Bool, password candidate: String?) async throws {
+        let loaded = try await fetchListing(of: url, runner: runner, password: candidate)
+        if url != archiveURL {
+            // Başka bir arşive geçiliyorsa öncekilerin (iç içe olanlar dahil) geçici dosyalarını sil.
+            discardAllSessions()
+        } else {
+            // Aynı arşiv yeniden okunuyor (ör. düzenlemeden sonra): eski önizlemeler artık içerikle uyuşmayabilir.
+            discardSessionDirectory()
+        }
+        apply(loaded, keepFolder: keepFolder)
+    }
+
+    private func apply(_ loaded: LoadedListing, keepFolder: Bool) {
         let folder = currentFolder
-        // Başka bir arşive geçiliyorsa öncekinin geçici dosyalarını sil.
-        if url != archiveURL { discardSessionDirectory() }
-        archiveURL = url
-        password = currentPassword
-        self.listing = listing
-        statistics = ArchiveStatistics(listing: listing)
-        headersEncrypted = encryptedHeaders
-        isEditable = ArchiveCapabilities.isEditable(type: listing.info.type, url: url)
+        archiveURL = loaded.url
+        password = loaded.password
+        listing = loaded.listing
+        statistics = ArchiveStatistics(listing: loaded.listing)
+        headersEncrypted = loaded.headersEncrypted
+        // İç içe açılan arşiv geçici bir kopyadır; değişiklikler kaybolacağı için düzenlenemez.
+        isEditable = archiveStack.isEmpty && ArchiveCapabilities.isEditable(type: loaded.listing.info.type, url: loaded.url)
         previewCache = [:]
         selection = []
         if !keepFolder { searchText = "" }
-        tree = ArchiveTree.build(from: listing.entries)
+        tree = ArchiveTree.build(from: loaded.listing.entries)
         currentFolder = keepFolder && node(folder)?.isDirectory == true ? folder : ""
     }
 
     func closeArchive() {
+        discardAllSessions()
         archiveURL = nil
         listing = nil
         statistics = nil
@@ -470,20 +553,99 @@ final class AppModel {
         password = nil
         headersEncrypted = false
         isEditable = false
-        discardSessionDirectory()
         previewCache = [:]
         quickLookURL = nil
         showInfo = false
     }
 
-    /// Finder'dan "Birlikte Aç" / Dock: arşivler her zaman açılır (açık arşive eklenmez); diğer dosyalar yeni arşiv sayfasına gider.
+    // MARK: - İç içe arşivler
+
+    /// Arşivin içindeki bir arşivi (ör. .zip içindeki .tar.gz) geçici klasöre çıkarıp tarayıcıda açar.
+    func browseArchive(_ path: String) {
+        guard let archive = archiveURL, operation == nil, node(path)?.isDirectory == false else { return }
+        if needsPassword(for: [path]) {
+            passwordRequest = PasswordRequest(archive: archive, isRetry: false, action: .browse(path: path))
+            return
+        }
+        let currentPassword = password
+        perform(.progressReading, archive: archive, retry: .browse(path: path)) { runner, progress in
+            let url = try await self.extractedItem(path, runner: runner, password: currentPassword, progress: progress)
+            try await self.enterNested(url, runner: runner, password: nil)
+        }
+    }
+
+    /// İç içe arşivi açar; kendi parolası gerekiyorsa sorar (üstteki arşiv açık kalır).
+    private func enterNested(_ url: URL, runner: CommandRunner, password candidate: String?) async throws {
+        let loaded: LoadedListing
+        do {
+            loaded = try await fetchListing(of: url, runner: runner, password: candidate)
+        } catch SevenZipError.wrongPassword {
+            passwordRequest = PasswordRequest(archive: url, isRetry: candidate != nil, action: .openNested)
+            return
+        }
+        guard let archiveURL, let listing else { return }
+        archiveStack.append(ArchiveContext(
+            url: archiveURL, password: password, listing: listing, headersEncrypted: headersEncrypted, isEditable: isEditable,
+            sessionRoot: sessionRoot, previewCache: previewCache, currentFolder: currentFolder, selection: selection
+        ))
+        // Üstteki arşivin geçici klasörü (iç arşivin kendisi orada) açık kalır; iç arşiv kendi klasörünü kullanır.
+        sessionRoot = nil
+        quickLookURL = nil
+        apply(loaded, keepFolder: false)
+    }
+
+    private func openNested(_ url: URL, password value: String) {
+        perform(.progressReading, archive: nil, retry: nil) { runner, _ in
+            try await self.enterNested(url, runner: runner, password: value)
+        }
+    }
+
+    /// Yol çubuğundan ya da ⌘↑ ile üstteki bir arşive döner (`level`: `archiveStack` içindeki sıra).
+    func returnToArchive(level: Int) {
+        guard operation == nil, archiveStack.indices.contains(level) else { return }
+        while archiveStack.count > level {
+            discardSessionDirectory()
+            let context = archiveStack.removeLast()
+            archiveURL = context.url
+            password = context.password
+            listing = context.listing
+            statistics = ArchiveStatistics(listing: context.listing)
+            headersEncrypted = context.headersEncrypted
+            isEditable = context.isEditable
+            sessionRoot = context.sessionRoot
+            if archiveStack.count == level {
+                searchText = ""
+                tree = ArchiveTree.build(from: context.listing.entries)
+                currentFolder = node(context.currentFolder)?.isDirectory == true ? context.currentFolder : ""
+                selection = context.selection
+                previewCache = context.previewCache
+            }
+        }
+    }
+
+    /// Açık arşivin ve iç içe gezinmede üstteki tüm arşivlerin geçici klasörlerini siler.
+    private func discardAllSessions() {
+        discardSessionDirectory()
+        for context in archiveStack {
+            if let root = context.sessionRoot { try? FileManager.default.removeItem(at: root) }
+        }
+        archiveStack = []
+    }
+
+    /// Finder'dan "Birlikte Aç" / Dock: yalnızca arşivler geldiyse ilki açılır (açık arşive eklenmez);
+    /// arşivlerle birlikte başka dosyalar da geldiyse hepsi, sürükle-bırakta olduğu gibi yeni arşiv sayfasına gider.
     func handleOpenRequest(_ urls: [URL]) {
         let files = urls.filter(\.isFileURL)
-        if let archive = files.first(where: { ArchiveNaming.isArchive($0) && !ArchiveNaming.defaultIsDirectory($0) }) {
+        guard !files.isEmpty else { return }
+        if files.allSatisfy(isOpenableArchive), let archive = files.first {
             openArchive(archive)
-        } else if !files.isEmpty {
+        } else {
             beginCreate(sources: files)
         }
+    }
+
+    private func isOpenableArchive(_ url: URL) -> Bool {
+        ArchiveNaming.isArchive(url) && !ArchiveNaming.defaultIsDirectory(url)
     }
 
     /// Bırakılan öğeler: düzenlenebilir bir arşiv açıksa eklemeyi önerir; yoksa tek arşiv → aç, diğerleri → yeni arşiv.
@@ -492,7 +654,7 @@ final class AppModel {
         guard !files.isEmpty else { return }
         if listing != nil, isEditable, operation == nil {
             addRequest = AddRequest(sources: files)
-        } else if files.count == 1, let url = files.first, ArchiveNaming.isArchive(url), !ArchiveNaming.defaultIsDirectory(url) {
+        } else if files.count == 1, let url = files.first, isOpenableArchive(url) {
             openArchive(url)
         } else {
             beginCreate(sources: files)
@@ -510,8 +672,14 @@ final class AppModel {
         selection = []
     }
 
+    /// Bir üst klasör; iç içe açılmış bir arşivin kökündeyse onu içeren arşive döner.
+    var canGoUp: Bool { listing != nil && (!currentFolder.isEmpty || !archiveStack.isEmpty) }
+
     func goUp() {
-        guard !currentFolder.isEmpty else { return }
+        if currentFolder.isEmpty {
+            if !archiveStack.isEmpty { returnToArchive(level: archiveStack.count - 1) }
+            return
+        }
         let previous = currentFolder
         currentFolder = ArchiveTree.parent(of: previous)
         selection = [previous]
@@ -523,7 +691,7 @@ final class AppModel {
         selection = []
     }
 
-    /// Çift tık / Return: klasöre gir ya da dosyayı aç.
+    /// Çift tık / Return / ⌘↓: klasöre gir, arşivse içine gir, değilse dosyayı aç.
     func primaryAction(_ ids: Set<ArchiveNode.ID>) {
         guard ids.count == 1, let id = ids.first, let node = node(id) else { return }
         if node.isDirectory {
@@ -531,6 +699,8 @@ final class AppModel {
                 browserMode = .folders
                 enterFolder(id)
             }
+        } else if ArchiveNaming.isBrowsable(node.name) {
+            browseArchive(id)
         } else {
             openItem(id)
         }
@@ -544,18 +714,31 @@ final class AppModel {
 
     func extract(items: [String]) {
         guard let archive = archiveURL, operation == nil else { return }
+        // Klasör görünümünde bir alt klasördeyken seçilen öğeler, o klasörün yolu olmadan hedefe yazılır
+        // (Finder'a sürüklemedeki gibi). Arama sonuçları ve ağaç görünümü tam yolu korur.
+        let folder = browserMode == .folders && searchText.isEmpty ? currentFolder : ""
+        let stripping = !items.isEmpty && !folder.isEmpty && items.allSatisfy({ $0.hasPrefix(folder + "/") }) ? folder : ""
         if needsPassword(for: items) {
-            passwordRequest = PasswordRequest(archive: archive, isRetry: false, action: .extract(items: items, destination: nil))
+            passwordRequest = PasswordRequest(archive: archive, isRetry: false, action: .extract(items: items, destination: nil, stripping: stripping))
             return
         }
         guard let destination = chooseExtractDestination(for: archive) else { return }
-        runExtract(archive: archive, items: items, destination: destination, password: password)
+        runExtract(archive: archive, items: items, base: destination, stripping: stripping, password: password)
     }
 
-    private func runExtract(archive: URL, items: [String], destination: URL, password: String?) {
+    /// - Parameters:
+    ///   - items: Görünümdeki (normalleştirilmiş) yollar; boşsa tüm arşiv.
+    ///   - base: Alt klasör kuralı uygulanmadan önceki hedef klasör.
+    ///   - stripping: Hedefe yazarken atılacak iç klasör yolu.
+    private func runExtract(archive: URL, items: [String], base: URL, stripping: String, password: String?) {
         let policy = settings.overwriteMode
-        let knownEntries = archive == archiveURL ? listing?.entries : nil
-        perform(.progressExtracting, archive: archive, retry: .extract(items: items, destination: destination), usedPassword: password != nil) { runner, progress in
+        let subfolderMode = settings.subfolderMode
+        let archiveName = ArchiveNaming.baseName(of: archive)
+        let isOpenArchive = archive == archiveURL
+        let knownEntries = isOpenArchive ? listing?.entries : nil
+        let rawItems = isOpenArchive ? items.map(archivePath(for:)) : items
+        let retry = PendingAction.extract(items: items, destination: base, stripping: stripping)
+        perform(.progressExtracting, archive: archive, retry: retry, usedPassword: password != nil) { runner, progress in
             let fileManager = FileManager.default
 
             // 1. Boş alan. Açık arşivin listesi yoksa (ör. Buraya Çıkar) önce listelenir; parola gerekirse burada sorulur.
@@ -565,21 +748,32 @@ final class AppModel {
                 try SevenZipError.check(listed)
                 entries = ListingParser.parse(listed.stdout, fallbackName: ArchiveNaming.streamItemName(for: archive)).entries
             }
-            try InsufficientSpaceError.check(required: DiskSpace.requiredBytes(for: items, in: entries ?? []), at: destination)
+            try InsufficientSpaceError.check(required: DiskSpace.requiredBytes(for: items, in: entries ?? []), at: base)
 
             // 2. Hedefle aynı birimdeki hazırlık klasörüne çıkar; iptal ya da hata hedefi değiştirmez.
-            let staging = try StagedExtraction.makeStagingDirectory(for: destination)
+            let staging = try StagedExtraction.makeStagingDirectory(for: base)
             defer { try? fileManager.removeItem(at: staging) }
-            let options = ExtractOptions(archive: archive, destination: staging, items: items, password: password, overwrite: .replace)
+            let options = ExtractOptions(archive: archive, destination: staging, items: rawItems, password: password, overwrite: .replace)
             let result = try await self.confined(runner, archive: archive, writable: [staging]).run(
                 SevenZipCommand.extract(options), workingDirectory: options.workingDirectory, input: options.input, onProgress: progress
             )
-            let warning = try SevenZipError.check(result)
+            var warnings = [try SevenZipError.check(result)].compactMap { $0 }
 
-            // 3. Karantina işaretini aktar, 4. seçilen kurala göre hedefe taşı.
+            // 3. Hedef ağacın dışını gösteren bağlantıları ayıkla, karantina işaretini aktar.
+            let removedLinks = StagedExtraction.secureSymlinks(in: staging)
+            if !removedLinks.isEmpty {
+                warnings.append(self.t(.warningRemovedLinks, removedLinks.prefix(10).joined(separator: ", ")))
+            }
             Quarantine.propagate(from: archive, to: staging, since: .distantPast)
-            try StagedExtraction.merge(from: staging, into: destination, policy: policy)
-            self.finish(message: self.t(.toastExtracted, destination.lastPathComponent), reveal: destination, warning: warning)
+
+            // 4. Alt klasör kuralına göre hedefi belirle ve seçilen üzerine yazma kuralıyla taşı.
+            let content = StagedExtraction.contentRoot(in: staging, stripping: stripping)
+            let destination = StagedExtraction.destination(for: content, base: base, archiveName: archiveName, mode: subfolderMode)
+            let changed = try StagedExtraction.merge(from: content, into: destination, policy: policy)
+            // Doğrudan hedefe tek öğe çıktıysa Finder o öğeyi seçsin.
+            let reveal = destination == base && changed.count == 1 ? changed[0] : destination
+            let warning = warnings.isEmpty ? nil : warnings.joined(separator: "\n\n")
+            self.finish(message: self.t(.toastExtracted, reveal.lastPathComponent), reveal: reveal, warning: warning)
         }
     }
 
@@ -649,12 +843,21 @@ final class AppModel {
         }
         let currentPassword = password
         perform(.progressExtracting, archive: archive, retry: retry) { runner, progress in
-            let session = self.sessionDirectory()
-            let extractor = ItemExtractor(runner: self.confined(runner, archive: archive, writable: [session]), archive: archive, password: currentPassword, root: session)
-            let url = try await extractor.extract(path, expectedSize: self.node(path)?.size, onProgress: progress)
-            self.previewCache[path] = url
-            completion(url)
+            completion(try await self.extractedItem(path, runner: runner, password: currentPassword, progress: progress))
         }
+    }
+
+    /// Açık arşivdeki bir öğeyi oturum klasörüne çıkarır (önbellekte varsa onu verir). Bir işlemin içinden çağrılır.
+    private func extractedItem(
+        _ path: String, runner: CommandRunner, password currentPassword: String?, progress: @escaping @Sendable (Double) -> Void
+    ) async throws -> URL {
+        if let cached = previewCache[path], FileManager.default.fileExists(atPath: cached.path) { return cached }
+        guard let archive = archiveURL else { throw SevenZipError.cancelled }
+        let session = sessionDirectory()
+        let extractor = ItemExtractor(runner: confined(runner, archive: archive, writable: [session]), archive: archive, password: currentPassword, root: session)
+        let url = try await extractor.extract(archivePath(for: path), expectedSize: node(path)?.size, onProgress: progress)
+        previewCache[path] = url
+        return url
     }
 
     /// Açık arşivin geçici klasörü (yalnızca kullanıcıya açık, 0700).
@@ -688,7 +891,69 @@ final class AppModel {
         let runner = confined(CommandRunner(executableURL: engineURL), archive: archive, writable: [session])
         let extractor = ItemExtractor(runner: runner, archive: archive, password: password, root: session)
         let name = (node.id as NSString).lastPathComponent
-        return ArchiveItemTransfer(extractor: extractor, path: node.id, name: name, size: node.size)
+        return ArchiveItemTransfer(extractor: extractor, path: node.archivePath, name: name, size: node.size)
+    }
+
+    // MARK: - Kopyala, yapıştır, sağlama değerleri
+
+    /// ⌘C: seçili öğeleri oturum klasörüne çıkarır ve dosya olarak panoya koyar; Finder'da ⌘V ile yapıştırılabilir.
+    /// (Geçici dosyalar arşiv kapanınca silinir; yapıştırma arşiv açıkken yapılmalıdır.)
+    func copyItems(_ ids: [String]? = nil, to pasteboard: NSPasteboard = .general) {
+        let items = ids ?? selection.sorted()
+        guard let archive = archiveURL, operation == nil, !items.isEmpty else { return }
+        if needsPassword(for: items) {
+            passwordRequest = PasswordRequest(archive: archive, isRetry: false, action: .copy(items: items))
+            return
+        }
+        let currentPassword = password
+        let entries = listing?.entries ?? []
+        perform(.progressCopying, archive: archive, retry: .copy(items: items)) { runner, progress in
+            let session = self.sessionDirectory()
+            let extractor = ItemExtractor(runner: self.confined(runner, archive: archive, writable: [session]), archive: archive, password: currentPassword, root: session)
+            let urls = try await extractor.extract(
+                items.map(self.archivePath(for:)), expectedSize: DiskSpace.requiredBytes(for: items, in: entries), onProgress: progress
+            )
+            pasteboard.clearContents()
+            pasteboard.writeObjects(urls as [NSURL])
+            self.showToast(self.t(.toastCopied, urls.count), systemImage: "doc.on.doc.fill")
+        }
+    }
+
+    /// ⌘V: panodaki dosyaları (onay sorarak) düzenlenebilir arşivin açık klasörüne ekler.
+    func pasteFiles(from pasteboard: NSPasteboard = .general) {
+        guard listing != nil, isEditable, operation == nil else { return }
+        let options: [NSPasteboard.ReadingOptionKey: Any] = [.urlReadingFileURLsOnly: true]
+        let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: options) as? [URL] ?? []
+        guard !urls.isEmpty else { return }
+        addRequest = AddRequest(sources: urls)
+    }
+
+    /// Seçili dosyanın CRC32, SHA-256 ve BLAKE2sp değerlerini (7zz h) gösterir.
+    func showChecksums(_ path: String? = nil) {
+        guard let path = path ?? (selection.count == 1 ? selection.first : nil), node(path)?.isDirectory == false,
+              let archive = archiveURL, operation == nil else { return }
+        if needsPassword(for: [path]) {
+            passwordRequest = PasswordRequest(archive: archive, isRetry: false, action: .checksums(path: path))
+            return
+        }
+        let currentPassword = password
+        perform(.progressChecksums, archive: archive, retry: .checksums(path: path)) { runner, progress in
+            let file = try await self.extractedItem(path, runner: runner, password: currentPassword, progress: progress)
+            let result = try await self.confined(runner, archive: file).run(SevenZipCommand.hash(file: file))
+            try SevenZipError.check(result)
+            let text = ChecksumParser.text(ChecksumParser.parse(result.stdout))
+            let name = OpenSafety.visibleName((path as NSString).lastPathComponent)
+            self.alert = AlertItem(
+                title: self.t(.checksumsTitle, name),
+                message: text,
+                actionTitle: self.t(.buttonCopy),
+                action: {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(text, forType: .string)
+                },
+                cancelTitle: self.t(.buttonOK)
+            )
+        }
     }
 
     // MARK: - Arşivi düzenleme
@@ -711,24 +976,37 @@ final class AppModel {
     func confirmAdd() {
         guard let request = addRequest else { return }
         addRequest = nil
-        addFiles(request.sources)
+        addFiles(request.sources, into: request.folder)
     }
 
-    func addFiles(_ sources: [URL]) {
+    /// - Parameter folder: Arşivdeki hedef klasör; nil ise klasör görünümünde açık olan klasör.
+    func addFiles(_ sources: [URL], into folder: String? = nil) {
         guard let archive = archiveURL, isEditable, !sources.isEmpty, operation == nil else { return }
         if needsPasswordForEdit {
-            passwordRequest = PasswordRequest(archive: archive, isRetry: false, action: .add(sources: sources))
+            passwordRequest = PasswordRequest(archive: archive, isRetry: false, action: .add(sources: sources, folder: folder))
             return
         }
-        let folder = browserMode == .folders ? currentFolder : ""
+        // Arşiv içindeki klasörün 7zz'nin tanıdığı yazımı ("./belgeler" gibi) korunur.
+        let target = folder ?? (browserMode == .folders ? currentFolder : "")
+        let folderPath = target.isEmpty ? "" : archivePath(for: target)
         let currentPassword = password
         let encryptHeaders = headersEncrypted
-        perform(.progressUpdating, archive: archive, retry: .add(sources: sources)) { runner, progress in
-            let plan = try AddPlan.make(sources: sources, into: folder, stagingRoot: ItemExtractor.temporaryRoot)
+        let archiveType = listing?.info.type
+        let storeSymlinks = settings.storeSymlinks
+        let excludeMetadata = settings.excludeMacMetadata
+        perform(.progressUpdating, archive: archive, retry: .add(sources: sources, folder: folder)) { runner, progress in
+            // 7zz arşivin güncellenmiş kopyasını yanına yazar: arşiv kadar (tar'da eklenenler kadar da) yer gerekir.
+            let compresses = archiveType?.lowercased() != "tar"
+            let sourceBytes = compresses ? 0 : await Self.measure(sources)
+            try self.checkSpaceForWriting(archive: archive, sourceBytes: sourceBytes, compresses: compresses)
+            let plan = try AddPlan.make(sources: sources, into: folderPath, stagingRoot: ItemExtractor.temporaryRoot)
             defer {
                 if let staging = plan.stagingDirectory { try? FileManager.default.removeItem(at: staging) }
             }
-            let command = SevenZipCommand.add(archive: archive, names: plan.names, password: currentPassword, encryptHeaders: encryptHeaders)
+            let command = SevenZipCommand.add(
+                archive: archive, names: plan.names, password: currentPassword, encryptHeaders: encryptHeaders,
+                archiveType: archiveType, storeSymlinks: storeSymlinks, excludeMacMetadata: excludeMetadata
+            )
             let writer = self.confined(runner, archive: archive, writable: [archive.deletingLastPathComponent()], protectPersonalData: false)
             let result = try await writer.run(command, workingDirectory: plan.workingDirectory, input: SevenZipCommand.passwordInput(currentPassword), onProgress: progress)
             let warning = try SevenZipError.check(result)
@@ -756,8 +1034,10 @@ final class AppModel {
             return
         }
         let currentPassword = password
+        let rawItems = items.map(archivePath(for:))
         perform(.progressUpdating, archive: archive, retry: .delete(items: items)) { runner, progress in
-            let result = try await self.confined(runner, archive: archive, writable: [archive.deletingLastPathComponent()]).run(SevenZipCommand.delete(archive: archive, items: items), input: SevenZipCommand.passwordInput(currentPassword), onProgress: progress)
+            try self.checkSpaceForWriting(archive: archive, sourceBytes: 0, compresses: true)
+            let result = try await self.confined(runner, archive: archive, writable: [archive.deletingLastPathComponent()]).run(SevenZipCommand.delete(archive: archive, items: rawItems), input: SevenZipCommand.passwordInput(currentPassword), onProgress: progress)
             let warning = try SevenZipError.check(result)
             try await self.readListing(of: archive, runner: runner, keepFolder: true, password: currentPassword)
             self.finishEdit(warning: warning)
@@ -781,13 +1061,30 @@ final class AppModel {
             return
         }
         let currentPassword = password
+        // 7zz eski adı ham yazımıyla tanır; yeni ad da aynı üst klasör yazımıyla verilir.
+        let rawPath = archivePath(for: path)
+        let rawNewPath = ArchiveTree.renamedPath(rawPath, to: name)
         perform(.progressUpdating, archive: archive, retry: .rename(path: path, newName: name)) { runner, _ in
-            let result = try await self.confined(runner, archive: archive, writable: [archive.deletingLastPathComponent()]).run(SevenZipCommand.rename(archive: archive, from: path, to: newPath), input: SevenZipCommand.passwordInput(currentPassword))
+            try self.checkSpaceForWriting(archive: archive, sourceBytes: 0, compresses: true)
+            let result = try await self.confined(runner, archive: archive, writable: [archive.deletingLastPathComponent()]).run(SevenZipCommand.rename(archive: archive, from: rawPath, to: rawNewPath), input: SevenZipCommand.passwordInput(currentPassword))
             let warning = try SevenZipError.check(result)
             try await self.readListing(of: archive, runner: runner, keepFolder: true, password: currentPassword)
             self.selection = [newPath]
             self.finishEdit(warning: warning)
         }
+    }
+
+    /// Arşiv yazmadan önce hedef birimde yer olduğunu denetler (bkz. `DiskSpace.requiredForWriting`).
+    private func checkSpaceForWriting(archive: URL?, sourceBytes: Int64, compresses: Bool, at directory: URL? = nil) throws {
+        let existing = archive.map { DiskSpace.totalSize(of: [$0]) } ?? 0
+        let required = DiskSpace.requiredForWriting(sourceBytes: sourceBytes, compresses: compresses, existingArchiveBytes: existing)
+        guard required > 0, let location = directory ?? archive?.deletingLastPathComponent() else { return }
+        try InsufficientSpaceError.check(required: required, at: location)
+    }
+
+    /// Kaynakların toplam boyutu; büyük klasörlerde arayüzü dondurmamak için arka planda ölçülür.
+    nonisolated private static func measure(_ urls: [URL]) async -> Int64 {
+        await Task.detached(priority: .userInitiated) { DiskSpace.totalSize(of: urls) }.value
     }
 
     private func finishEdit(warning: String?) {
@@ -803,17 +1100,17 @@ final class AppModel {
     /// "Arhivar ile Buraya Çıkar": arşivleri yanlarına (ayarlara göre alt klasöre) sırayla çıkarır.
     /// Açık arşivin parolasına dokunmaz; parola isteyen bir arşivde kuyruk yanıt gelene kadar bekler.
     func extractHere(_ archives: [URL]) {
-        serviceQueue += archives.filter { ArchiveNaming.isArchive($0) }
+        // Bölünmüş arşivin parçaları ilk parçaya çevrilir; aynı arşiv iki kez çıkarılmaz.
+        for archive in archives where ArchiveNaming.isArchive(archive) {
+            let first = ArchiveNaming.firstVolume(of: archive)
+            if !serviceQueue.contains(first) { serviceQueue.append(first) }
+        }
         guard serviceTask == nil, !serviceQueue.isEmpty else { return }
         serviceTask = Task {
             while !serviceQueue.isEmpty {
                 let archive = serviceQueue.removeFirst()
                 await waitUntilIdle()
-                let base = archive.deletingLastPathComponent()
-                let destination = settings.extractIntoSubfolder
-                    ? base.appendingPathComponent(ArchiveNaming.baseName(of: archive), isDirectory: true)
-                    : base
-                runExtract(archive: archive, items: [], destination: destination, password: nil)
+                runExtract(archive: archive, items: [], base: archive.deletingLastPathComponent(), stripping: "", password: nil)
                 // Parola sorulursa, yeniden deneme de bitene kadar sıradakine geçme.
                 await waitUntilIdle()
             }
@@ -838,11 +1135,14 @@ final class AppModel {
         }
     }
 
+    /// Çıkarma hedefi (alt klasör kuralı uygulanmadan). İç içe açılmış bir arşivde "arşivin yanı",
+    /// geçici kopyanın değil diskteki en dış arşivin yanıdır.
     private func chooseExtractDestination(for archive: URL) -> URL? {
+        let location = archive == archiveURL ? (rootArchiveURL ?? archive) : archive
         var base: URL?
         switch settings.extractLocation {
         case .nextToArchive:
-            base = archive.deletingLastPathComponent()
+            base = location.deletingLastPathComponent()
         case .custom:
             base = settings.customExtractFolder.map { URL(fileURLWithPath: $0, isDirectory: true) }
         case .ask:
@@ -855,14 +1155,12 @@ final class AppModel {
             panel.canChooseFiles = false
             panel.canChooseDirectories = true
             panel.canCreateDirectories = true
-            panel.directoryURL = archive.deletingLastPathComponent()
+            panel.directoryURL = location.deletingLastPathComponent()
             guard panel.runModal() == .OK, let url = panel.url else { return nil }
             base = url
         }
-        guard let base else { return nil }
-        return settings.extractIntoSubfolder
-            ? base.appendingPathComponent(ArchiveNaming.baseName(of: archive), isDirectory: true)
-            : base
+        // Arşiv adıyla klasör (alt klasör kuralı) çıkarma bittikten sonra, içeriğe bakılarak belirlenir.
+        return base
     }
 
     // MARK: - Oluşturma
@@ -873,15 +1171,44 @@ final class AppModel {
 
     func createArchive(_ options: CreateOptions) {
         perform(.progressCreating, archive: nil, retry: nil) { runner, progress in
-            let writer = self.confined(runner, archive: options.destination, writable: [options.destination.deletingLastPathComponent()], protectPersonalData: false)
-            let result = try await writer.run(SevenZipCommand.create(options), input: options.input, onProgress: progress)
-            let warning = try SevenZipError.check(result)
-            let exists = FileManager.default.fileExists(atPath: options.destination.path)
-            if exists { self.addRecent(options.destination) }
+            let fileManager = FileManager.default
+            let directory = options.destination.deletingLastPathComponent()
+            let isTwoStep = options.format.tarCompression != nil
+
+            // Sıkıştırmasız biçimler (ve tar.* biçimlerinin ara tar dosyası) kaynakların tamamı kadar yer ister.
+            let needsSourceSize = !options.compresses || isTwoStep
+            let sourceBytes = needsSourceSize ? await Self.measure(options.sources) : 0
+            try self.checkSpaceForWriting(archive: nil, sourceBytes: sourceBytes, compresses: !needsSourceSize, at: directory)
+
+            // tar.*: önce aynı birimdeki geçici bir klasöre tar, sonra hedefe sıkıştırılmış hâli yazılır.
+            var stagingDirectory: URL?
+            if isTwoStep { stagingDirectory = try StagedExtraction.makeStagingDirectory(for: directory) }
+            defer { if let stagingDirectory { try? fileManager.removeItem(at: stagingDirectory) } }
+            let writer = self.confined(
+                runner, archive: options.destination, writable: [directory] + (stagingDirectory.map { [$0] } ?? []), protectPersonalData: false
+            )
+
+            var warnings: [String] = []
+            if let stagingDirectory {
+                let stage = SevenZipCommand.tarStage(for: options.destination, in: stagingDirectory)
+                let first = try await writer.run(SevenZipCommand.create(options, tarStage: stage)) { progress($0 * 0.5) }
+                if let warning = try SevenZipError.check(first) { warnings.append(warning) }
+                let command = SevenZipCommand.compressTarStage(options, tarStage: stage) ?? []
+                let second = try await writer.run(command) { progress(0.5 + $0 * 0.5) }
+                if let warning = try SevenZipError.check(second) { warnings.append(warning) }
+            } else {
+                let result = try await writer.run(SevenZipCommand.create(options), input: options.input, onProgress: progress)
+                if let warning = try SevenZipError.check(result) { warnings.append(warning) }
+            }
+
+            // Bölünmüş arşivde açılacak dosya "ad.7z.001"dir.
+            let output = options.firstOutput
+            let exists = fileManager.fileExists(atPath: output.path)
+            if exists { self.addRecent(output) }
             self.finish(
-                message: self.t(.toastCreated, options.destination.lastPathComponent),
-                reveal: exists ? options.destination : options.destination.deletingLastPathComponent(),
-                warning: warning
+                message: self.t(.toastCreated, output.lastPathComponent),
+                reveal: exists ? output : directory,
+                warning: warnings.isEmpty ? nil : warnings.joined(separator: "\n\n")
             )
         }
     }
@@ -897,9 +1224,9 @@ final class AppModel {
         switch request.action {
         case .open:
             loadArchive(request.archive, password: value)
-        case .extract(let items, let destination):
+        case .extract(let items, let destination, let stripping):
             if let destination {
-                runExtract(archive: request.archive, items: items, destination: destination, password: value)
+                runExtract(archive: request.archive, items: items, base: destination, stripping: stripping, password: value)
             } else if isCurrentArchive {
                 extract(items: items)
             }
@@ -909,12 +1236,20 @@ final class AppModel {
             openItem(path)
         case .quickLook(let path):
             toggleQuickLook(path)
-        case .add(let sources):
-            addFiles(sources)
+        case .add(let sources, let folder):
+            addFiles(sources, into: folder)
         case .delete(let items):
             deleteItems(items)
         case .rename(let path, let newName):
             rename(path, to: newName)
+        case .browse(let path):
+            browseArchive(path)
+        case .openNested:
+            openNested(request.archive, password: value)
+        case .copy(let items):
+            copyItems(items)
+        case .checksums(let path):
+            showChecksums(path)
         }
     }
 
@@ -924,7 +1259,9 @@ final class AppModel {
 
     // MARK: - Ortak işlem altyapısı
 
+    /// İptal, Finder'dan gelen "Buraya Çıkar" kuyruğunun tamamını durdurur; sıradaki arşive geçilmez.
     func cancelOperation() {
+        serviceQueue.removeAll()
         currentTask?.cancel()
     }
 
@@ -968,6 +1305,7 @@ final class AppModel {
             defer {
                 operation = nil
                 currentTask = nil
+                presentPendingConsentIfIdle()
             }
             do {
                 try await body(runner) { value in
@@ -1000,6 +1338,9 @@ final class AppModel {
     private func message(for error: Error) -> String {
         if let space = error as? InsufficientSpaceError {
             return t(.errorDiskSpace, settings.bytes(space.required), settings.bytes(space.available))
+        }
+        if let duplicate = error as? AddPlan.DuplicateNameError {
+            return t(.duplicateNames, duplicate.names.joined(separator: ", "))
         }
         guard let error = error as? SevenZipError else { return error.localizedDescription }
         switch error {
@@ -1076,8 +1417,9 @@ final class AppModel {
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
+    /// İç içe gezinmede geçici kopya yerine diskteki en dış arşiv gösterilir.
     func revealArchive() {
-        if let archiveURL { reveal(archiveURL) }
+        if let rootArchiveURL { reveal(rootArchiveURL) }
     }
 
     func openManual() {

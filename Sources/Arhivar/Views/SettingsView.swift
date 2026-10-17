@@ -63,7 +63,9 @@ private struct GeneralSettingsView: View {
                         }
                     }
                 }
-                Toggle(settings.t(.settingsSubfolder), isOn: $settings.extractIntoSubfolder)
+                Picker(settings.t(.settingsSubfolder), selection: $settings.subfolderMode) {
+                    ForEach(SubfolderMode.allCases) { Text(settings.t($0.titleKey)).tag($0) }
+                }
                 Picker(settings.t(.settingsOverwrite), selection: $settings.overwriteMode) {
                     ForEach(OverwriteMode.allCases) { Text(settings.t($0.titleKey)).tag($0) }
                 }
@@ -98,6 +100,14 @@ private struct CompressionSettingsView: View {
                     ForEach(CompressionLevel.allCases) { Text(settings.t($0.titleKey)).tag($0) }
                 }
                 Toggle(settings.t(.settingsMultithread), isOn: $settings.multithreaded)
+                Toggle(settings.t(.excludeMacMetadata), isOn: $settings.excludeMacMetadata)
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle(settings.t(.settingsStoreSymlinks), isOn: $settings.storeSymlinks)
+                    Text(settings.t(.settingsStoreSymlinksNote))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
         .formStyle(.grouped)
@@ -192,6 +202,7 @@ private struct AdvancedSettingsView: View {
         .formStyle(.grouped)
         .confirmationDialog(settings.t(.settingsResetConfirm), isPresented: $confirmReset) {
             Button(settings.t(.settingsReset), role: .destructive) {
+                model.browserMode = .folders
                 settings.resetAll()
                 Task { await model.refreshEngine() }
             }

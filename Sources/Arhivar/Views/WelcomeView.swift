@@ -147,12 +147,40 @@ struct EngineStatusView: View {
     }
 }
 
-/// Yeni 7-Zip sürümü bulunduğunda gösterilir.
+/// Yeni Arhivar ya da 7-Zip sürümü bulunduğunda gösterilir.
 struct UpdateBanner: View {
     @Environment(AppModel.self) private var model
     @Environment(AppSettings.self) private var settings
 
     var body: some View {
+        VStack(spacing: 12) {
+            appBanner
+            engineBanner
+        }
+    }
+
+    /// Açılıştaki otomatik denetim yalnızca Ayarlar › Gelişmiş'te görünmesin; yeni Arhivar sürümü burada da duyurulur.
+    @ViewBuilder
+    private var appBanner: some View {
+        if case .available(let release) = model.appUpdateState {
+            HStack(spacing: 14) {
+                Image(systemName: "sparkles")
+                    .font(.title2)
+                    .foregroundStyle(.tint)
+                Text(settings.t(.appUpdateAvailable, release.version, AppInfo.version))
+                    .font(.callout)
+                Spacer(minLength: 8)
+                Button(settings.t(.appUpdateDownload)) { model.openAppDownload() }
+                    .buttonStyle(.glassProminent)
+            }
+            .padding(14)
+            .frame(maxWidth: 520)
+            .glassEffect(.regular, in: .rect(cornerRadius: 18))
+        }
+    }
+
+    @ViewBuilder
+    private var engineBanner: some View {
         switch model.updateState {
         case .available(let latest, let installed):
             HStack(spacing: 14) {

@@ -17,6 +17,7 @@ struct CreateArchiveSheet: View {
     @State private var confirmation = ""
     @State private var encryptNames = true
     @State private var volumeSizeMB = 0
+    @State private var excludeMetadata = false
     @State private var didLoad = false
 
     var body: some View {
@@ -80,9 +81,19 @@ struct CreateArchiveSheet: View {
                     Image(nsImage: FileIcons.icon(for: url))
                         .resizable()
                         .frame(width: 20, height: 20)
-                    Text(url.lastPathComponent)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(url.lastPathComponent)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        // Aynı adlı kaynakları ayırt etmek için bulundukları klasör gösterilir.
+                        if duplicateNames.contains(url.lastPathComponent.lowercased()) {
+                            Text(url.deletingLastPathComponent().path)
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                                .lineLimit(1)
+                                .truncationMode(.head)
+                        }
+                    }
                     Spacer()
                     Button {
                         sources.removeAll { $0 == url }
@@ -133,7 +144,8 @@ struct CreateArchiveSheet: View {
                     Text(settings.bytes(Int64(megabytes) * 1_048_576)).tag(megabytes)
                 }
             }
-            .disabled(format.singleFileOnly)
+            .disabled(!format.supportsVolumes)
+            Toggle(settings.t(.excludeMacMetadata), isOn: $excludeMetadata)
         }
     }
 
@@ -174,9 +186,19 @@ struct CreateArchiveSheet: View {
         format.supportsEncryption && password != confirmation
     }
 
+    /// Farklı klasörlerden gelen aynı adlı kaynaklar (küçük harfle); 7zz "Duplicate filename" hatasıyla dururdu.
+    private var duplicateNames: Set<String> {
+        Set(AddPlan.duplicateNames(in: sources).map { $0.lowercased() })
+    }
+
     private var validationMessage: String? {
         if singleFileProblem { return settings.t(.createSingleFileOnly) }
-        if passwordProblem && !confirmation.isEmpty { return settings.t(.createPasswordMismatch) }
+        let duplicates = AddPlan.duplicateNames(in: sources)
+        if !duplicates.isEmpty { return settings.t(.duplicateNames, duplicates.joined(separator: ", ")) }
+        if passwordProblem {
+            // Onay boşken düğmenin neden kapalı olduğu da söylenir.
+            return settings.t(confirmation.isEmpty ? .createPasswordConfirmHint : .createPasswordMismatch)
+        }
         if let destination, FileManager.default.fileExists(atPath: destination.path) {
             return settings.t(.createExistsWarning)
         }
@@ -184,7 +206,7 @@ struct CreateArchiveSheet: View {
     }
 
     private var isValid: Bool {
-        !sources.isEmpty && destination != nil && !singleFileProblem && !passwordProblem
+        !sources.isEmpty && destination != nil && !singleFileProblem && !passwordProblem && duplicateNames.isEmpty
     }
 
     // MARK: - Eylemler
@@ -194,6 +216,7 @@ struct CreateArchiveSheet: View {
         didLoad = true
         format = settings.defaultFormat
         level = settings.defaultLevel
+        excludeMetadata = settings.excludeMacMetadata
         add(request.sources)
     }
 
@@ -233,8 +256,10 @@ struct CreateArchiveSheet: View {
             level: level,
             password: format.supportsEncryption && !password.isEmpty ? password : nil,
             encryptFileNames: encryptNames,
-            volumeSizeMB: volumeSizeMB > 0 && !format.singleFileOnly ? volumeSizeMB : nil,
-            multithreaded: settings.multithreaded
+            volumeSizeMB: volumeSizeMB > 0 && format.supportsVolumes ? volumeSizeMB : nil,
+            multithreaded: settings.multithreaded,
+            storeSymlinks: settings.storeSymlinks,
+            excludeMacMetadata: excludeMetadata
         )
         dismiss()
         model.createArchive(options)

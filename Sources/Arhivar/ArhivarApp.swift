@@ -111,6 +111,15 @@ struct AppCommands: Commands {
             Button(settings.t(.contextQuickLook)) { model.toggleQuickLook() }
                 .keyboardShortcut("y")
                 .disabled(!model.canOperate || model.selection.count != 1)
+            // Finder'daki gibi: ⌘↓ seçili klasöre girer ya da dosyayı açar (arşivse içine girer).
+            Button(settings.t(.contextOpen)) { model.primaryAction(model.selection) }
+                .keyboardShortcut(.downArrow, modifiers: .command)
+                .disabled(!model.canOperate || model.selection.count != 1)
+            Button(settings.t(.contextChecksums)) { model.showChecksums() }
+                .disabled(!model.canOperate || model.selection.count != 1 || model.selection.first.flatMap(model.node)?.isDirectory != false)
+            Button(settings.t(.toolbarInfo)) { model.showInfo.toggle() }
+                .keyboardShortcut("i")
+                .disabled(model.listing == nil)
             Divider()
             Button(settings.t(.editAddFiles)) { model.presentAddPanel() }
                 .keyboardShortcut("a", modifiers: [.command, .option])
@@ -123,7 +132,7 @@ struct AppCommands: Commands {
             Divider()
             Button(settings.t(.navUp)) { model.goUp() }
                 .keyboardShortcut(.upArrow, modifiers: .command)
-                .disabled(model.listing == nil || model.currentFolder.isEmpty || model.browserMode != .folders)
+                .disabled(!model.canGoUp || model.browserMode != .folders || model.operation != nil)
             Divider()
             Button(settings.t(.menuShowInFinder)) { model.revealArchive() }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
