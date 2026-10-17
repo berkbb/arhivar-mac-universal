@@ -94,7 +94,7 @@ public enum LKey: String, CaseIterable, Sendable {
     case levelStore, levelFastest, levelFast, levelNormal, levelMaximum, levelUltra
     case buttonCancel, buttonOK, buttonChoose, buttonShowInFinder, buttonOpenSettings, buttonUnlock
     case panelOpenArchive, panelChooseDestination, panelExtract, panelAdd
-    case progressReading, progressCreating, progressExtracting, progressTesting
+    case progressReading, progressCreating, progressExtracting, progressTesting, progressPreparing
     case toastExtracted, toastCreated, toastTestPassed
     case passwordTitle, passwordMessage, passwordWrong
     case errorTitle, warningTitle, errorEngineNotFound, errorEngineTimeout, errorCancelled

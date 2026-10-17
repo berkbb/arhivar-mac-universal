@@ -262,7 +262,33 @@ final class AppModel {
         NSWorkspace.shared.open(release.downloadURL ?? release.pageURL)
     }
 
+    /// Motor en az bir kez denetlendi mi? Finder servisleri ve "Birlikte Aç" uygulama açılırken hemen gelebilir.
+    @ObservationIgnored private var engineChecked = false
+    @ObservationIgnored private var engineProbe: Task<Void, Never>?
+
+    /// Motor henüz denetlenmediyse denetler; süren bir denetim varsa onu bekler.
+    func ensureEngine() async {
+        if engineChecked { return }
+        if let engineProbe {
+            await engineProbe.value
+            return
+        }
+        await refreshEngine()
+    }
+
     func refreshEngine() async {
+        if let engineProbe {
+            await engineProbe.value
+            return
+        }
+        let probe = Task { await self.probeEngine() }
+        engineProbe = probe
+        await probe.value
+        engineProbe = nil
+        engineChecked = true
+    }
+
+    private func probeEngine() async {
         engineStatus = .checking
         let fileManager = FileManager.default
         let candidates = EngineLocator.candidates(customPath: settings.customEnginePath)
@@ -893,6 +919,17 @@ final class AppModel {
     ) {
         let usedPassword = usedPassword ?? (archive != nil && archive == archiveURL && password != nil)
         guard operation == nil else { return }
+        if !engineChecked {
+            // Uygulama yeni açıldı (ör. Finder sağ tık menüsünden); motor bulunana kadar "Açılıyor" göster, sonra devam et.
+            operation = OperationState(titleKey: .progressPreparing, progress: nil)
+            currentTask = Task {
+                await ensureEngine()
+                operation = nil
+                currentTask = nil
+                perform(title, archive: archive, retry: retry, usedPassword: usedPassword, body)
+            }
+            return
+        }
         guard let engineURL, engineStatus != .missing else {
             alert = AlertItem(title: t(.engineMissingTitle), message: t(.errorEngineNotFound))
             return

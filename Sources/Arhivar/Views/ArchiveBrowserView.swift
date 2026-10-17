@@ -304,6 +304,7 @@ struct ProgressOverlay: View {
     let operation: OperationState
     @Environment(AppModel.self) private var model
     @Environment(AppSettings.self) private var settings
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -311,6 +312,14 @@ struct ProgressOverlay: View {
                 .fill(.black.opacity(0.14))
                 .ignoresSafeArea()
             VStack(spacing: 16) {
+                // İşleme göre canlandırılan simge; Hareketi Azalt açıksa durağan kalır.
+                Image(systemName: symbol)
+                    .font(.system(size: 46, weight: .regular))
+                    .foregroundStyle(.tint)
+                    .symbolRenderingMode(.hierarchical)
+                    .symbolEffect(.bounce.up.byLayer, options: .repeating.speed(0.7), isActive: !reduceMotion)
+                    .frame(height: 56)
+                    .accessibilityHidden(true)
                 Text(settings.t(operation.titleKey))
                     .font(.headline)
                 if let progress = operation.progress {
@@ -321,7 +330,8 @@ struct ProgressOverlay: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ProgressView()
-                        .controlSize(.large)
+                        .progressViewStyle(.linear)
+                        .frame(width: 220)
                 }
                 Button(settings.t(.buttonCancel), role: .cancel) { model.cancelOperation() }
                     .buttonStyle(.glass)
@@ -330,6 +340,17 @@ struct ProgressOverlay: View {
             .glassEffect(.regular, in: .rect(cornerRadius: 26))
         }
         .transition(.opacity)
+    }
+
+    private var symbol: String {
+        switch operation.titleKey {
+        case .progressReading, .progressPreparing: "doc.zipper"
+        case .progressExtracting: "arrow.up.bin"
+        case .progressCreating: "archivebox"
+        case .progressTesting: "checkmark.seal"
+        case .progressUpdating: "arrow.triangle.2.circlepath"
+        default: "shippingbox"
+        }
     }
 }
 

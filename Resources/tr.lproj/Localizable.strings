@@ -119,6 +119,7 @@
 "progressCreating" = "Arşiv oluşturuluyor…";
 "progressExtracting" = "Dosyalar çıkarılıyor…";
 "progressTesting" = "Arşiv test ediliyor…";
+"progressPreparing" = "Açılıyor…";
 
 "toastExtracted" = "Dosyalar %@ konumuna çıkarıldı";
 "toastCreated" = "%@ oluşturuldu";

@@ -119,6 +119,7 @@
 "progressCreating" = "Creating archive…";
 "progressExtracting" = "Extracting files…";
 "progressTesting" = "Testing archive…";
+"progressPreparing" = "Opening…";
 
 "toastExtracted" = "Files extracted to %@";
 "toastCreated" = "%@ created";

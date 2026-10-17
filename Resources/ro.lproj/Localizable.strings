@@ -119,6 +119,7 @@
 "progressCreating" = "Se creează arhiva…";
 "progressExtracting" = "Se extrag fișierele…";
 "progressTesting" = "Se testează arhiva…";
+"progressPreparing" = "Se deschide…";
 
 "toastExtracted" = "Fișierele au fost extrase în %@";
 "toastCreated" = "%@ a fost creată";

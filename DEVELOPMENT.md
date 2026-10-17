@@ -52,6 +52,11 @@ Arhivar/
 - **Açma güvenliği:** `OpenSafety.executableKind` riskli türleri ve çalıştırma bitini, `hasDeceptiveCharacters` görünmez ve yön değiştiren karakterleri bulur.
 - **Geçici dosyalar:** `$TMPDIR/Arhivar/session-<UUID>` (0700) arşiv başına tutulur ve arşiv kapanınca silinir. `ItemExtractor.sweepStale` açılışta 6 saatten eski klasörleri temizler.
 - **Liste ayrıştırma:** satırlar bayt düzeyinde bölünür, blok alanları `Substring` olarak tutulur ve tarih `ListingParser.parseTimestamp` ile okunur (DateFormatter kullanılmaz). Yaz saati geçişlerinde sonuç DateFormatter ile aynıdır; bunu testler denetler.
+- **Parolalar:** hiçbir zaman argüman olarak verilmez. `SevenZipCommand.passwordInput` parolayı 7zz'nin stdin'ine yazar; `l`, `t`, `x`, `d` ve `rn` parolayı kendileri sorar, `a` için çıplak `-p` verilir. Parola bilinmiyorsa stdin boştur ve 7zz `Break signaled` ile durur; bu "parola gerekli" olarak sınıflandırılır.
+- **Hazırlık klasörüyle çıkarma:** `StagedExtraction` hedefle aynı birimde bir klasör açar (`itemReplacementDirectory`; olmazsa gizli `.arhivar-staging-*`). 7zz oraya çıkarır, ardından üzerine yazma kuralı Swift'te uygulanarak hedefe taşınır. Hedefteki sembolik bağlantıların içine yazılmaz.
+- **Disk alanı:** `DiskSpace` / `InsufficientSpaceError`, seçimin açılmış boyutunu `volumeAvailableCapacityForImportantUsage` değerinden 1 GB pay düşülmüş alanla karşılaştırır.
+- **Sandbox:** `SandboxProfile.forOperation` her işlem için SBPL kuralları üretir ve `CommandRunner` 7zz'yi `/usr/bin/sandbox-exec -p … -D W0=…` ile başlatır. Yollar `realpath(3)` ile çözülür, çünkü `URL.resolvingSymlinksInPath()` `/private` önekini siler ve kural eşleşmez. Kişisel klasör yasağı yalnızca arşiv okunurken (liste, test, çıkarma, silme, yeniden adlandırma) uygulanır; oluşturma ve eklemede kullanıcı kaynakları seçtiği için uygulanmaz.
+- **Soğuk açılış:** Finder servisleri ve "Birlikte Aç" uygulama açılırken hemen gelebilir. `perform` motor henüz denetlenmediyse "Açılıyor…" gösterip `ensureEngine()` sonucunu bekler.
 - **Motor seçimi:** Ayarlarda özel bir 7zz seçildiyse o kullanılır. Yoksa uygulama paketindeki, yedek klasördeki (`~/Library/Application Support/Arhivar/engine`) ve Homebrew'daki kopyalar çalıştırılıp **en yeni sürüm** seçilir.
 
 ## Metin ekleme (yerelleştirme)
@@ -66,7 +71,7 @@ Arhivar/
 
 ```bash
 swift build                      # hızlı geliştirme derlemesi
-swift test                       # 74 test (ArhivarCoreTests + ArhivarAppTests); gerçek 7zz testleri Vendor/7-Zip/7zz kullanır
+swift test                       # 89 test (ArhivarCoreTests + ArhivarAppTests); gerçek 7zz testleri Vendor/7-Zip/7zz kullanır
 ./Scripts/build_app.sh           # evrensel build/Arhivar.app (ARCHS=native ile yalnızca bu Mac)
 ./Scripts/package.sh             # testler + .app + dist/Arhivar-<sürüm>.{dmg,zip,sha256}
 ./Scripts/package.sh --update-7zip   # önce Vendor/7-Zip'i güncelle, sonra paketle

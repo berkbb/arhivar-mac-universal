@@ -5,6 +5,22 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/tr/1.1.0/) biçimini ve
 
 ## [Yayımlanmadı]
 
+### Güvenlik
+
+- Parolalar 7zz'ye komut satırı yerine stdin üzerinden veriliyor; işlem sürerken `ps` ile okunamıyor.
+- Çıkarma önce hedefle aynı diskteki bir hazırlık klasörüne yapılıyor ve başarılı olursa taşınıyor. İptal, CRC hatası ya da dolu disk durumunda hedef hiç değişmiyor; "üzerine yaz" seçiliyken bile mevcut dosyalar korunuyor.
+- Çıkarma, Hızlı Bakış ve Finder'a sürüklemeden önce boş disk alanı denetleniyor.
+- 7zz her işlemde `sandbox-exec` ile yalıtılmış çalışıyor: ağ kapalı, yalnızca işlemin hedef klasörüne yazabiliyor, arşiv okurken `~/.ssh` ya da Anahtar Zinciri gibi kişisel klasörleri okuyamıyor. Ayarlar › Gelişmiş bölümünden kapatılabilir; varsayılan açık.
+
+### Düzeltilenler
+
+- Uygulama kapalıyken Finder sağ tık menüsünden "Arhivar ile Buraya Çıkar" ya da "Arhivar ile Aç" seçilince "7-Zip bulunamadı" hatası veriyordu. Artık motor bulunana kadar bekleniyor.
+- Doğru parola verildiğinde şifreli arşivdeki başka bir hata (ör. CRC) yanlışlıkla "parola yanlış" olarak gösterilebiliyordu.
+
+### Değişenler
+
+- İşlem göstergesi, işleme göre canlandırılan bir simgeyle "Açılıyor…" ve "Arşiv okunuyor…" durumlarını gösteriyor. Hareketi Azalt açıksa simge durağan kalıyor.
+
 ## [1.0.0] — 2026-10-17
 
 İlk sürüm. macOS 26 (Tahoe) ve üstü; Apple Silicon ve Intel (evrensel).

@@ -59,7 +59,7 @@ Terminalden aynı işler:
 ./Scripts/set-version.sh 1.0.1        # sürümü değiştir (tek kaynak: Support/Info.plist)
 ./Scripts/release.sh --dry-run        # yayımı dene; göndermeden göster
 ./Scripts/release.sh                  # paketle, etiketle, GitHub Releases'e yükle
-swift test                            # 74 test
+swift test                            # 89 test
 ```
 
 Gereken: Xcode 26 veya üstü. Ayrıntılar için [DEVELOPMENT.md](DEVELOPMENT.md), sürüm notları için [CHANGELOG.md](CHANGELOG.md).

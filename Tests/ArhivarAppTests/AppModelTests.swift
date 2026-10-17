@@ -294,6 +294,28 @@ struct AppModelTests {
         #expect(leftovers.isEmpty)
     }
 
+    /// Uygulama Finder sağ tık menüsüyle kapalıyken açıldığında istek, motor denetlenmeden gelir.
+    /// Önceden "7-Zip bulunamadı" uyarısı çıkıyordu; şimdi motor bulunana kadar beklenmeli.
+    @Test func coldStartServiceRequestsWaitForEngine() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        let archive = try await fixture.makeArchive("soguk.zip", format: .zip)
+        let other = try await fixture.makeArchive("acilacak.7z", format: .sevenZip)
+
+        // refreshEngine() çağrılmadan:
+        fixture.model.extractHere([archive])
+        await fixture.model.serviceQueueTask?.value
+        #expect(fixture.model.alert == nil)
+        #expect(FileManager.default.fileExists(atPath: fixture.workspace.appendingPathComponent("soguk/kaynak/not.txt").path))
+
+        let second = try Fixture()
+        defer { second.cleanUp() }
+        second.model.openArchive(other)
+        while second.model.operation != nil { await second.model.operationTask?.value }
+        #expect(second.model.alert == nil)
+        #expect(second.model.archiveURL == other)
+    }
+
     @Test func folderNavigationAndEditing() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanUp() }
