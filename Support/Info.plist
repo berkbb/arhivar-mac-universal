@@ -11,6 +11,97 @@
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
+			<key>CFBundleTypeIconFile</key>
+			<string>zip</string>
+			<key>CFBundleTypeName</key>
+			<string>ZIP archive</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.zip-archive</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeIconFile</key>
+			<string>7z</string>
+			<key>CFBundleTypeName</key>
+			<string>7z archive</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>org.7-zip.7-zip-archive</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeIconFile</key>
+			<string>rar</string>
+			<key>CFBundleTypeName</key>
+			<string>RAR archive</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.rarlab.rar-archive</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeIconFile</key>
+			<string>tar</string>
+			<key>CFBundleTypeName</key>
+			<string>Tar or compressed file</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.tar-archive</string>
+				<string>org.gnu.gnu-zip-archive</string>
+				<string>org.gnu.gnu-zip-tar-archive</string>
+				<string>public.bzip2-archive</string>
+				<string>public.tar-bzip2-archive</string>
+				<string>org.tukaani.xz-archive</string>
+				<string>org.tukaani.tar-xz-archive</string>
+				<string>public.z-archive</string>
+				<string>com.facebook.zstandard-archive</string>
+				<string>org.lz4.lz4-archive</string>
+				<string>org.nongnu.lzip-archive</string>
+				<string>org.7-zip.lzma-archive</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeIconFile</key>
+			<string>disk</string>
+			<key>CFBundleTypeName</key>
+			<string>Disk image</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.iso-image</string>
+				<string>com.apple.disk-image-udif</string>
+				<string>com.vmware.vm-disk</string>
+				<string>com.vmware.foreign.vhd</string>
+				<string>com.microsoft.vhdx</string>
+				<string>org.qemu.qcow2</string>
+				<string>org.squashfs.squashfs-image</string>
+				<string>org.osta.udf-image</string>
+				<string>com.microsoft.windows-imaging-format</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeIconFile</key>
+			<string>archive</string>
 			<key>CFBundleTypeName</key>
 			<string>Archive</string>
 			<key>CFBundleTypeRole</key>
@@ -19,38 +110,14 @@
 			<string>Alternate</string>
 			<key>LSItemContentTypes</key>
 			<array>
-				<string>org.7-zip.7-zip-archive</string>
-				<string>public.zip-archive</string>
-				<string>com.rarlab.rar-archive</string>
-				<string>public.tar-archive</string>
-				<string>org.gnu.gnu-zip-archive</string>
-				<string>public.bzip2-archive</string>
-				<string>org.tukaani.xz-archive</string>
-				<string>public.iso-image</string>
-				<string>com.apple.disk-image-udif</string>
-				<string>org.gnu.gnu-zip-tar-archive</string>
-				<string>public.tar-bzip2-archive</string>
-				<string>org.tukaani.tar-xz-archive</string>
-				<string>public.z-archive</string>
 				<string>com.microsoft.cab</string>
 				<string>public.cpio-archive</string>
 				<string>com.apple.xar-archive</string>
-				<string>com.vmware.vm-disk</string>
-				<string>com.vmware.foreign.vhd</string>
-				<string>com.facebook.zstandard-archive</string>
-				<string>org.lz4.lz4-archive</string>
-				<string>org.nongnu.lzip-archive</string>
-				<string>org.7-zip.lzma-archive</string>
-				<string>com.microsoft.windows-imaging-format</string>
-				<string>com.microsoft.vhdx</string>
-				<string>org.qemu.qcow2</string>
 				<string>org.debian.deb-archive</string>
 				<string>com.redhat.rpm-archive</string>
 				<string>org.7-zip.split-archive</string>
 				<string>com.arjsoftware.arj-archive</string>
 				<string>org.lha.lzh-archive</string>
-				<string>org.squashfs.squashfs-image</string>
-				<string>org.osta.udf-image</string>
 				<string>public.archive</string>
 			</array>
 		</dict>

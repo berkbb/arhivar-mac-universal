@@ -31,6 +31,10 @@ if [ ! -f "$ROOT/Resources/AppIcon.icns" ]; then
   echo "▸ Uygulama simgesi çiziliyor…"
   swift "$ROOT/Scripts/make_icon.swift" "$ROOT/Resources/AppIcon.icns"
 fi
+if [ ! -f "$ROOT/Resources/DocumentIcons/zip.icns" ]; then
+  echo "▸ Belge simgeleri çiziliyor…"
+  swift "$ROOT/Scripts/make_document_icons.swift" "$ROOT/Resources/DocumentIcons"
+fi
 
 echo "▸ Paket hazırlanıyor…"
 rm -rf "$APP"
@@ -38,6 +42,8 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/Arhivar" "$APP/Contents/MacOS/Arhivar"
 cp "$ROOT/Support/Info.plist" "$APP/Contents/Info.plist"
 cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/"
+# Arhivar varsayılan uygulama olduğunda Finder'ın arşivlerde gösterdiği belge simgeleri (Info.plist: CFBundleTypeIconFile).
+cp "$ROOT/Resources/DocumentIcons/"*.icns "$APP/Contents/Resources/"
 cp -R "$ROOT/Resources/"*.lproj "$APP/Contents/Resources/"
 cp "$ROOT/Scripts/update-7zip.sh" "$APP/Contents/Resources/update-7zip.sh"
 chmod 755 "$APP/Contents/Resources/update-7zip.sh"
