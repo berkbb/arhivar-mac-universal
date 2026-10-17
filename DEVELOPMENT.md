@@ -71,7 +71,7 @@ Arhivar/
 
 ```bash
 swift build                      # quick development build
-swift test                       # 89 tests (ArhivarCoreTests + ArhivarAppTests); real-7zz tests use Vendor/7-Zip/7zz
+swift test                       # 90 tests (ArhivarCoreTests + ArhivarAppTests); real-7zz tests use Vendor/7-Zip/7zz
 ./Scripts/build_app.sh           # universal build/Arhivar.app (ARCHS=native for this Mac only)
 ./Scripts/package.sh             # tests + .app + dist/Arhivar-<version>.{dmg,zip,sha256}
 ./Scripts/package.sh --update-7zip   # update Vendor/7-Zip first, then package

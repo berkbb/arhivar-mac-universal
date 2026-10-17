@@ -5,6 +5,10 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ## [Unreleased]
 
+### Fixed
+
+- When Arhivar was started from the Finder context menu (Open / Extract Here / Compress with Arhivar) or with "Open With", its main window never appeared, so the progress overlay could not be seen until the app was clicked. The main window now opens and comes to the front for every such request.
+
 ## [1.0.1] — 2026-10-17
 
 ### Security

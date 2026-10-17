@@ -49,6 +49,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Finder'dan "Birlikte Aç" ile gelen arşivler.
     func application(_ application: NSApplication, open urls: [URL]) {
+        AppModel.shared.presentMainWindow()
         AppModel.shared.handleOpenRequest(urls)
     }
 
@@ -67,6 +68,9 @@ struct AppCommands: Commands {
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
+        // Uygulama Finder servisi ya da "Birlikte Aç" ile başlatıldığında SwiftUI ana pencereyi açmaz.
+        // Menü komutları pencere olmadan da kurulduğu için pencere açma eylemi buradan modele verilir.
+        let _ = model.registerWindowOpener { [openWindow] in openWindow(id: WindowID.main) }
         CommandGroup(replacing: .appInfo) {
             Button(settings.t(.menuAbout)) { openWindow(id: WindowID.about) }
             Button(settings.t(.menuCheckUpdates)) {

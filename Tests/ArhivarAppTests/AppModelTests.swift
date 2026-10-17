@@ -316,6 +316,25 @@ struct AppModelTests {
         #expect(second.model.archiveURL == other)
     }
 
+    /// Finder servisleri ve "Birlikte Aç" uygulamayı penceresiz başlatabilir; istek geldiğinde ana pencere açılmalı.
+    @Test func serviceRequestsOpenTheMainWindow() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        var opened = 0
+        fixture.model.registerWindowOpener { opened += 1 }
+        fixture.model.presentMainWindow()
+        #expect(opened == 1)
+
+        // Pencere açma eylemi henüz kayıtlı değilse (çok erken soğuk açılış) kayıt gelince yeniden denenir.
+        let late = try Fixture()
+        defer { late.cleanUp() }
+        var lateOpened = 0
+        late.model.presentMainWindow()
+        late.model.registerWindowOpener { lateOpened += 1 }
+        for _ in 0..<20 where lateOpened == 0 { try await Task.sleep(for: .milliseconds(50)) }
+        #expect(lateOpened == 1)
+    }
+
     @Test func folderNavigationAndEditing() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanUp() }

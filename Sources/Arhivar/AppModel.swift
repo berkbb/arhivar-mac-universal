@@ -186,6 +186,34 @@ final class AppModel {
         String(format: settings.t(key), locale: settings.locale, arguments: arguments)
     }
 
+    // MARK: - Pencere
+
+    @ObservationIgnored private var openMainWindowAction: (() -> Void)?
+
+    func registerWindowOpener(_ action: @escaping () -> Void) {
+        openMainWindowAction = action
+    }
+
+    /// Ana pencereyi açar (kapalıysa ya da hiç açılmadıysa) ve öne getirir.
+    /// Finder servisleri ve "Birlikte Aç" uygulamayı penceresiz başlatabilir; işlem göstergesinin görünmesi için gerekir.
+    func presentMainWindow(attempt: Int = 0) {
+        NSApp?.activate()
+        guard let openMainWindowAction else {
+            // Menü komutları henüz kurulmadıysa (çok erken soğuk açılış) kısa bir süre sonra yeniden dene.
+            if attempt < 20 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { self.presentMainWindow(attempt: attempt + 1) }
+            }
+            return
+        }
+        openMainWindowAction()
+        // Etkinleştirme reddedilse bile pencere öne gelsin.
+        DispatchQueue.main.async {
+            (NSApp?.windows ?? [])
+                .filter { $0.canBecomeMain && $0.isVisible }
+                .forEach { $0.orderFrontRegardless() }
+        }
+    }
+
     // MARK: - Açılış ve motor
 
     func launch() async {
