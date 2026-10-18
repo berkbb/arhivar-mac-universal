@@ -1250,12 +1250,21 @@ final class AppModel {
             while !serviceQueue.isEmpty {
                 let archive = serviceQueue.removeFirst()
                 await waitUntilIdle()
-                runExtract(archive: archive, items: [], base: archive.deletingLastPathComponent(), stripping: "", password: nil)
+                // Açık (ya da iç içe gezinmede en dıştaki) arşivin bilinen parolası kullanılır: parolasız deneme
+                // "yanlış parola" sayılıp açık arşivin parolasını silerdi.
+                runExtract(archive: archive, items: [], base: archive.deletingLastPathComponent(), stripping: "", password: knownPassword(for: archive))
                 // Parola sorulursa, yeniden deneme de bitene kadar sıradakine geçme.
                 await waitUntilIdle()
             }
             serviceTask = nil
         }
+    }
+
+    /// Arşivin bu oturumda doğrulanmış parolası: açık arşivinki ya da iç içe gezinmede en dıştaki arşivinki.
+    private func knownPassword(for archive: URL) -> String? {
+        if archive == archiveURL { return password }
+        if let root = archiveStack.first, root.url == archive { return root.password }
+        return nil
     }
 
     /// Kuyruktaki işlerin bitmesini bekler (testler ve sıralı servisler için).

@@ -1200,4 +1200,37 @@ struct AppModelTests {
         model.beginCreate()
         #expect(model.createRequest != nil)
     }
+
+    // MARK: - .agents/context/roadmap.md: dördüncü tur
+
+    /// R4-2: açık ve kilidi açılmış şifreli arşiv "Buraya Çıkar" ile çıkarılırken parolası yeniden sorulmaz, silinmez.
+    @Test func extractHereReusesTheOpenArchivePassword() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let secret = try await fixture.makeArchive("gizli.7z", format: .sevenZip, password: "p4ss", encryptNames: true)
+        let model = fixture.model
+        model.openArchive(secret)
+        await fixture.settle()
+        model.submitPassword("p4ss")
+        await fixture.settle()
+        #expect(model.archiveURL == secret)
+
+        model.extractHere([secret])
+        // Süre sınırı: parola yeniden sorulursa kuyruk yanıt bekler; test sonsuza dek beklemesin.
+        for _ in 0..<200 where model.serviceQueueTask != nil && model.passwordRequest == nil {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        let askedAgain = model.passwordRequest != nil
+        if askedAgain { model.cancelPasswordRequest() }
+        await model.serviceQueueTask?.value
+        #expect(!askedAgain)
+        #expect(model.alert == nil)
+        #expect(FileManager.default.fileExists(atPath: fixture.workspace.appendingPathComponent("gizli/kaynak/not.txt").path))
+        // Parola hâlâ biliniyor: test işlemi yeniden sormaz.
+        model.testArchive()
+        await fixture.settle()
+        #expect(model.passwordRequest == nil)
+        #expect(model.alert == nil)
+    }
 }
