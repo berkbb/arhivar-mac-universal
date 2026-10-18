@@ -58,3 +58,29 @@ private func temporaryFolder(_ name: String) throws -> URL {
     #expect(ArchiveNaming.firstVolume(of: folder.appendingPathComponent("yalniz.r00")) == folder.appendingPathComponent("yalniz.r00"))
 }
 
+// MARK: - R5-4 Boyut toplamları
+
+/// Negatif boyut gereken alanı azaltmaz; Int64.max'ı aşan (işaretsiz yazılmış) boyut yok sayılmaz, sınırda durur.
+@Test func requiredBytesNeverShrinkAndHugeSizesSaturate() {
+    let entries = [ArchiveEntry(path: "a", size: 10), ArchiveEntry(path: "b", size: -5)]
+    #expect(DiskSpace.requiredBytes(for: [], in: entries) == 10)
+
+    let output = """
+    --
+    Type = zip
+
+    ----------
+    Path = bomba.bin
+    Size = 18446744073709551615
+    Packed Size = 18446744073709551615
+
+    Path = eksi.bin
+    Size = -1
+
+    """
+    let listing = ListingParser.parse(output)
+    #expect(listing.entries.first?.size == Int64.max)
+    #expect(listing.entries.first?.packedSize == Int64.max)
+    #expect(listing.entries.last?.size == nil)
+    #expect(DiskSpace.requiredBytes(for: [], in: listing.entries) == Int64.max)
+}

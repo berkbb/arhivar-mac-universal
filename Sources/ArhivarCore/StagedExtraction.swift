@@ -420,7 +420,8 @@ public enum DiskSpace {
         entries.reduce(0) { total, entry in
             guard !entry.isDirectory else { return total }
             let selected = items.isEmpty || items.contains { entry.path == $0 || entry.path.hasPrefix($0 + "/") }
-            return selected ? total.saturatingAdding(entry.size ?? 0) : total
+            // Bozuk ya da uydurma negatif bir boyut gereken alanı azaltmasın.
+            return selected ? total.saturatingAdding(max(0, entry.size ?? 0)) : total
         }
     }
 

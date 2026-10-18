@@ -258,6 +258,12 @@ public enum ListingParser {
         return length == 0 || (dots == length && length <= 2)
     }
 
+    /// 7zz boyutları işaretsiz yazar. Int64.max'ı aşan (uydurma) bir boyut `Int64(_:)` ile nil olur ve boş alan
+    /// denetiminde 0 sayılırdı; sınırda durur. Negatif değer geçersizdir (nil).
+    static func parseSize(_ text: Substring) -> Int64? {
+        UInt64(text).map { Int64(clamping: $0) }
+    }
+
     static func makeEntry(_ block: Block, timeZone: TimeZone) -> ArchiveEntry? {
         guard let raw = block.path, !raw.isEmpty else { return nil }
         let path = normalizedPath(raw)
@@ -271,8 +277,8 @@ public enum ListingParser {
         return ArchiveEntry(
             path: path,
             archivePath: String(raw),
-            size: block.size.flatMap { Int64($0) },
-            packedSize: block.packedSize.flatMap { Int64($0) },
+            size: block.size.flatMap(parseSize),
+            packedSize: block.packedSize.flatMap(parseSize),
             modified: modified,
             isDirectory: isDirectory,
             isEncrypted: block.encrypted == "+",
