@@ -480,6 +480,12 @@ final class AppModel {
     func openArchive(_ url: URL) {
         // Bölünmüş arşivin herhangi bir parçası seçildiyse ilk parçadan açılır.
         let url = ArchiveNaming.firstVolume(of: url)
+        // İç içe gezinirken en dıştaki arşiv yeniden seçildiyse (kenar çubuğu) diskten yeniden okunmaz:
+        // ona dönülür, parolası ve klasörü korunur.
+        if url == rootArchiveURL, !archiveStack.isEmpty {
+            returnToArchive(level: 0)
+            return
+        }
         loadArchive(url, password: url == archiveURL ? password : nil)
     }
 

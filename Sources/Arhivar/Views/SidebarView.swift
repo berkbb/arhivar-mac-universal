@@ -41,9 +41,11 @@ struct SidebarView: View {
         .listStyle(.sidebar)
     }
 
+    /// İç içe gezinmede seçili kalan, diskteki en dış arşivdir; ona tıklamak yeniden okumadan geri döner
+    /// (bkz. `AppModel.openArchive`).
     private var selection: Binding<SidebarItem?> {
         Binding {
-            model.archiveURL.map { SidebarItem.recent($0) } ?? .home
+            model.rootArchiveURL.map { SidebarItem.recent($0) } ?? .home
         } set: { item in
             switch item {
             case .home:

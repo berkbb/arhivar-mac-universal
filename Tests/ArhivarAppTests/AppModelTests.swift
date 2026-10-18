@@ -873,6 +873,38 @@ struct AppModelTests {
         #expect(model.currentFolder == "kaynak")
     }
 
+    /// P2-12: iç arşivdeyken kenar çubuğunda kök arşive tıklamak onu diskten yeniden okumaz; parolası korunur.
+    @Test func reopeningTheRootArchiveReturnsWithItsPassword() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let inner = try await fixture.makeArchive("ic.zip", format: .zip)
+        let outer = fixture.workspace.appendingPathComponent("sifreli.7z")
+        let options = CreateOptions(
+            sources: [inner, fixture.workspace.appendingPathComponent("kaynak")], destination: outer, format: .sevenZip, level: .fast,
+            password: "p", encryptFileNames: false
+        )
+        try SevenZipError.check(try await fixture.runner.run(SevenZipCommand.create(options), input: options.input))
+        let model = fixture.model
+        model.openArchive(outer)
+        await fixture.settle()
+        model.primaryAction(["ic.zip"])
+        await fixture.settle()
+        model.submitPassword("p")
+        await fixture.settle()
+        #expect(model.rootArchiveURL == outer)
+        #expect(model.archiveStack.count == 1)
+
+        model.openArchive(outer)
+        #expect(model.operation == nil)
+        #expect(model.archiveURL == outer)
+        #expect(model.archiveStack.isEmpty)
+        model.toggleQuickLook("kaynak/not.txt")
+        await fixture.settle()
+        #expect(model.passwordRequest == nil)
+        #expect(model.quickLookURL?.lastPathComponent == "not.txt")
+    }
+
     /// P1-7: aynı klasördeki bir öğenin adına (büyük/küçük harf duyarsız) yeniden adlandırılmaz.
     @Test func renameRejectsSiblingNames() async throws {
         let fixture = try Fixture()
