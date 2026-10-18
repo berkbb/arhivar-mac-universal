@@ -51,3 +51,12 @@ All arguments passed to `7zz` include `-sccUTF-8` and place file/archive paths a
 3. **Executable & Deceptive Filename Detection (`OpenSafety`):**
    - Checks UTIs and extensions for executables, scripts, `.pkg`, `.mobileconfig`, `.terminal`, `.workflow`, `.scpt`, `.scptd`, `.applescript`, `.shortcut`, `.prefpane`, `.qlgenerator`, and POSIX execute bits (`0o111`).
    - Detects Unicode format/control characters (such as `U+202E` RTL override) and invisible blank fillers (`U+2800` Braille blank, `U+3164` Hangul filler, `U+115F`, `U+1160`, `U+FFA0`), rendering them visibly as `⟦U+XXXX⟧` in the table and requiring confirmation before opening.
+
+---
+
+## 4. Finder Integration & Document Icons
+
+- **Six Document Icon Families (`Support/Info.plist` & `Resources/DocumentIcons/`):**
+  - `CFBundleDocumentTypes` groups all supported archive UTIs into six distinct families (`zip`, `7z`, `rar`, `tar`, `disk`, `archive`), each with its own `CFBundleTypeIconFile` and `LSHandlerRank = Alternate` (so Arhivar never takes over default file associations unless the user explicitly selects Arhivar in Finder's Get Info › Open with › Change All).
+  - Icons are drawn purely in CoreGraphics by `Scripts/make_document_icons.swift` (no SF Symbols, up to 512 px to keep all six `.icns` files around ~1.7 MB total).
+  - `DocumentIconTests` enforces that every family has its `.icns` file, every entry has `LSHandlerRank == "Alternate"`, no UTI belongs to more than one family, and all `UTImportedTypeDeclarations` and `NSServices` archive UTIs are mapped to a family.

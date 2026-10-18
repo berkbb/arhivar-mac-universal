@@ -45,9 +45,19 @@
 
 ---
 
+### Build Scripts & Bundle Resources (`Scripts/`, `Support/`, `Resources/`)
+
+| File | Primary Symbols / Artifacts | Responsibilities |
+| :--- | :--- | :--- |
+| `Scripts/make_icon.swift` | `drawIcon`, `Resources/AppIcon.icns` | Programmatic CoreGraphics generator for the macOS app icon (16px to 1024px) |
+| `Scripts/make_document_icons.swift` | `Family`, `zipper`, `box`, `books`, `layers`, `disc`, `drawDocument`, `Resources/DocumentIcons/{zip,7z,rar,tar,disk,archive}.icns` | Programmatic CoreGraphics generator for the six Finder document icon families (up to 512px, ~1.7 MB total, zero SF Symbols) |
+| `Support/Info.plist` | `CFBundleDocumentTypes`, `NSServices`, `UTImportedTypeDeclarations` | Declares six document icon families (`LSHandlerRank = Alternate`), Finder context-menu services, and 14 custom archive UTIs |
+
+---
+
 ## 2. Change Impact Map
 
 - **Adding a UI String:** Must update `LKey` in `Sources/ArhivarCore/Localization.swift` **and** all three `Resources/{tr,en,ro}.lproj/Localizable.strings` files (`RunnerAndLocalizationTests` enforces 100% key and format-specifier parity).
-- **Adding a Supported Archive Format:** Update `ArchiveFormat` (`ArchiveOptions.swift`), `ArchiveNaming.archiveExtensions` (`Engine.swift`), `Support/Info.plist` (`CFBundleDocumentTypes`, `NSServices`, `UTImportedTypeDeclarations`), and `CommandTests` / `RoadmapTests`.
+- **Adding a Supported Archive Format:** Update `ArchiveFormat` (`ArchiveOptions.swift`), `ArchiveNaming.archiveExtensions` (`Engine.swift`), `Support/Info.plist` (`CFBundleDocumentTypes` in exactly one of the six icon families, `NSServices`, `UTImportedTypeDeclarations`), and verify with `DocumentIconTests`, `CommandTests`, and `RoadmapTests`.
 - **Modifying `ArchiveNode` or `ArchiveBrowserView` Table Columns:** Never introduce `@Environment` lookups inside `NameCell` or any table cell view; verify with `BrowserViewTests`.
 - **Modifying `AppSettings` Keys:** Add new `UserDefaults` keys to `AppSettings.Key.all` so `resetAll()` removes them cleanly (`resetRemovesAllPreferences` test).

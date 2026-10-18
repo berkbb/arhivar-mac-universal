@@ -67,7 +67,7 @@ The same tasks from the terminal:
 swift test                            # 146 tests
 ```
 
-Requires Xcode 26 or later. See [DEVELOPMENT.md](DEVELOPMENT.md) for details, [ROADMAP.md](ROADMAP.md) for planned features and [CHANGELOG.md](CHANGELOG.md) for release notes.
+Requires Xcode 26 or later. See [DEVELOPMENT.md](DEVELOPMENT.md) for details, [roadmap.md](.agents/context/roadmap.md) for planned features and [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## License
 

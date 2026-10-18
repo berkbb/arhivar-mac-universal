@@ -13,6 +13,6 @@ Establishes Specification-Driven Development (SDD) lifecycle phases: Constitutio
 
 ## 2. Application in Arhivar
 
-- Treat specifications, constitutions (`AGENTS.md`), and roadmaps (`ROADMAP.md`) as living executable artifacts.
+- Treat specifications, constitutions (`AGENTS.md`), and roadmaps (`.agents/context/roadmap.md`) as living executable artifacts.
 - Resolve ambiguities before implementation and enforce review gates via unit and integration tests.
-- Keep `ROADMAP.md`, `CHANGELOG.md`, and `.agents/context/roadmap.md` synchronized with code changes.
+- Keep `.agents/context/roadmap.md` and `CHANGELOG.md` synchronized with code changes.
