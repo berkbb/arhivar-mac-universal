@@ -39,6 +39,20 @@
 - **Status:** ✅ Done — `FileManager.contentsOfDirectory` and its enumerators never list regular files whose names start with `._` (folders, FIFOs and symlinks with that prefix are listed). As a result `merge` silently dropped `._config`-style files at the content root and when merging into existing folders, `Quarantine.propagate` left them without `com.apple.quarantine` (a `._run.command` would open without a Gatekeeper check), and `DiskSpace.totalSize` ignored their size. `StagedExtraction.entries(ofDirectory:)` (`readdir`) now lists every entry for `merge`, `destination`, `leaveOutRootMetadata`, `secureSymlinks`, `Quarantine.propagate`, `SpecialFiles.archivePaths` and `DiskSpace.totalSize`. `isMacMetadata(_:in:)` counts a `._name` file as metadata only if it carries the AppleDouble signature (`00 05 16 07`) or its companion `name` sits next to it, so real `._config` files are kept. `copyItem` / `moveItem` were verified to keep `._*` files. Tests `directoryEntriesIncludeDotUnderscoreFiles`, `mergeMovesDotUnderscoreFiles`, `quarantineReachesDotUnderscoreFiles`, `onlyRealAppleDoubleFilesAreMetadata`, `totalSizeCountsDotUnderscoreFiles`, `dotUnderscoreFilesAreExtractedAndQuarantined`.
 - **Location:** `Sources/ArhivarCore/StagedExtraction.swift` (`entries(ofDirectory:)`, `isMacMetadata(_:in:)`, `merge`, `destination`, `leaveOutRootMetadata`, `secureSymlinks`, `DiskSpace.regularFileBytes`), `Sources/ArhivarCore/Quarantine.swift`, `Sources/ArhivarCore/ArchiveEditing.swift` (`SpecialFiles.archivePaths`), `Sources/Arhivar/AppModel.swift` (`runExtract` reveal)
 
+#### P5. ✅ [P0] 11-Discipline Chaos, Security, Stress, Penetration & Robustness Test Matrix
+- **Status:** ✅ Done — Added a comprehensive 17-test multi-vector suite (`ChaosAndSecurityMatrixTests.swift`) verifying all 11 security and resilience disciplines across the application:
+  1. *Security:* Zip-Slip traversal escapes, malicious symlink rewrites outside destination, zero command-line password exposure via pipe stdin.
+  2. *Stress:* Parsing massive directories (2,000 files in a single flat folder), deep nested folder hierarchies (35 levels of recursion), and rapid consecutive parse throughput (50 repetitions).
+  3. *Destructive:* Resilient error handling and zero crashes when opening 0-byte files or corrupted archives filled with pseudo-random byte garbage.
+  4. *Penetration:* Cleansing of Gatekeeper user-approval bit (`0x0040`) from `com.apple.quarantine` extended attribute on extracted and dragged items.
+  5. *Load & Volume:* Zip bomb defense via saturating addition (`Int64.max`) preventing integer overflow traps (`EXC_BAD_INSTRUCTION`).
+  6. *Endurance:* 30 repeated staging directory allocation and teardown cycles under read-only permissions (`0o555` / `0o444`) without permission leakage or descriptor exhaustion.
+  7. *Vulnerability Scanning:* CLI option injection defense via `--` delimiters and `-spd`, Trojan Source Unicode spoofing detection (RLO `U+202E`, Braille `U+2800`, Hangul `U+3164`, zero-width space `U+200B`), and risky executable format scanning (`.command`, `.app`, `.sh`, `.workflow`, `.action`, `.terminal`).
+  8. *Red Team:* Standalone symlink exfiltration blocked via `ItemExtractor.SymbolicLinkError`, read-only and multi-volume archive in-place edit prevention.
+  9. *Fuzzing:* Parser resilience against malformed listings, unclosed brace blocks, inverted/negative sizes, and mutated lines without throwing unhandled exceptions.
+  10. *Chaos:* Graceful SIGTERM cancellation escalation to SIGKILL within 2-second grace period for uncooperative processes, `OwnerAccess` permission restoration for unreadable/unwritable files (`0o000` / `0o555`), and concurrent multi-task reentrancy across parser, tree, naming, and sandbox subsystems.
+- **Location:** `Tests/ArhivarCoreTests/ChaosAndSecurityMatrixTests.swift`
+
 ---
 
 ### Sixth Hardening Round — RAR Multi-Part Name Stripping, Split ZIP `.z01` Handling & Multi-Volume In-Place Edit Guard (2026-10-18)

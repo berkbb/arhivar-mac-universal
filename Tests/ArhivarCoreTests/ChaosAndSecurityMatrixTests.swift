@@ -36,16 +36,16 @@ struct ChaosAndSecurityMatrixTests {
 
         // Staging içinde dışarıyı (/etc/hosts) gösteren sembolik bağlantı
         let badLink = staging.appendingPathComponent("bad_link")
-        try FileManager.default.createSymbolicLink(at: badLink, withDestinationPath: "/etc/hosts")
+        try FileManager.default.createSymbolicLink(atPath: badLink.path, withDestinationPath: "/etc/hosts")
 
         // Staging içinde 3 üst klasörü gösteren göreli bağlantı
         let escapingLink = staging.appendingPathComponent("escaping_link")
-        try FileManager.default.createSymbolicLink(at: escapingLink, withDestinationPath: "../../../../../tmp")
+        try FileManager.default.createSymbolicLink(atPath: escapingLink.path, withDestinationPath: "../../../../../tmp")
 
         // Geçerli iç bağlantı
         try Data("safe".utf8).write(to: staging.appendingPathComponent("target.txt"))
         let safeLink = staging.appendingPathComponent("safe_link")
-        try FileManager.default.createSymbolicLink(at: safeLink, withDestinationPath: "target.txt")
+        try FileManager.default.createSymbolicLink(atPath: safeLink.path, withDestinationPath: "target.txt")
 
         let removed = StagedExtraction.secureSymlinks(in: staging, extractionRoot: staging)
         #expect(removed.contains("bad_link"))
@@ -218,7 +218,7 @@ struct ChaosAndSecurityMatrixTests {
         let sum = entries.compactMap(\.size).saturatingSum()
         #expect(sum == Int64.max)
 
-        let required = DiskSpace.requiredBytes(for: entries)
+        let required = DiskSpace.requiredBytes(for: [], in: entries)
         #expect(required == Int64.max)
     }
 
@@ -289,15 +289,28 @@ struct ChaosAndSecurityMatrixTests {
 
     /// Tehlikeli Çalıştırılabilir Türlerin Taraması:
     /// Sistemin kod çalıştırabileceği tüm uzantı ve türlerin OpenSafety tarafından yakalandığı doğrulanır.
-    @Test func vulnerabilityRiskyExecutableTypesScanning() {
-        let riskyNames = [
-            "betik.command", "kod.sh", "program.app", "script.scpt", "otomasyon.workflow",
-            "aksiyon.action", "profil.mobileconfig", "ayar.terminal", "baglanti.webloc", "link.url",
-            "eklenti.qlgenerator", "panel.prefpane", "yama.osax"
+    @Test func vulnerabilityRiskyExecutableTypesScanning() throws {
+        let temp = try makeTempFolder("risky-types")
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let dynamicExtensions = [
+            "script.scpt", "otomasyon.workflow", "aksiyon.action", "baglanti.webloc",
+            "link.url", "eklenti.qlgenerator", "panel.prefpane", "yama.osax"
         ]
-        for name in riskyNames {
+        for name in dynamicExtensions {
             let ext = (name as NSString).pathExtension
-            #expect(OpenSafety.riskyExtensions.contains(ext), "Yakalanmayan riskli uzantı: \(ext)")
+            #expect(OpenSafety.riskyExtensions.contains(ext), "Yakalanmayan dinamik riskli uzantı: \(ext)")
+        }
+
+        // Dosya bazlı tür doğrulaması (UTType ve çalıştırma izni)
+        let sampleFiles = [
+            "betik.command", "kod.sh", "program.app", "profil.mobileconfig", "ayar.terminal",
+            "belge.workflow", "bag.url", "script.scpt"
+        ]
+        for name in sampleFiles {
+            let file = temp.appendingPathComponent(name)
+            try Data("echo test".utf8).write(to: file)
+            #expect(OpenSafety.executableKind(of: file) != nil, "executableKind yakalayamadı: \(name)")
         }
     }
 
@@ -401,13 +414,12 @@ struct ChaosAndSecurityMatrixTests {
         }
 
         try await Task.sleep(for: .milliseconds(300))
-        runner.cancel()
-
         let start = CFAbsoluteTimeGetCurrent()
-        let result = try await task.value
+        task.cancel()
+        await #expect(throws: SevenZipError.cancelled) {
+            _ = try await task.value
+        }
         let elapsed = CFAbsoluteTimeGetCurrent() - start
-
-        #expect(result.exitCode != 0)
         #expect(elapsed < 4.0) // 2 sn killGracePeriod + tolerans
     }
 

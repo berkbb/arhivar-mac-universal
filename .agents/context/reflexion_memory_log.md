@@ -148,6 +148,25 @@
   - This caused `StagedExtraction.destination` to return `subfolder`, extracting into `base/Proje/Proje/...` (unwanted double nesting).
 - **Lesson & Guardrail:** Filter out macOS metadata (`.DS_Store`, `__MACOSX`, and `._*`) from root content entries when evaluating whether an archive has a single root or multiple roots in `.smart` mode. If filtering leaves only meaningful entries, evaluate based on the meaningful count; if all items were metadata, fall back to the raw count. Test `smartDestinationIgnoresMacMetadata`.
 
+---
+
+## Episode 18: 11-Discipline Chaos, Security, Stress, Penetration & Robustness Test Matrix
+- **Context:** Subjecting the application to an exhaustive testing matrix spanning Security, Stress, Destructive, Penetration, Load, Volume, Endurance, Vulnerability Scanning, Red Team Operations, Fuzzing, and Chaos disciplines.
+- **Key Invariants & Verified Traps:**
+  1. *Zip-Slip & Path Traversal:* Symbolic links attempting to escape the extraction root via relative (`../../etc/passwd`) or absolute paths (`/private/etc/hosts`) rewritten by `7zz` are aggressively removed or rewritten relative to destination by `StagedExtraction.secureSymlinks`.
+  2. *Zero Password Exposure:* Passwords must never be present in argv arrays or process environment variables where `ps` or DTrace can inspect them. Verified that `SevenZipCommand` passes `-p` without argument and supplies credentials strictly through stdin `Pipe`.
+  3. *Stack & Heap Memory Under Stress:* Verified `ArchiveTree.build` processes 2,000 flat directory items and 35-level deep recursive hierarchies without deep call-stack recursion overflow or memory exhaustion.
+  4. *Destructive Inputs:* Corrupt archives (0 bytes, random non-header bytes) are handled gracefully via typed `SevenZipError` and `ListingParser` error paths with zero process traps.
+  5. *Quarantine Cleansing:* Verified `Quarantine.cleansedValue` systematically clears the user-approved flag `0x0040` from `com.apple.quarantine` attributes, ensuring Gatekeeper re-evaluation for extracted items.
+  6. *Zip Bomb Protection:* Verified `Int64.saturatingAdding` and `requiredBytes` ensure integer overflow does not trigger `EXC_BAD_INSTRUCTION` traps when summing maliciously inflated archive sizes.
+  7. *Endurance & Descriptor Leaks:* Verified 30 consecutive staging make/teardown cycles under read-only (`0o555` / `0o444`) permissions operate without file descriptor leaks or permission degradation.
+  8. *Command & Unicode Injection:* Guarded against CLI argument injection via mandatory `--` delimiters and `-spd`, and detected deceptive Trojan Source / bidirectional control characters (`U+202E`, `U+2800`, `U+3164`, `U+200B`) via `OpenSafety`.
+  9. *Red Team Containment:* Exfiltration via standalone symbolic links is intercepted with `ItemExtractor.SymbolicLinkError`, and in-place editing operations on read-only files or multi-volume archives are rejected upfront.
+  10. *Fuzzing Resilience:* `ListingParser.parse` recovers gracefully from malformed listings, unclosed brace blocks, missing fields, and negative sizes without unhandled fatal errors.
+  11. *Chaos & Termination Escalation:* When a child process refuses SIGTERM cancellation, `CommandRunner` escalates to SIGKILL within 2 seconds. Owner permissions on unreadable files (`0o000` / `0o555`) are safely elevated and restored by `OwnerAccess`, and concurrent execution across 20 parallel async tasks operates reentrantly without race conditions.
+- **Lesson & Guardrail:** Dedicated matrix tests must be retained in `ChaosAndSecurityMatrixTests.swift` and executed on every CI and pre-release gate.
+
+
 
 
 
