@@ -28,7 +28,7 @@ extension SevenZipCommand {
         if encryptHeaders, hasPassword { args.append("-mhe=on") }
         // -mem verilmezse 7zz şifreli zip'e eklenen dosyaları zayıf ZipCrypto ile şifreler; oluşturmadaki gibi AES-256 kalsın.
         if hasPassword, (archiveType ?? archive.pathExtension).lowercased() == "zip" { args.append("-mem=AES256") }
-        args += sourceSwitches(names: names, storeSymlinks: storeSymlinks, excludeMacMetadata: excludeMacMetadata)
+        args += sourceSwitches(names: names + [archive.path], storeSymlinks: storeSymlinks, excludeMacMetadata: excludeMacMetadata)
         return args + ["--", archive.path] + names
     }
 

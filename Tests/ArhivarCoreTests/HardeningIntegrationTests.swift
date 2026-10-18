@@ -90,4 +90,28 @@ struct HardeningIntegrationTests {
         #expect(listing.info.comment == "bir\nType = 7z\n}\n----------\nPath = sahte.txt\nSize = 999999")
     }
 
+    /// P0-5: adında "*" geçen arşiv açılırken, sınanırken, çıkarılırken ve sağlama değeri alınırken yanındaki
+    /// eşleşen arşivler işe karışmaz.
+    @Test func starredArchiveNamesAreLiteral() async throws {
+        defer { cleanUp() }
+        let starred = workspace.appendingPathComponent("yedek*1.7z")
+        let other = workspace.appendingPathComponent("yedekX1.7z")
+        try await create(CreateOptions(sources: [workspace.appendingPathComponent("kaynak/a/b/f.txt")], destination: starred, format: .sevenZip, level: .fast))
+        let extra = workspace.appendingPathComponent("baska.txt")
+        try "b".write(to: extra, atomically: true, encoding: .utf8)
+        try await create(CreateOptions(sources: [extra], destination: other, format: .sevenZip, level: .fast))
+
+        #expect(try await list(starred).entries.map(\.path) == ["f.txt"])
+        let output = workspace.appendingPathComponent("cikti", isDirectory: true)
+        let options = ExtractOptions(archive: starred, destination: output, overwrite: .replace)
+        try SevenZipError.check(try await runner.run(SevenZipCommand.extract(options), timeout: 30))
+        #expect(try fileManager.contentsOfDirectory(atPath: output.path) == ["f.txt"])
+        let hash = try await runner.run(SevenZipCommand.hash(file: starred), timeout: 30)
+        try SevenZipError.check(hash)
+        let sums = ChecksumParser.parse(hash.stdout)
+        #expect(!sums.isEmpty)
+        // Birden çok dosyanın birleşik değeri "-00000002" gibi bir sayaçla biter.
+        #expect(!sums.contains { $0.value.contains("-") })
+    }
+
 }

@@ -63,3 +63,21 @@ private func mode(of url: URL) -> UInt16? {
     #expect(ListingParser.parse(empty).info.comment == "----------\nPath = sahte\nSize = 5")
 }
 
+// MARK: - P0-5 Joker karakterler
+
+@Test func archivePathsAreNeverWildcards() {
+    let starred = URL(fileURLWithPath: "/tmp/yedek*1.7z")
+    #expect(SevenZipCommand.list(archive: starred).contains("-spd"))
+    #expect(SevenZipCommand.test(archive: starred).contains("-spd"))
+    #expect(SevenZipCommand.extract(ExtractOptions(archive: starred, destination: URL(fileURLWithPath: "/tmp/c"), overwrite: .replace)).contains("-spd"))
+    #expect(SevenZipCommand.hash(file: starred).contains("-spd"))
+    #expect(SevenZipCommand.add(archive: starred, names: ["a"]).contains("-spd"))
+    #expect(!SevenZipCommand.add(archive: archive, names: ["a"]).contains("-spd"))
+
+    let plain = CreateOptions(sources: [URL(fileURLWithPath: "/x/a")], destination: URL(fileURLWithPath: "/tmp/y?.zip"), format: .zip, level: .fast)
+    #expect(SevenZipCommand.create(plain).contains("-spd"))
+    let tarGz = CreateOptions(sources: [URL(fileURLWithPath: "/x/a")], destination: URL(fileURLWithPath: "/tmp/y*.tar.gz"), format: .tarGzip, level: .fast)
+    let stage = URL(fileURLWithPath: "/tmp/s/y.tar")
+    #expect(SevenZipCommand.compressTarStage(tarGz, tarStage: stage)?.contains("-spd") == true)
+}
+

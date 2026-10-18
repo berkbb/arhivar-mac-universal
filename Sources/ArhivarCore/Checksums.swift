@@ -16,8 +16,9 @@ extension SevenZipCommand {
     public static let checksumAlgorithms = ["CRC32", "SHA256", "BLAKE2sp"]
 
     /// `7zz h`: dosyanın CRC32, SHA-256 ve BLAKE2sp değerlerini hesaplar (ek bağımlılık yok).
+    /// `-spd`: adında "*" ya da "?" geçen dosyada eşleşen tüm dosyaların birleşik değeri hesaplanmasın.
     public static func hash(file: URL) -> [String] {
-        ["h", "-bd"] + checksumAlgorithms.map { "-scrc" + $0 } + common + ["--", file.path]
+        ["h", "-bd", "-spd"] + checksumAlgorithms.map { "-scrc" + $0 } + common + ["--", file.path]
     }
 }
 

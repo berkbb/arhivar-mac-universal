@@ -225,21 +225,23 @@ public enum SevenZipCommand {
         return Data(String(repeating: line + "\n", count: 4).utf8)
     }
 
+    // Arşiv yolunun kendisi de joker karakter sayılır: "yedek*1.7z" açılırken "-spd" olmadan aynı klasördeki
+    // "yedekX1.7z" de listelenir, test edilir, çıkarılır. Filtre kullanmayan komutlar her zaman "-spd" verir.
+
     public static func list(archive: URL) -> [String] {
-        ["l", "-slt", "-bd"] + common + ["--", archive.path]
+        ["l", "-slt", "-bd", "-spd"] + common + ["--", archive.path]
     }
 
     public static func test(archive: URL) -> [String] {
-        ["t", "-bsp1", "-bb0"] + common + ["--", archive.path]
+        ["t", "-bsp1", "-bb0", "-spd"] + common + ["--", archive.path]
     }
 
     public static func extract(_ options: ExtractOptions) -> [String] {
         // 7zz -o yolundaki "*" karakterini arşiv adıyla değiştirir; böyle bir yolda hedef klasörde çalışılıp "-o." verilir.
         let output = options.workingDirectory == nil ? options.destination.path : "."
-        var args = ["x", "-o" + output, options.overwrite.switchValue, "-bsp1", "-bb0", "-y"]
+        // Arşiv yolu ve seçili öğelerin adları joker karakter olarak yorumlanmasın.
+        var args = ["x", "-o" + output, options.overwrite.switchValue, "-bsp1", "-bb0", "-y", "-spd"]
         args += common
-        // Seçili öğelerin adları joker karakter olarak yorumlanmasın.
-        if !options.items.isEmpty { args.append("-spd") }
         args += ["--", options.archive.path]
         args += options.items
         return args
@@ -283,12 +285,12 @@ public enum SevenZipCommand {
         if options.isSplit, let volume = options.volumeSizeMB {
             args.append("-v\(volume)m")
         }
+        let output = isTarStage ? (tarStage ?? Self.tarStage(for: options.destination, in: options.destination.deletingLastPathComponent())) : options.destination
         args += sourceSwitches(
-            names: options.sources.map(\.path),
+            names: options.sources.map(\.path) + [output.path],
             storeSymlinks: options.storeSymlinks && format.supportsSymlinks,
             excludeMacMetadata: options.excludeMacMetadata
         )
-        let output = isTarStage ? (tarStage ?? Self.tarStage(for: options.destination, in: options.destination.deletingLastPathComponent())) : options.destination
         args += ["--", output.path]
         args += options.sources.map(\.path)
         return args
@@ -310,6 +312,6 @@ public enum SevenZipCommand {
         if compression.supportsMultithreading {
             args.append(options.multithreaded ? "-mmt=on" : "-mmt=1")
         }
-        return args + wildcardSafety(for: [tarStage.path]) + ["--", options.destination.path, tarStage.path]
+        return args + wildcardSafety(for: [tarStage.path, options.destination.path]) + ["--", options.destination.path, tarStage.path]
     }
 }

@@ -410,7 +410,7 @@ private let archive = URL(fileURLWithPath: "/tmp/ornek.zip")
     #expect(sums.map(\.algorithm) == ["CRC32", "SHA256", "BLAKE2sp"])
     #expect(sums[0].value == "ED6F7A7A")
     #expect(ChecksumParser.text(sums).hasPrefix("CRC32: ED6F7A7A\nSHA256: 98ea"))
-    #expect(SevenZipCommand.hash(file: URL(fileURLWithPath: "/x/a")) == ["h", "-bd", "-scrcCRC32", "-scrcSHA256", "-scrcBLAKE2sp", "-sccUTF-8", "--", "/x/a"])
+    #expect(SevenZipCommand.hash(file: URL(fileURLWithPath: "/x/a")) == ["h", "-bd", "-spd", "-scrcCRC32", "-scrcSHA256", "-scrcBLAKE2sp", "-sccUTF-8", "--", "/x/a"])
 
     let info = ListingParser.parse("--\nPath = c.zip\nType = zip\nComment = Merhaba yorum\nikinci satır\n\n----------\n").info
     #expect(info.comment == "Merhaba yorum\nikinci satır")

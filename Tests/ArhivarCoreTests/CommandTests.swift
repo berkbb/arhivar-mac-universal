@@ -7,7 +7,8 @@ private let destination = URL(fileURLWithPath: "/tmp/cikti")
 
 @Test func extractAllArguments() {
     let args = SevenZipCommand.extract(ExtractOptions(archive: archive, destination: destination, overwrite: .rename))
-    #expect(args == ["x", "-o/tmp/cikti", "-aou", "-bsp1", "-bb0", "-y", "-sccUTF-8", "--", "/tmp/ornek.7z"])
+    // Tümünü çıkarırken de "-spd": arşiv yolu ("yedek*1.7z") joker karakter sayılıp başka arşivler çıkarılmasın.
+    #expect(args == ["x", "-o/tmp/cikti", "-aou", "-bsp1", "-bb0", "-y", "-spd", "-sccUTF-8", "--", "/tmp/ornek.7z"])
 }
 
 @Test func extractSelectedItemsDisablesWildcards() {
@@ -57,7 +58,8 @@ private let destination = URL(fileURLWithPath: "/tmp/cikti")
 }
 
 @Test func listAndTestArguments() {
-    #expect(SevenZipCommand.list(archive: archive) == ["l", "-slt", "-bd", "-sccUTF-8", "--", "/tmp/ornek.7z"])
+    #expect(SevenZipCommand.list(archive: archive) == ["l", "-slt", "-bd", "-spd", "-sccUTF-8", "--", "/tmp/ornek.7z"])
+    #expect(SevenZipCommand.test(archive: archive).contains("-spd"))
     #expect(!SevenZipCommand.test(archive: archive).contains { $0.hasPrefix("-p") })
 }
 
