@@ -365,3 +365,21 @@ private func mode(of url: URL) -> UInt16? {
     #expect(StagedExtraction.itemType(directory.appendingPathComponent("c.zip"), fileManager: .default) == .typeDirectory)
 }
 
+// MARK: - P2-11 Açma güvenliği
+
+@Test func moreRiskyExtensionsAndInvisibleCharacters() throws {
+    let root = try temporaryFolder("risk")
+    defer { StagedExtraction.removeTree(at: root) }
+    for name in ["Akis.workflow", "Eylem.action", "Ek.osax", "Kisayol.url", "Konum.webloc"] {
+        let url = root.appendingPathComponent(name)
+        try Data("x".utf8).write(to: url)
+        #expect(OpenSafety.executableKind(of: url) != nil, "\(name)")
+    }
+    // U+034F ve U+17B4 "format" kategorisinde değildir ama görünmez.
+    #expect(OpenSafety.hasDeceptiveCharacters("fatura\u{034F}.pdf"))
+    #expect(OpenSafety.hasDeceptiveCharacters("a\u{17B4}.command"))
+    #expect(OpenSafety.visibleName("a\u{034F}b") == "a⟦U+034F⟧b")
+    // Emojinin biçim seçicisi görünür karakterin parçasıdır; tek başına ise gizlidir.
+    #expect(!OpenSafety.hasDeceptiveCharacters("Kalp ❤\u{FE0F}.txt"))
+    #expect(OpenSafety.hasDeceptiveCharacters("fatura\u{FE0F}.pdf"))
+}
