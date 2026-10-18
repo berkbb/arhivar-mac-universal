@@ -74,9 +74,13 @@ public enum ListingParser {
     /// - Parameter fallbackName: Tek akışlı biçimlerde (xz, bzip2) 7zz öğe adı yazmaz; bu ad kullanılır.
     public static func parse(_ output: String, timeZone: TimeZone = .current, fallbackName: String? = nil) -> ArchiveListing {
         // Satırlar bayt düzeyinde ve tembel okunur: 200 bin girdide milyonlarca öğelik ara dizi oluşmaz.
-        // Başlık bölümü küçüktür; yalnızca o saklanır, girdi blokları okunurken işlenir.
-        var header: [Substring] = []
-        var inEntries = false
+        // Girdi blokları okunurken işlenir; küçük başlık bölümü en sonda bir kez ayrıştırılır.
+        //
+        // Başlık ile girdileri ayıran, SON "----------" satırıdır. 7zz arşiv yorumunu "{ … }" arasında olduğu gibi
+        // yazar; yorum sahte bir ayraç ve "Path = …" satırları içerebilir. Girdi alanlarında ise satır sonları "_"
+        // olur, bu yüzden gerçek ayraçtan sonra bir daha ayraç gelemez (boş arşivde de ayraç yazılır). Sonradan gelen
+        // her ayraç, o ana kadar girdi sanılanların da başlığa ait olduğunu gösterir.
+        var headerEnd: String.Index?
         var entries: [ArchiveEntry] = []
         // Alanlar satırın kendisini gösteren Substring'lerdir; yalnızca girdi oluşturulurken kopyalanır.
         var block = Block()
@@ -89,27 +93,29 @@ public enum ListingParser {
             block = Block()
         }
 
-        forEachLine(of: output) { line in
-            if !inEntries {
-                if isMarker(line, "----------") {
-                    inEntries = true
-                } else {
-                    header.append(line)
-                }
+        forEachLine(of: output[...]) { line in
+            if isMarker(line, "----------") {
+                headerEnd = line.startIndex
+                entries.removeAll()
+                block = Block()
+            } else if headerEnd == nil {
+                return
             } else if line.utf8.allSatisfy({ $0 == 0x20 || $0 == 0x09 }) {
                 flush()
             } else if let (key, value) = keyValue(line) {
                 block.set(key, value)
             }
         }
-        // Girdi listesi yoksa (boş arşiv) yalnızca başlık okunur.
-        guard inEntries else { return ArchiveListing(info: parseInfo(header[...]), entries: []) }
+        var header: [Substring] = []
+        forEachLine(of: output[..<(headerEnd ?? output.endIndex)]) { header.append($0) }
+        // Girdi listesi yoksa yalnızca başlık okunur.
+        guard headerEnd != nil else { return ArchiveListing(info: parseInfo(header[...]), entries: []) }
         flush()
         return ArchiveListing(info: parseInfo(header[...]), entries: entries)
     }
 
     /// Metnin satırlarını ara dizi oluşturmadan sırayla verir; "\r\n" sonundaki \r atılır.
-    static func forEachLine(of text: String, _ body: (Substring) -> Void) {
+    static func forEachLine(of text: Substring, _ body: (Substring) -> Void) {
         let utf8 = text.utf8
         var start = utf8.startIndex
         while start < utf8.endIndex {
@@ -127,15 +133,32 @@ public enum ListingParser {
         guard let start = lines.firstIndex(where: { isMarker($0, "--") }) else {
             return ArchiveInfo()
         }
+        let body = lines[(start + 1)...]
+        // Çok satırlı değerler (arşiv yorumu) "Comment = " satırından sonra "{" ve "}" satırları arasında, olduğu gibi
+        // yazılır. Yorum "Type = 7z" gibi alan satırları ya da kendi "}" satırını içerebilir; bunlar başlık alanlarını
+        // değiştirmemeli. Gerçek kapanış başlıktaki son "}" satırıdır: ardından yalnızca 7zz'nin kendi alanları gelir.
+        let lastClose = body.lastIndex { $0 == "}" }
         var values: [String: String] = [:]
         var lastKey: String?
-        for line in lines[(start + 1)...] {
-            if let (key, value) = keyValue(line) {
-                lastKey = String(key)
+        var index = body.startIndex
+        while index < body.endIndex {
+            defer { index += 1 }
+            let line = body[index]
+            guard let (key, value) = keyValue(line) else {
+                if lastKey == "Comment", !isMarker(line, "--"), !isMarker(line, "----") {
+                    // Süslü ayraçsız yazılmış çok satırlı yorumun devam satırları.
+                    values["Comment", default: ""] += "\n" + line
+                }
+                continue
+            }
+            lastKey = String(key)
+            let open = index + 1
+            if value.isEmpty, open < body.endIndex, body[open] == "{", let close = lastClose, close > open {
+                values[String(key)] = body[(open + 1)..<close].joined(separator: "\n")
+                lastKey = nil
+                index = close
+            } else {
                 values[String(key)] = String(value)
-            } else if lastKey == "Comment", !isMarker(line, "--"), !isMarker(line, "----") {
-                // Çok satırlı yorumun devam satırları.
-                values["Comment", default: ""] += "\n" + line
             }
         }
         let comment = values["Comment"]?.trimmingCharacters(in: .whitespacesAndNewlines)
