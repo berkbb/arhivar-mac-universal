@@ -114,6 +114,25 @@ struct HardeningIntegrationTests {
         #expect(!sums.contains { $0.value.contains("-") })
     }
 
+    /// P0-6: FIFO içeren klasör zip'e alınırken 7zz çekirdekte kilitlenmez; FIFO arşive girmez.
+    @Test func fifosDoNotHangArchiveCreation() async throws {
+        defer { cleanUp() }
+        let source = workspace.appendingPathComponent("kaynak")
+        #expect(mkfifo(source.appendingPathComponent("a/boru").path, 0o644) == 0)
+        let destination = workspace.appendingPathComponent("boru.zip")
+        var options = CreateOptions(sources: [source], destination: destination, format: .zip, level: .fast)
+        options.excludedPaths = SpecialFiles.archivePaths(in: [source])
+        #expect(options.excludedPaths == ["kaynak/a/boru"])
+        try await create(options)
+        #expect(try await list(destination).entries.map(\.path).sorted() == ["kaynak", "kaynak/a", "kaynak/a/b", "kaynak/a/b/f.txt"])
+
+        // Eklemede de: aynı klasördeki kaynaklar doğrudan (geçici kopya olmadan) verilir.
+        let plan = try AddPlan.make(sources: [source], into: "", stagingRoot: workspace.appendingPathComponent("hazirlik"))
+        let excluded = SpecialFiles.archivePaths(in: plan.names.map { plan.workingDirectory.appendingPathComponent($0) })
+        let add = SevenZipCommand.add(archive: destination, names: plan.names, excluding: excluded)
+        try SevenZipError.check(try await runner.run(add, timeout: 30, workingDirectory: plan.workingDirectory))
+    }
+
     /// P0-2: alt klasörden çekilen öğede mutlak ve kardeş klasöre giden bağlantılar dışarı taşınmaz; 7zz'nin
     /// reddettiği bağlantıların 0 baytlık yer tutucuları içerik sanılmaz, tek başına bağlantı verilmez.
     @Test func itemExtractorContainsLinksAndPlaceholders() async throws {

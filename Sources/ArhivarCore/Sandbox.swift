@@ -25,9 +25,13 @@ public struct SandboxProfile: Sendable, Equatable {
         [
             // Kimlik bilgileri ve erişim belirteçleri
             ".ssh", ".gnupg", ".aws", ".config/gh", ".netrc", ".kube", ".docker", ".npmrc", ".pypirc", ".git-credentials",
+            // Kabuk geçmişi (komut satırına yazılmış parolalar, belirteçler)
+            ".zsh_history", ".bash_history",
             // Sistem ve iletişim verileri
             "Library/Keychains", "Library/Cookies", "Library/Mail", "Library/Messages",
             "Library/Application Support/AddressBook", "Library/Safari", "Library/Accounts",
+            // Uygulama kapları ve HTTP oturumları (sandbox'lı uygulamaların verileri, çerezleri)
+            "Library/Containers", "Library/Group Containers", "Library/HTTPStorages",
             // Tarayıcı profilleri (çerezler, kayıtlı parolalar, oturumlar)
             "Library/Application Support/Google/Chrome", "Library/Application Support/Firefox",
             "Library/Application Support/BraveSoftware", "Library/Application Support/Microsoft Edge",
@@ -39,13 +43,16 @@ public struct SandboxProfile: Sendable, Equatable {
     /// - Parameters:
     ///   - archive: İşlenen arşiv; kişisel klasörlerden birinin içindeyse o klasör yasaklanmaz.
     ///   - writable: 7zz'nin yazabileceği klasörler.
-    ///   - protectPersonalData: Arşiv okunurken (liste, test, çıkarma) true; kullanıcı kaynak seçerken (oluşturma, ekleme) false.
+    ///   - readable: Kullanıcının açıkça seçtiği kaynaklar (oluşturma, ekleme); kişisel bir klasörün içindeyse o klasör
+    ///     yasaklanmaz. Kaynakların içindeki bağlantılar ise kişisel klasörlere ulaşamaz: bağlantılar izlendiğinde
+    ///     (gz/bz2/xz ya da "bağlantıları sakla" kapalıyken) "~/.ssh/id_ed25519" arşive girerdi.
+    ///   - protectPersonalData: false ise kişisel veri klasörleri yasaklanmaz.
     public static func forOperation(
-        archive: URL, writable: [URL], protectPersonalData: Bool,
+        archive: URL, writable: [URL], readable: [URL] = [], protectPersonalData: Bool = true,
         home: URL = FileManager.default.homeDirectoryForCurrentUser
     ) -> SandboxProfile {
         let writable = writable.map(resolved)
-        let keep = [resolved(archive)] + writable
+        let keep = [resolved(archive)] + writable + readable.map(resolved)
         let denied = protectPersonalData
             ? personalDataDirectories(home: home).map(resolved).filter { denied in
                 // Kullanıcının açıkça çalıştığı bir yolu kapsayan yasak, işlemi bozardı.

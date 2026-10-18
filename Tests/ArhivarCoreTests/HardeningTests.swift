@@ -109,6 +109,76 @@ private func mode(of url: URL) -> UInt16? {
     #expect(SevenZipCommand.compressTarStage(tarGz, tarStage: stage)?.contains("-spd") == true)
 }
 
+// MARK: - P0-6 Özel dosyalar
+
+@Test func specialFilesAreExcludedByArchivePath() {
+    var options = CreateOptions(sources: [URL(fileURLWithPath: "/x/kaynak")], destination: archive, format: .zip, level: .fast)
+    options.excludedPaths = ["kaynak/alt/boru"]
+    let args = SevenZipCommand.create(options)
+    #expect(args.contains("-x!kaynak/alt/boru"))
+    #expect(!args.contains("-spd"))
+    // Joker karakterli yol "-spd" olmadan başka dosyaları da dışlardı.
+    options.excludedPaths = ["kaynak/b?ru"]
+    #expect(SevenZipCommand.create(options).contains("-spd"))
+    #expect(SevenZipCommand.add(archive: archive, names: ["a"], excluding: ["a/boru"]).contains("-x!a/boru"))
+}
+
+@Test func addPlanSkipsFifosAndSockets() throws {
+    let root = try temporaryFolder("ozel")
+    defer { StagedExtraction.removeTree(at: root) }
+    let source = root.appendingPathComponent("k", isDirectory: true)
+    try FileManager.default.createDirectory(at: source.appendingPathComponent("alt"), withIntermediateDirectories: true)
+    try "x".write(to: source.appendingPathComponent("alt/dosya.txt"), atomically: true, encoding: .utf8)
+    #expect(mkfifo(source.appendingPathComponent("alt/boru").path, 0o644) == 0)
+    // Unix soketi (sun_path en çok 104 bayt; geçici klasör yolu buna sığar).
+    let socketPath = source.appendingPathComponent("s").path
+    let descriptor = socket(AF_UNIX, SOCK_STREAM, 0)
+    defer { close(descriptor) }
+    var address = sockaddr_un()
+    address.sun_family = sa_family_t(AF_UNIX)
+    withUnsafeMutableBytes(of: &address.sun_path) { buffer in
+        socketPath.utf8CString.withUnsafeBytes { buffer.copyMemory(from: UnsafeRawBufferPointer(rebasing: $0.prefix(buffer.count))) }
+    }
+    let bound = withUnsafePointer(to: &address) {
+        $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(descriptor, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
+    }
+    #expect(bound == 0)
+
+    #expect(SpecialFiles.archivePaths(in: [source]).sorted() == ["k/alt/boru", "k/s"])
+    #expect(SpecialFiles.isSpecial(atPath: source.appendingPathComponent("alt/boru").path))
+    #expect(!SpecialFiles.isSpecial(atPath: source.appendingPathComponent("alt/dosya.txt").path))
+    // Bağlantı izlenecekse (bağlantı olarak saklanmıyorsa) FIFO'yu gösteren bağlantı da dışlanır.
+    try FileManager.default.createSymbolicLink(atPath: source.appendingPathComponent("bag").path, withDestinationPath: "alt/boru")
+    #expect(!SpecialFiles.archivePaths(in: [source]).contains("k/bag"))
+    #expect(SpecialFiles.archivePaths(in: [source], followingSymlinks: true).contains("k/bag"))
+
+    // Kopyalama FIFO ve soketlerde durmaz; onlar atlanır.
+    let plan = try AddPlan.make(sources: [source], into: "hedef", stagingRoot: root.appendingPathComponent("hazirlik"))
+    let staged = try #require(plan.stagingDirectory).appendingPathComponent("hedef/k")
+    #expect(FileManager.default.fileExists(atPath: staged.appendingPathComponent("alt/dosya.txt").path))
+    #expect(StagedExtraction.itemType(staged.appendingPathComponent("alt/boru"), fileManager: .default) == nil)
+    #expect(StagedExtraction.itemType(staged.appendingPathComponent("s"), fileManager: .default) == nil)
+}
+
+// MARK: - P0-6 Kum havuzu
+
+@Test func creatingKeepsPersonalDataProtected() {
+    let home = URL(fileURLWithPath: "/Users/ornek")
+    let denied = Set(SandboxProfile.personalDataDirectories(home: home).map(\.path))
+    for path in [".zsh_history", ".bash_history", "Library/Containers", "Library/Group Containers", "Library/HTTPStorages"] {
+        #expect(denied.contains("/Users/ornek/" + path), "\(path)")
+    }
+    // Kaynak kişisel bir klasördeyse yalnızca o klasör açılır; diğerleri kapalı kalır.
+    let profile = SandboxProfile.forOperation(
+        archive: URL(fileURLWithPath: "/Users/ornek/Desktop/yedek.zip"), writable: [URL(fileURLWithPath: "/Users/ornek/Desktop")],
+        readable: [URL(fileURLWithPath: "/Users/ornek/.ssh/config")], home: home
+    )
+    let paths = profile.deniedReadDirectories.map(\.path)
+    #expect(!paths.contains("/Users/ornek/.ssh"))
+    #expect(paths.contains("/Users/ornek/.aws"))
+    #expect(paths.contains("/Users/ornek/Library/Keychains"))
+}
+
 // MARK: - P1-8 Yollar ve istatistik
 
 @Test func addPlanNormalizesDotPrefixedFolder() throws {

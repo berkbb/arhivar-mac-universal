@@ -1,4 +1,5 @@
 import CoreTransferable
+import Darwin
 import Foundation
 import UniformTypeIdentifiers
 
@@ -17,10 +18,12 @@ public enum ArchiveCapabilities {
 
 extension SevenZipCommand {
     /// Var olan arşive dosya ekler. `names`, `workingDirectory`'ye göre göreli yollardır.
-    /// - Parameter archiveType: 7zz'nin bildirdiği tür ("zip", "7z", …); yoksa uzantıdan anlaşılır.
+    /// - Parameters:
+    ///   - archiveType: 7zz'nin bildirdiği tür ("zip", "7z", …); yoksa uzantıdan anlaşılır.
+    ///   - excluding: Eklenmeyecek özel dosyaların arşivdeki yolları (bkz. `SpecialFiles`).
     public static func add(
         archive: URL, names: [String], password: String? = nil, encryptHeaders: Bool = false,
-        archiveType: String? = nil, storeSymlinks: Bool = true, excludeMacMetadata: Bool = false
+        archiveType: String? = nil, storeSymlinks: Bool = true, excludeMacMetadata: Bool = false, excluding: [String] = []
     ) -> [String] {
         // Parola stdin'den verilir (bkz. passwordInput); burada yalnızca sorulması istenir.
         let hasPassword = password?.isEmpty == false
@@ -28,7 +31,9 @@ extension SevenZipCommand {
         if encryptHeaders, hasPassword { args.append("-mhe=on") }
         // -mem verilmezse 7zz şifreli zip'e eklenen dosyaları zayıf ZipCrypto ile şifreler; oluşturmadaki gibi AES-256 kalsın.
         if hasPassword, (archiveType ?? archive.pathExtension).lowercased() == "zip" { args.append("-mem=AES256") }
-        args += sourceSwitches(names: names + [archive.path], storeSymlinks: storeSymlinks, excludeMacMetadata: excludeMacMetadata)
+        args += sourceSwitches(
+            names: names + [archive.path], storeSymlinks: storeSymlinks, excludeMacMetadata: excludeMacMetadata, excluding: excluding
+        )
         return args + ["--", archive.path] + names
     }
 
@@ -94,16 +99,70 @@ public struct AddPlan: Sendable, Equatable {
         let target = folder.isEmpty ? staging : staging.appendingPathComponent(folder, isDirectory: true)
         do {
             try fileManager.createDirectory(at: target, withIntermediateDirectories: true)
+            // FIFO ve soketler kopyalanamaz (ENOTSUP) ve 7zz'yi kilitler; kopyalanmadan atlanır.
+            let skipping = SpecialFiles.SkippingCopier()
+            let copier = FileManager()
+            copier.delegate = skipping
             var names: [String] = []
-            for source in sources {
-                try fileManager.copyItem(at: source, to: target.appendingPathComponent(source.lastPathComponent))
+            for source in sources where !SpecialFiles.isSpecial(atPath: source.path) {
+                try copier.copyItem(at: source, to: target.appendingPathComponent(source.lastPathComponent))
                 names.append(source.lastPathComponent)
             }
+            withExtendedLifetime(skipping) {}
             let topLevel = folder.split(separator: "/").first.map(String.init)
             return AddPlan(workingDirectory: staging, names: topLevel.map { [$0] } ?? names, stagingDirectory: staging)
         } catch {
             try? fileManager.removeItem(at: staging)
             throw error
+        }
+    }
+}
+
+/// FIFO (adlandırılmış boru), soket ve aygıt dosyaları: arşivlenecek veri değildir.
+///
+/// 7zz bir FIFO'yu O_NONBLOCK olmadan açar ve yazan biri gelene kadar çekirdekte sonsuza dek bekler (zip, tar, wim,
+/// gz, …). `FileManager.copyItem` ise FIFO ve soketlerde ENOTSUP verip tüm kopyalamayı durdurur.
+public enum SpecialFiles {
+    /// Sıradan dosya, klasör ya da sembolik bağlantı değil mi? (lstat; bağlantı izlenmez)
+    public static func isSpecial(atPath path: String, followingSymlinks: Bool = false) -> Bool {
+        var info = stat()
+        guard lstat(path, &info) == 0 else { return false }
+        if info.st_mode & S_IFMT == S_IFLNK {
+            // Bağlantılar izlenecekse (bağlantı olarak saklanmıyorsa) 7zz gösterdiği FIFO'yu açardı.
+            guard followingSymlinks, stat(path, &info) == 0 else { return false }
+        }
+        let type = info.st_mode & S_IFMT
+        return type != S_IFREG && type != S_IFDIR && type != S_IFLNK
+    }
+
+    /// Kaynakların içindeki özel dosyalar, arşivde alacakları yollarla ("klasör/alt/pipe").
+    /// 7zz bir kaynağı son yol bileşeniyle saklar; `-x!` ile verilen bu yollar yalnızca o öğeyi dışlar.
+    public static func archivePaths(in sources: [URL], followingSymlinks: Bool = false, fileManager: FileManager = .default) -> [String] {
+        var result: [String] = []
+        for source in sources {
+            let name = source.lastPathComponent
+            if isSpecial(atPath: source.path, followingSymlinks: followingSymlinks) {
+                result.append(name)
+                continue
+            }
+            guard StagedExtraction.itemType(source, fileManager: fileManager) == .typeDirectory,
+                  let enumerator = fileManager.enumerator(atPath: source.path) else { continue }
+            while let relative = enumerator.nextObject() as? String {
+                let type = enumerator.fileAttributes?[.type] as? FileAttributeType
+                guard type != .typeRegular, type != .typeDirectory else { continue }
+                if type == .typeSymbolicLink, !followingSymlinks { continue }
+                if isSpecial(atPath: (source.path as NSString).appendingPathComponent(relative), followingSymlinks: followingSymlinks) {
+                    result.append(name + "/" + relative)
+                }
+            }
+        }
+        return result
+    }
+
+    /// Kopyalarken özel dosyaları atlayan `FileManager` temsilcisi.
+    final class SkippingCopier: NSObject, FileManagerDelegate {
+        func fileManager(_ fileManager: FileManager, shouldCopyItemAt srcURL: URL, to dstURL: URL) -> Bool {
+            !SpecialFiles.isSpecial(atPath: srcURL.path)
         }
     }
 }

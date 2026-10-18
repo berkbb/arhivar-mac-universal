@@ -805,6 +805,37 @@ struct AppModelTests {
 
     // MARK: - .agents/context/roadmap.md: 13 açık madde
 
+    /// P0-6: FIFO içeren klasörler oluşturma ve eklemede 7zz'yi kilitlemez; FIFO arşive girmez.
+    @Test func fifosAreSkippedWhenCreatingAndAdding() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        #expect(mkfifo(fixture.workspace.appendingPathComponent("kaynak/alt/boru").path, 0o644) == 0)
+        let model = fixture.model
+        let archive = fixture.workspace.appendingPathComponent("boru.zip")
+        model.createArchive(CreateOptions(sources: [fixture.workspace.appendingPathComponent("kaynak")], destination: archive, format: .zip, level: .fast))
+        await fixture.settle()
+        #expect(model.alert == nil)
+        model.openArchive(archive)
+        await fixture.settle()
+        #expect(model.node("kaynak/alt/b.txt") != nil)
+        #expect(model.node("kaynak/alt/boru") == nil)
+
+        let folder = fixture.workspace.appendingPathComponent("ekler", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try "e".write(to: folder.appendingPathComponent("e.txt"), atomically: true, encoding: .utf8)
+        #expect(mkfifo(folder.appendingPathComponent("boru2").path, 0o644) == 0)
+        model.addFiles([folder], into: "kaynak")
+        await fixture.settle()
+        #expect(model.alert == nil)
+        model.addFiles([folder], into: "")
+        await fixture.settle()
+        #expect(model.alert == nil)
+        #expect(model.node("kaynak/ekler/e.txt") != nil)
+        #expect(model.node("ekler/e.txt") != nil)
+        #expect(model.node("ekler/boru2") == nil)
+    }
+
     /// P0-2: 7zz'nin reddettiği bağlantının 0 baytlık yer tutucusu hedefteki dosyayı ezmez; alt klasörden
     /// çıkarılan öğelerle mutlak bağlantılar hedefin dışını göstermez.
     @Test func extractionDropsLinkPlaceholdersAndEscapingLinks() async throws {

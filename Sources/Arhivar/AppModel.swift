@@ -1061,11 +1061,19 @@ final class AppModel {
             defer {
                 if let staging = plan.stagingDirectory { StagedExtraction.removeTree(at: staging) }
             }
+            // FIFO, soket ve aygıt dosyaları eklenmez: 7zz bir FIFO'yu okurken sonsuza dek bekler.
+            let excluded = await Self.specialFiles(
+                in: plan.names.map { plan.workingDirectory.appendingPathComponent($0) }, followingSymlinks: !storeSymlinks
+            )
             let command = SevenZipCommand.add(
                 archive: archive, names: plan.names, password: currentPassword, encryptHeaders: encryptHeaders,
-                archiveType: archiveType, storeSymlinks: storeSymlinks, excludeMacMetadata: excludeMetadata
+                archiveType: archiveType, storeSymlinks: storeSymlinks, excludeMacMetadata: excludeMetadata, excluding: excluded
             )
-            let writer = self.confined(runner, archive: archive, writable: [archive.deletingLastPathComponent()], protectPersonalData: false)
+            // Kişisel veri klasörleri, kullanıcı oradan açıkça bir kaynak seçmedikçe okunamaz (kaynaktaki bir bağlantı
+            // "~/.ssh" içindeki bir anahtarı arşive taşımasın).
+            let writer = self.confined(
+                runner, archive: archive, writable: [archive.deletingLastPathComponent()], readable: sources + [plan.workingDirectory]
+            )
             let result = try await writer.run(command, workingDirectory: plan.workingDirectory, input: SevenZipCommand.passwordInput(currentPassword), onProgress: progress)
             let warning = try SevenZipError.check(result)
             try await self.readListing(of: archive, runner: runner, keepFolder: true, password: currentPassword)
@@ -1143,6 +1151,11 @@ final class AppModel {
     /// Kaynakların toplam boyutu; büyük klasörlerde arayüzü dondurmamak için arka planda ölçülür.
     nonisolated private static func measure(_ urls: [URL]) async -> Int64 {
         await Task.detached(priority: .userInitiated) { DiskSpace.totalSize(of: urls) }.value
+    }
+
+    /// Kaynaklardaki özel dosyaların (FIFO, soket, aygıt) arşivdeki yolları; arka planda taranır.
+    nonisolated private static func specialFiles(in urls: [URL], followingSymlinks: Bool) async -> [String] {
+        await Task.detached(priority: .userInitiated) { SpecialFiles.archivePaths(in: urls, followingSymlinks: followingSymlinks) }.value
     }
 
     private func finishEdit(warning: String?) {
@@ -1242,24 +1255,30 @@ final class AppModel {
             let sourceBytes = needsSourceSize ? await Self.measure(options.sources) : 0
             try self.checkSpaceForWriting(archive: nil, sourceBytes: sourceBytes, compresses: !needsSourceSize, at: directory)
 
+            // FIFO, soket ve aygıt dosyaları arşive alınmaz: 7zz bir FIFO'yu okurken sonsuza dek bekler.
+            var staged = options
+            let followsLinks = !(options.storeSymlinks && options.format.supportsSymlinks)
+            staged.excludedPaths = await Self.specialFiles(in: options.sources, followingSymlinks: followsLinks)
+
             // tar.*: önce aynı birimdeki geçici bir klasöre tar, sonra hedefe sıkıştırılmış hâli yazılır.
             var stagingDirectory: URL?
             if isTwoStep { stagingDirectory = try StagedExtraction.makeStagingDirectory(for: directory) }
             defer { if let stagingDirectory { try? fileManager.removeItem(at: stagingDirectory) } }
+            // Kişisel veri klasörleri, kullanıcı oradan açıkça bir kaynak seçmedikçe okunamaz.
             let writer = self.confined(
-                runner, archive: options.destination, writable: [directory] + (stagingDirectory.map { [$0] } ?? []), protectPersonalData: false
+                runner, archive: options.destination, writable: [directory] + (stagingDirectory.map { [$0] } ?? []), readable: options.sources
             )
 
             var warnings: [String] = []
             if let stagingDirectory {
                 let stage = SevenZipCommand.tarStage(for: options.destination, in: stagingDirectory)
-                let first = try await writer.run(SevenZipCommand.create(options, tarStage: stage)) { progress($0 * 0.5) }
+                let first = try await writer.run(SevenZipCommand.create(staged, tarStage: stage)) { progress($0 * 0.5) }
                 if let warning = try SevenZipError.check(first) { warnings.append(warning) }
-                let command = SevenZipCommand.compressTarStage(options, tarStage: stage) ?? []
+                let command = SevenZipCommand.compressTarStage(staged, tarStage: stage) ?? []
                 let second = try await writer.run(command) { progress(0.5 + $0 * 0.5) }
                 if let warning = try SevenZipError.check(second) { warnings.append(warning) }
             } else {
-                let result = try await writer.run(SevenZipCommand.create(options), input: options.input, onProgress: progress)
+                let result = try await writer.run(SevenZipCommand.create(staged), input: staged.input, onProgress: progress)
                 if let warning = try SevenZipError.check(result) { warnings.append(warning) }
             }
 
@@ -1329,9 +1348,10 @@ final class AppModel {
 
     /// 7zz'yi işleme uygun kum havuzu kurallarıyla çalıştıran kopya: ağ kapalı, yalnızca `writable` klasörlerine yazar,
     /// arşiv okunurken kişisel veri klasörlerini okuyamaz. Ayarlar › Gelişmiş'ten kapatılabilir.
-    func confined(_ runner: CommandRunner, archive: URL, writable: [URL] = [], protectPersonalData: Bool = true) -> CommandRunner {
+    /// `readable`: kullanıcının seçtiği kaynaklar (oluşturma, ekleme); kişisel bir klasörün içindelerse o klasör açık kalır.
+    func confined(_ runner: CommandRunner, archive: URL, writable: [URL] = [], readable: [URL] = []) -> CommandRunner {
         guard settings.sandboxEngine else { return runner }
-        return runner.sandboxed(.forOperation(archive: archive, writable: writable, protectPersonalData: protectPersonalData))
+        return runner.sandboxed(.forOperation(archive: archive, writable: writable, readable: readable))
     }
 
     /// Süren işlem (varsa); sıralı işlemler bunun bitmesini bekler.

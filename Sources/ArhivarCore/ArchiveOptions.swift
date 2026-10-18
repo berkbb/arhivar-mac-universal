@@ -159,11 +159,14 @@ public struct CreateOptions: Sendable, Equatable {
     public var storeSymlinks: Bool
     /// .DS_Store, ._* ve __MACOSX dosyalarını arşive alma.
     public var excludeMacMetadata: Bool
+    /// Arşive alınmayacak öğelerin arşivdeki yolları ("klasör/alt/pipe"): FIFO, soket ve aygıt dosyaları
+    /// (bkz. `SpecialFiles`). 7zz bir FIFO'yu okumaya çalışırken çekirdekte sonsuza dek bekler.
+    public var excludedPaths: [String]
 
     public init(
         sources: [URL], destination: URL, format: ArchiveFormat, level: CompressionLevel,
         password: String? = nil, encryptFileNames: Bool = false, volumeSizeMB: Int? = nil, multithreaded: Bool = true,
-        storeSymlinks: Bool = true, excludeMacMetadata: Bool = false
+        storeSymlinks: Bool = true, excludeMacMetadata: Bool = false, excludedPaths: [String] = []
     ) {
         self.sources = sources
         self.destination = destination
@@ -175,6 +178,7 @@ public struct CreateOptions: Sendable, Equatable {
         self.multithreaded = multithreaded
         self.storeSymlinks = storeSymlinks
         self.excludeMacMetadata = excludeMacMetadata
+        self.excludedPaths = excludedPaths
     }
 
     /// Bölünmüş arşivde 7zz "ad.7z" yerine "ad.7z.001", "ad.7z.002", … yazar.
@@ -250,18 +254,22 @@ public enum SevenZipCommand {
     /// macOS üst veri dosyaları: Finder görünüm ayarları, AppleDouble kopyaları ve Arşiv İzlencesi klasörü.
     public static let macMetadataExclusions = ["-xr!.DS_Store", "-xr!._*", "-xr!__MACOSX"]
 
-    /// Adlarında "*" ya da "?" geçen kaynaklar joker karakter sanılmasın diye `-spd` verilir.
-    /// `-spd` hariç tutma kalıplarındaki jokerleri de kapattığı için yalnızca gerektiğinde eklenir;
-    /// böyle bir kaynakta "._*" kalıbı uygulanamaz (".DS_Store" ve "__MACOSX" tam adla yine çalışır).
+    /// Adlarında "*" ya da "?" geçen yollar (kaynaklar, arşivin kendisi, dışlanan öğeler) joker karakter
+    /// sanılmasın diye `-spd` verilir. `-spd` hariç tutma kalıplarındaki jokerleri de kapattığı için yalnızca
+    /// gerektiğinde eklenir; o zaman "._*" kalıbı uygulanamaz (".DS_Store" ve "__MACOSX" tam adla yine çalışır).
     static func wildcardSafety(for names: [String]) -> [String] {
         names.contains { $0.contains("*") || $0.contains("?") } ? ["-spd"] : []
     }
 
-    /// Ekleme ve oluşturmada ortak seçenekler: joker güvenliği, bağlantılar ve üst veri dışlama.
-    static func sourceSwitches(names: [String], storeSymlinks: Bool, excludeMacMetadata: Bool) -> [String] {
-        var args = wildcardSafety(for: names)
+    /// Ekleme ve oluşturmada ortak seçenekler: joker güvenliği, bağlantılar, üst veri ve özel dosya dışlama.
+    /// - Parameters:
+    ///   - names: Kaynak yolları ve arşivin yolu.
+    ///   - excluding: Arşive alınmayacak öğelerin arşivdeki yolları (`-x!` yalnızca o yolu dışlar).
+    static func sourceSwitches(names: [String], storeSymlinks: Bool, excludeMacMetadata: Bool, excluding: [String] = []) -> [String] {
+        var args = wildcardSafety(for: names + excluding)
         if storeSymlinks { args.append("-snl") }
         if excludeMacMetadata { args += macMetadataExclusions }
+        args += excluding.map { "-x!" + $0 }
         return args
     }
 
@@ -289,7 +297,8 @@ public enum SevenZipCommand {
         args += sourceSwitches(
             names: options.sources.map(\.path) + [output.path],
             storeSymlinks: options.storeSymlinks && format.supportsSymlinks,
-            excludeMacMetadata: options.excludeMacMetadata
+            excludeMacMetadata: options.excludeMacMetadata,
+            excluding: options.excludedPaths
         )
         args += ["--", output.path]
         args += options.sources.map(\.path)
