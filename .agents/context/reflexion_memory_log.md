@@ -106,3 +106,14 @@
   2. `AppModel.extractHere` passed `password: nil` even when the target archive was already open and unlocked in the main window (`archive == archiveURL`), causing 7zz to abort and `handle` to clear the open archive's valid `password`.
 - **Lesson & Guardrail:** Use `removeTree` when replacing directories, grant `S_IWUSR | S_IXUSR` when merging directories, temporarily open `S_IRWXU` during `secureSymlinks` directory traversal (restoring original modes afterward), and reuse `archive == archiveURL ? password : nil` in `extractHere`.
 
+---
+
+## Episode 14: Folder Collision Pre-Flight, Read-Only Archive In-Place Guard & Old-Style RAR Multi-Volume
+- **Context:** Creating an archive whose target name collides with an existing folder, opening read-only archives for editing, and handling old-style multi-part RAR archives (`.r00`..`.r99`).
+- **Root Cause:**
+  1. `CreateArchiveSheet` used `fileExists` which returned true for directories, misleadingly stating an archive would be replaced, while `AppModel.createArchive` ran `7zz a` first before failing on `installArchive` (`CocoaError.fileWriteFileExists`).
+  2. `ArchiveCapabilities.isEditable` didn't verify filesystem permissions, offering Add/Delete/Rename on read-only archives (`0o444`, locked files, or read-only DMGs) where 7zz failed with `errno=13 : Permission denied`.
+  3. Old-style multi-volume RAR archives (`.r00`..`.r99`) were unrecognized in `ArchiveNaming.archiveExtensions` and failed in 7zz if not opened from `.rar`.
+  4. Negative sizes in corrupted/malicious archive entries could reduce total bytes in `DiskSpace.requiredBytes`.
+- **Lesson & Guardrail:** Validate folder collisions upfront (`!isFolderConflict` in `CreateArchiveSheet`, pre-flight check in `createArchive`), verify `isWritableFile` on archive and parent directory for `isEditable`, recognize `r\d\d` in `ArchiveNaming.firstVolume`, and read sizes as non-negative with saturating arithmetic.
+
