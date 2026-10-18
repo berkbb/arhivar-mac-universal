@@ -243,6 +243,7 @@
 "duplicateNames" = "Elementele cu același nume nu pot fi în același dosar al arhivei: %@";
 "createPasswordConfirmHint" = "Introduceți parola din nou pentru a o confirma.";
 "warningRemovedLinks" = "Legăturile simbolice care indică în afara destinației au fost omise: %@";
+"renameExists" = "În acest dosar există deja un element numit „%@”.";
 "contextCopy" = "Copiază";
 "toastCopied" = "%ld elemente copiate";
 "contextBrowse" = "Deschide în Arhivar";

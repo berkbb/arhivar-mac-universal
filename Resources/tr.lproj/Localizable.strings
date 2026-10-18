@@ -243,6 +243,7 @@
 "duplicateNames" = "Aynı adlı öğeler arşivde aynı klasörde bulunamaz: %@";
 "createPasswordConfirmHint" = "Onaylamak için parolayı yeniden girin.";
 "warningRemovedLinks" = "Hedefin dışını gösteren sembolik bağlantılar atlandı: %@";
+"renameExists" = "Bu klasörde “%@” adlı bir öğe zaten var.";
 "contextCopy" = "Kopyala";
 "toastCopied" = "%ld öğe kopyalandı";
 "contextBrowse" = "Arhivar'da Aç";

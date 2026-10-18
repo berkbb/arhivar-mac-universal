@@ -1116,12 +1116,25 @@ final class AppModel {
         renameRequest = RenameRequest(path: path, name: (path as NSString).lastPathComponent)
     }
 
+    /// Yeni ad aynı klasördeki başka bir öğeninkiyle çakışıyor mu? `7zz rn` buna izin verir ve arşivde aynı yollu
+    /// iki girdi oluşur. APFS gibi büyük/küçük harf duyarsız denetlenir; öğenin kendi adının harf değişikliği serbesttir.
+    func renameConflicts(_ path: String, to newName: String) -> Bool {
+        let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let parent = ArchiveTree.parent(of: path)
+        let siblings = parent.isEmpty ? tree : (node(parent)?.children ?? [])
+        return siblings.contains { $0.id != path && $0.name.compare(name, options: .caseInsensitive) == .orderedSame }
+    }
+
     func rename(_ path: String, to newName: String) {
         renameRequest = nil
         let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let archive = archiveURL, isEditable, ArchiveTree.isValidName(name) else { return }
         let newPath = ArchiveTree.renamedPath(path, to: name)
         guard newPath != path else { return }
+        guard !renameConflicts(path, to: name) else {
+            alert = AlertItem(title: t(.errorTitle), message: t(.renameExists, OpenSafety.visibleName(name)))
+            return
+        }
         if headersEncrypted && password == nil {
             passwordRequest = PasswordRequest(archive: archive, isRetry: false, action: .rename(path: path, newName: name))
             return

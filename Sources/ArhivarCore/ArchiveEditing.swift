@@ -320,10 +320,14 @@ extension ArchiveTree {
         return String(path[..<slash])
     }
 
-    /// Bir öğenin yeniden adlandırıldıktan sonraki tam yolu.
+    /// Bir öğenin yeniden adlandırıldıktan sonraki tam yolu. Ham yol sonda "/" taşıyabilir ("klasor/");
+    /// üst klasör o "/" atılarak bulunur, yeni yol da aynı yazımı korur ("yeni/").
     public static func renamedPath(_ path: String, to newName: String) -> String {
-        let parent = parent(of: path)
-        return parent.isEmpty ? newName : parent + "/" + newName
+        var trimmed = Substring(path)
+        while trimmed.count > 1, trimmed.hasSuffix("/") { trimmed = trimmed.dropLast() }
+        let parent = parent(of: String(trimmed))
+        let renamed = parent.isEmpty ? newName : parent + "/" + newName
+        return trimmed.count < path.count ? renamed + "/" : renamed
     }
 
     public static func isValidName(_ name: String) -> Bool {

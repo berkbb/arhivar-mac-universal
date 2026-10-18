@@ -179,6 +179,15 @@ private func mode(of url: URL) -> UInt16? {
     #expect(paths.contains("/Users/ornek/Library/Keychains"))
 }
 
+// MARK: - P1-7 Yeniden adlandırma
+
+@Test func renamedPathKeepsTrailingSlashSpelling() {
+    #expect(ArchiveTree.renamedPath("klasor/", to: "yeni") == "yeni/")
+    #expect(ArchiveTree.renamedPath("a/b/", to: "c") == "a/c/")
+    #expect(ArchiveTree.renamedPath("a/b", to: "c") == "a/c")
+    #expect(ArchiveTree.renamedPath("./a/b.txt", to: "c.txt") == "./a/c.txt")
+}
+
 // MARK: - P1-8 Yollar ve istatistik
 
 @Test func addPlanNormalizesDotPrefixedFolder() throws {

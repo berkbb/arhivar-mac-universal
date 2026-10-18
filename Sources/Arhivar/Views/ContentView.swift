@@ -181,7 +181,7 @@ private struct EditDialogs: ViewModifier {
             ) { request in
                 TextField(settings.t(.renameField), text: $newName)
                 Button(settings.t(.buttonRename)) { model.rename(request.path, to: newName) }
-                    .disabled(!ArchiveTree.isValidName(newName))
+                    .disabled(!ArchiveTree.isValidName(newName) || model.renameConflicts(request.path, to: newName))
                 Button(settings.t(.buttonCancel), role: .cancel) { model.renameRequest = nil }
             }
             .onChange(of: model.renameRequest?.id) {

@@ -805,6 +805,26 @@ struct AppModelTests {
 
     // MARK: - .agents/context/roadmap.md: 13 açık madde
 
+    /// P1-7: aynı klasördeki bir öğenin adına (büyük/küçük harf duyarsız) yeniden adlandırılmaz.
+    @Test func renameRejectsSiblingNames() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let archive = try await fixture.makeArchive("ad.7z", format: .sevenZip)
+        let model = fixture.model
+        model.openArchive(archive)
+        await fixture.settle()
+
+        #expect(model.renameConflicts("kaynak/not.txt", to: "alt"))
+        #expect(model.renameConflicts("kaynak/not.txt", to: " ALT "))
+        #expect(!model.renameConflicts("kaynak/not.txt", to: "NOT.txt"))
+        #expect(!model.renameConflicts("kaynak/not.txt", to: "yeni.txt"))
+        model.rename("kaynak/not.txt", to: "alt")
+        #expect(model.operation == nil)
+        #expect(model.alert?.message == fixture.settings.t(.renameExists, "alt"))
+        #expect(model.node("kaynak/not.txt") != nil)
+    }
+
     /// P0-3: var olan arşivin yerine yenisi konur (eklenmez); gz ve adları şifreli 7z'nin üzerine de yazılır.
     @Test func creatingReplacesAnExistingArchive() async throws {
         let fixture = try Fixture()
