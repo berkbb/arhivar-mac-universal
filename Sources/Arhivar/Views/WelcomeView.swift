@@ -42,6 +42,7 @@ struct WelcomeView: View {
                         }
                         .buttonStyle(.glass)
                     }
+                    .disabled(model.operation != nil)
                     .controlSize(.extraLarge)
                 }
 

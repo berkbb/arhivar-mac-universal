@@ -83,6 +83,7 @@ struct ContentView: View {
                 Label(settings.t(.toolbarOpen), systemImage: "folder")
             }
             .help(settings.t(.menuOpenArchive))
+            .disabled(model.operation != nil)
 
             Button {
                 model.beginCreate()
@@ -90,6 +91,7 @@ struct ContentView: View {
                 Label(settings.t(.toolbarCreate), systemImage: "archivebox")
             }
             .help(settings.t(.menuNewArchive))
+            .disabled(model.operation != nil)
         }
 
         ToolbarSpacer(.fixed, placement: .primaryAction)

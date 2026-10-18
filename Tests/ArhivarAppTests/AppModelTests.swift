@@ -1182,4 +1182,22 @@ struct AppModelTests {
         #expect(!FileManager.default.fileExists(atPath: destination.path))
     }
 
+    /// R3-4: işlem sürerken yeni arşiv sayfası açılmaz (içindeki "Oluştur" sessizce yok sayılırdı).
+    @Test func newArchiveWaitsForTheRunningOperation() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let archive = try await fixture.makeArchive("bekle.7z", format: .sevenZip)
+        let model = fixture.model
+        model.openArchive(archive)
+        await fixture.settle()
+
+        model.testArchive()
+        #expect(model.operation != nil)
+        model.beginCreate()
+        #expect(model.createRequest == nil)
+        await fixture.settle()
+        model.beginCreate()
+        #expect(model.createRequest != nil)
+    }
 }

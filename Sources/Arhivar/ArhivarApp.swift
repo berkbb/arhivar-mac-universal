@@ -82,16 +82,19 @@ struct AppCommands: Commands {
         }
 
         CommandGroup(replacing: .newItem) {
+            // İşlem sürerken yeni arşiv ve aç kapalıdır: istekleri işlem bitene kadar sessizce yok sayılırdı.
             Button(settings.t(.menuNewArchive)) {
                 openWindow(id: WindowID.main)
                 model.beginCreate()
             }
             .keyboardShortcut("n")
+            .disabled(model.operation != nil)
             Button(settings.t(.menuOpenArchive)) {
                 openWindow(id: WindowID.main)
                 model.presentOpenPanel()
             }
             .keyboardShortcut("o")
+            .disabled(model.operation != nil)
             Divider()
             // İşlem sürerken kapatılmaz: işlem bitince listeyi yeniden okuyup arşivi geri getirirdi.
             Button(settings.t(.menuCloseArchive)) { model.closeArchive() }

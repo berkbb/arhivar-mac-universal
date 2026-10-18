@@ -470,7 +470,9 @@ final class AppModel {
 
     // MARK: - Arşiv açma
 
+    /// ⌘O. İşlem sürerken seçilen arşiv açılamazdı (işlem bitene kadar yok sayılırdı); panel hiç açılmaz.
     func presentOpenPanel() {
+        guard operation == nil else { return }
         let panel = NSOpenPanel()
         panel.message = t(.panelOpenArchive)
         panel.canChooseFiles = true
@@ -1303,7 +1305,9 @@ final class AppModel {
 
     // MARK: - Oluşturma
 
+    /// ⌘N, araç çubuğu, Finder servisi. İşlem sürerken açılan sayfadaki "Oluştur" sessizce yok sayılırdı.
     func beginCreate(sources: [URL] = []) {
+        guard operation == nil else { return }
         createRequest = CreateRequest(sources: sources)
     }
 
