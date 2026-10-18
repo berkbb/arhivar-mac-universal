@@ -1317,5 +1317,7 @@ struct AppModelTests {
         #expect(try FileManager.default.contentsOfDirectory(atPath: output.path).sorted() == [".DS_Store", "Proje"])
         #expect(try String(contentsOf: output.appendingPathComponent(".DS_Store"), encoding: .utf8) == "kullanici")
         #expect(try String(contentsOf: output.appendingPathComponent("Proje/a.txt"), encoding: .utf8) == "a")
+        #expect(fixture.model.toast?.revealURL?.lastPathComponent == "Proje")
+        #expect(fixture.model.toast?.message == fixture.settings.t(.toastExtracted, "Proje"))
     }
 }
