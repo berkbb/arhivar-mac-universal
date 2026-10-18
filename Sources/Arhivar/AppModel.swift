@@ -548,7 +548,10 @@ final class AppModel {
         Set(listing.entries.lazy.filter(\.isSymbolicLink).map(\.path))
     }
 
+    /// ⇧⌘W. Süren bir işlem (ekleme, silme, iç arşive girme) bitince listeyi yeniden okuyup kapanan arşivi geri
+    /// getirirdi; işlem sırasında kapatılmaz.
     func closeArchive() {
+        guard operation == nil else { return }
         discardAllSessions()
         archiveURL = nil
         listing = nil
@@ -1394,6 +1397,8 @@ final class AppModel {
                 await ensureEngine()
                 operation = nil
                 currentTask = nil
+                // Motor denetlenirken iptal edildiyse işlem başlamaz.
+                guard !Task.isCancelled else { return }
                 perform(title, archive: archive, retry: retry, usedPassword: usedPassword, body)
             }
             return

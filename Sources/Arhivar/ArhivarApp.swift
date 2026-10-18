@@ -93,9 +93,10 @@ struct AppCommands: Commands {
             }
             .keyboardShortcut("o")
             Divider()
+            // İşlem sürerken kapatılmaz: işlem bitince listeyi yeniden okuyup arşivi geri getirirdi.
             Button(settings.t(.menuCloseArchive)) { model.closeArchive() }
                 .keyboardShortcut("w", modifiers: [.command, .shift])
-                .disabled(model.listing == nil)
+                .disabled(!model.canOperate)
         }
 
         // ⌘C / ⌘V arşiv tablosunda dosya kopyalar ve ekler; metin alanlarında her zamanki gibi çalışır.

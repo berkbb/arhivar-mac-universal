@@ -805,6 +805,40 @@ struct AppModelTests {
 
     // MARK: - .agents/context/roadmap.md: 13 açık madde
 
+    /// P1-10: işlem sürerken ⇧⌘W arşivi kapatmaz (işlem bitince geri gelirdi).
+    @Test func closeAndDropWaitForTheRunningOperation() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let archive = try await fixture.makeArchive("islem.7z", format: .sevenZip)
+        let model = fixture.model
+        model.openArchive(archive)
+        await fixture.settle()
+
+        model.testArchive()
+        #expect(model.operation != nil)
+        model.closeArchive()
+        await fixture.settle()
+        #expect(model.archiveURL == archive)
+        #expect(model.listing != nil)
+        model.closeArchive()
+        #expect(model.archiveURL == nil)
+    }
+
+    /// P1-10: motor denetlenirken iptal edilen işlem, denetim bitince başlamaz.
+    @Test func cancellingWhileTheEngineIsCheckedStopsTheOperation() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        let archive = try await fixture.makeArchive("soguk.7z", format: .sevenZip)
+        let model = fixture.model
+        model.openArchive(archive)
+        #expect(model.operation?.titleKey == .progressPreparing)
+        model.cancelOperation()
+        await fixture.settle()
+        #expect(model.archiveURL == nil)
+        #expect(model.alert == nil)
+    }
+
     /// P1-9: ağaç görünümünde iç arşive girilince yol çubuğu ve ⌘↑ üstteki arşive döndürür; klasörde Return girer.
     @Test func treeViewKeepsTheWayBackFromNestedArchives() async throws {
         let fixture = try Fixture()
