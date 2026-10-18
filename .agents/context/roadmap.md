@@ -9,10 +9,23 @@
 
 ## Open / In Progress
 
-### Priority 0 (P0) — Critical Security, Data Integrity & Parser Vulnerabilities
+### Upstream-Dependent Items
 
-#### 1. ⬜ [P0] Multi-Line Archive Comment (`Comment = \n{\n...\n}`) Header Spoofing & Fake Entry Injection in `ListingParser`
-- **Status:** ⬜ Open
+#### 1. 🟡 [Medium] Zstandard (`.zst` / `.tar.zst`) Archive Creation
+- **Status:** 🟡 Partially done — one-step `.tar.gz`, `.tar.xz`, and `.tar.bz2` creation is completed (tests `tarCompressionCommands`, `createsCompressedTar`, `createsTarGzInOneStep`).
+- ⬜ **Remaining:** Zstandard (`.zst` and `.tar.zst`) creation is currently **blocked upstream**: the official 7-Zip `7zz` (26.04) extracts `.zst` / `.tzst` (`K` flag in `7zz i`) but does not implement `zstd` archive creation (`7zz a -tzstd` fails with `E_NOTIMPL`).
+- **Next steps:** Offer `.zst` and `.tar.zst` in `ArchiveFormat` (`Sources/ArhivarCore/ArchiveOptions.swift`) once upstream `7zz` enables `C` (Create) support for `zstd`, or dynamically when the active engine reports `zstd` creation capability. `.tar.zst` will directly reuse `SevenZipCommand.tarStage` and `compressTarStage`.
+
+---
+
+## Done
+
+### Second Hardening Round — Parser, Symlinks, Atomic Create, Quarantine, Wildcards & Special Files (2026-10-18)
+
+All 13 items were reproduced against the bundled `7zz` 26.04 before the fix; the suite grew from 146 to 179 tests.
+
+#### R2-1. ✅ [P0] Multi-Line Archive Comment (`Comment = \n{\n...\n}`) Header Spoofing & Fake Entry Injection in `ListingParser`
+- **Status:** ✅ Done — `ListingParser.parse` treats the **last** `----------` line as the header/entries boundary (7zz turns newlines in entry fields into `_` and prints the marker for empty archives too, so a later marker proves the earlier ones were comment text); `parseInfo` reads a `Key = ` value followed by `{` up to the last `}` of the header and drops the wrapper lines. Tests `commentCannotSpoofHeaderOrInjectEntries`, `zipCommentCannotInjectEntries`.
 - **Locations:**
   - `Sources/ArhivarCore/ArchiveListing.swift` (`ListingParser.parse`, lines 92–108)
   - `Sources/ArhivarCore/ArchiveListing.swift` (`ListingParser.parseInfo`, lines 118–148)
@@ -22,8 +35,8 @@
   3. **Fake entry injection:** If a multi-line archive comment contains a line of 10 dashes (`----------`) followed by `Path = fake_file.txt\nSize = 999999`, `ListingParser.parse` hits `isMarker(line, "----------")` while still inside the header comment block, switches `inEntries = true` prematurely, and injects fake `ArchiveEntry` rows into the browser table. (In the real entry section after the last `----------`, `7zz` replaces all `\n` in entry paths and entry comments with `_`, so `----------` can never legitimately appear inside an entry.)
 - **Fix:** Track brace-delimited multi-line values (`{\n...\n}`) in `parseInfo` and `parse` (or split header vs. entries on the last `----------` marker outside a `{ ... }` block) so comment lines cannot spoof header fields or inject fake entries, and strip the outer `{` / `}` wrapper lines from `ArchiveInfo.comment`.
 
-#### 2. ⬜ [P0] Subfolder (`stripping`) & `ItemExtractor` Symlink Escape + `7zz` Dangerous-Link 0-Byte Placeholder Files
-- **Status:** ⬜ Open
+#### R2-2. ✅ [P0] Subfolder (`stripping`) & `ItemExtractor` Symlink Escape + `7zz` Dangerous-Link 0-Byte Placeholder Files
+- **Status:** ✅ Done — `secureSymlinks(in: content, extractionRoot: staging)` validates links against the content that is actually moved (absolute links rewritten by 7zz must land inside it); `ItemExtractor` validates each target, never hands out a standalone symlink target, and removes the 0-byte placeholders 7zz leaves for rejected links (`StagedExtraction.removeLinkPlaceholders`, driven by the new `ArchiveEntry.isSymbolicLink` from `Attributes` / `Mode` / `Symbolic Link`); `contentRoot` refuses a stripped folder reached through a symlink. Tests `symlinksAreCheckedAgainstTheMovedContent`, `linkPlaceholdersAreRemoved`, `contentRootRejectsSymlinkedFolders`, `detectsSymbolicLinkEntries`, `itemExtractorContainsLinksAndPlaceholders`, `extractionDropsLinkPlaceholdersAndEscapingLinks`.
 - **Locations:**
   - `Sources/Arhivar/AppModel.swift` (`runExtract`, lines 763–772)
   - `Sources/ArhivarCore/StagedExtraction.swift` (`secureSymlinks`, lines 113–157)
@@ -33,8 +46,8 @@
   2. **`7zz` 0-byte placeholder on ignored symlinks:** When `7zz x` rejects a traversal symlink with `ERROR: Dangerous link path was ignored : badlink : ../outside`, `7zz` leaves behind a **0-byte regular file (`-rw-r--r-- 0 badlink`)** on disk. In `runExtract` (with `.replace`), this 0-byte placeholder clobbers an existing file named `badlink` in `destination` (or creates a bogus 0-byte file). In `ItemExtractor.extract` (`openItem`, `toggleQuickLook`, `showChecksums`), `SevenZipError.check` returns a warning that `ItemExtractor` ignores, so Quick Look / Open opens a fake 0-byte file and Checksums reports the SHA-256 of 0 bytes (`e3b0c442...`).
 - **Fix:** Run `secureSymlinks` against `content` (with `stagingPrefix` set to `staging` so `7zz`-rewritten absolute links into `<staging>/...` are still recognized and rejected if outside `content`), validate each `target` root in `ItemExtractor.extract` (and reject standalone symlinks or targets whose archive entry is a symlink that was turned into a 0-byte regular file by `7zz`), and remove any 0-byte regular files in staging whose archive entry was a symbolic link (`isSymbolicLink`).
 
-#### 3. ⬜ [P0] Atomic Staged Archive Creation (`createArchive` Overwrite Append/Failure, Split `.001` Existence Check & Partial File on Cancel)
-- **Status:** ⬜ Open
+#### R2-3. ✅ [P0] Atomic Staged Archive Creation (`createArchive` Overwrite Append/Failure, Split `.001` Existence Check & Partial File on Cancel)
+- **Status:** ✅ Done — `createArchive` builds the archive in a same-volume staging folder (writable only there under the sandbox) and `StagedExtraction.installArchive` moves it into place only after success: an existing file is replaced in one step (also read-only ones), stale `.00N` volumes are removed first, and a folder with the same name is never deleted. `CreateArchiveSheet` checks `firstOutput` and rejects `.` / `..`; `createExistsWarning` now says the archive will be replaced (tr/en/ro). Tests `installedArchiveReplacesOldOneAndStaleVolumes`, `creatingReplacesAnExistingArchive`, `creatingASplitArchiveRemovesStaleVolumes`.
 - **Locations:**
   - `Sources/Arhivar/AppModel.swift` (`createArchive`, lines 1209–1255)
   - `Sources/Arhivar/Views/CreateArchiveSheet.swift` (`destinationExists`, lines 201–203; `sanitizedName`, lines 170–179)
@@ -48,8 +61,8 @@
   6. In `CreateArchiveSheet`, typing `.` or `..` as the archive name passes `!sanitizedName.isEmpty`, producing hidden or malformed output filenames (`.7z`, `..7z`).
 - **Fix:** Reject `.` and `..` in `CreateArchiveSheet.sanitizedName`, check `options.firstOutput.path` in `CreateArchiveSheet.destinationExists`, build new archives inside a same-volume `StagedExtraction.makeStagingDirectory(for: directory)`, and atomically move/replace the finished archive (or split volume set, removing any stale `.001`, `.002`, ... volumes first) into `directory` only after `7zz` succeeds.
 
-#### 4. ⬜ [P0] Gatekeeper Quarantine Bypass on Read-Only / Execute-Only Files (`0o555` / `0o444` / `0o111` / `0o000`) & `.replace` Failure on Read-Only Targets
-- **Status:** ⬜ Open
+#### R2-4. ✅ [P0] Gatekeeper Quarantine Bypass on Read-Only / Execute-Only Files (`0o555` / `0o444` / `0o111` / `0o000`) & `.replace` Failure on Read-Only Targets
+- **Status:** ✅ Done — `OwnerAccess` grants the owner's missing permission bits briefly and restores them: `Quarantine.set` / `value` (now `XATTR_NOFOLLOW`) retry on `EACCES` / `EPERM`, `Quarantine.propagate` walks into `0000` / `0311` folders, `mergeItem` replaces read-only files and writes into read-only folders left by an earlier extraction, `ItemExtractor` uses `since: .distantPast`. `StagedExtraction.removeTree` also deletes read-only staging and session trees (`FileManager.removeItem` cannot). Tests `quarantineReachesReadOnlyItems`, `replaceWorksOnReadOnlyTargets`, `removeTreeDeletesReadOnlyFolders`, `readOnlyFilesKeepQuarantineAndCanBeReplaced`.
 - **Locations:**
   - `Sources/ArhivarCore/Quarantine.swift` (`value`, lines 14–21; `set`, lines 31–34)
   - `Sources/ArhivarCore/StagedExtraction.swift` (`mergeItem`, lines 85–92)
@@ -61,8 +74,8 @@
   4. **`ItemExtractor` timestamp threshold:** `ItemExtractor.extract` passes `since: start` instead of `since: .distantPast` to `Quarantine.propagate` even though `directory` is a freshly created `UUID` folder.
 - **Fix:** In `Quarantine.set` and `Quarantine.value`, pass `XATTR_NOFOLLOW` and, if `setxattr`/`getxattr` fails with `EACCES`/`EPERM` on a non-symlink (`lstat`), temporarily add `S_IWUSR`/`S_IRUSR` (`chmod`) and restore the original mode immediately after; in `StagedExtraction.mergeItem`, ensure `S_IWUSR` on `target` before `replaceItemAt`; and pass `since: .distantPast` in `ItemExtractor.extract`.
 
-#### 5. ⬜ [P0] Wildcard Glob Expansion on Archive & Hash Paths (`-spd` Missing in `list`, `test`, `extract`, `hash`, `create`, `add`)
-- **Status:** ⬜ Open
+#### R2-5. ✅ [P0] Wildcard Glob Expansion on Archive & Hash Paths (`-spd` Missing in `list`, `test`, `extract`, `hash`, `create`, `add`)
+- **Status:** ✅ Done — `-spd` is always passed to `l`, `t`, `x` and `h` (as before to `d` and `rn`); `create`, `add` and `compressTarStage` include the archive path and the exclusions in `wildcardSafety`. Tests `archivePathsAreNeverWildcards`, `starredArchiveNamesAreLiteral`, `listAndTestArguments`, `extractAllArguments`.
 - **Locations:**
   - `Sources/ArhivarCore/ArchiveOptions.swift` (`SevenZipCommand.list`, `test`, `extract`, `create`, `compressTarStage`, lines 228–314)
   - `Sources/ArhivarCore/ArchiveEditing.swift` (`SevenZipCommand.add`, line 31)
@@ -75,8 +88,8 @@
   4. `SevenZipCommand.create` and `SevenZipCommand.add` only check `sources`/`names` for `*` or `?`, omitting `-spd` when the archive path itself contains `*` or `?`.
 - **Fix:** Pass `-spd` unconditionally in `SevenZipCommand.list`, `test`, `extract`, `delete`, `rename`, and `hash` (none of which use wildcard filters), and include the archive/output path in `wildcardSafety(for:)` for `create`, `compressTarStage`, and `add`.
 
-#### 6. ⬜ [P0] Infinite Kernel Hang on FIFO Named Pipes (`mkfifo`), `AddPlan` Socket/FIFO Copy Failure & Sandbox Personal-Data Protection During Create/Add
-- **Status:** ⬜ Open
+#### R2-6. ✅ [P0] Infinite Kernel Hang on FIFO Named Pipes (`mkfifo`), `AddPlan` Socket/FIFO Copy Failure & Sandbox Personal-Data Protection During Create/Add
+- **Status:** ✅ Done — `SpecialFiles` finds FIFOs, sockets and device nodes (and links to them when links are followed) and they are excluded with `-x!<archive path>` (`CreateOptions.excludedPaths`, `SevenZipCommand.add(excluding:)`, `-spd` when such a path contains `*`/`?`); `AddPlan.make` copies with a `FileManagerDelegate` that skips them. Create and add keep personal-data protection: `SandboxProfile.forOperation(readable:)` only opens a protected folder the user picked a source from; `.zsh_history`, `.bash_history`, `Library/Containers`, `Library/Group Containers` and `Library/HTTPStorages` were added. Tests `specialFilesAreExcludedByArchivePath`, `addPlanSkipsFifosAndSockets`, `creatingKeepsPersonalDataProtected`, `fifosDoNotHangArchiveCreation`, `fifosAreSkippedWhenCreatingAndAdding`.
 - **Locations:**
   - `Sources/ArhivarCore/ArchiveOptions.swift` (`SevenZipCommand.create`, lines 267–295)
   - `Sources/ArhivarCore/ArchiveEditing.swift` (`AddPlan.make`, lines 78–107)
@@ -88,12 +101,8 @@
   3. **Symlink exfiltration when `protectPersonalData: false`:** `createArchive` and `addFiles` pass `protectPersonalData: false` to `SandboxProfile.forOperation`, disabling read protection for `~/.ssh`, `~/.aws`, `~/Library/Keychains`, etc. If a source folder contains a symlink to `~/.ssh/id_ed25519` and `storeSymlinks == false` (or the format is `.gz`/`.bz2`/`.xz`), `7zz` dereferences the symlink and packs the secret file into the archive.
 - **Fix:** Exclude/skip non-regular/non-directory/non-symlink special files (FIFOs, sockets, device nodes) when staging in `AddPlan.make` and via `-x!` switches in `SevenZipCommand` (or pre-filtering), pass explicit `readable: sources` to `SandboxProfile.forOperation` so `protectPersonalData` remains `true` even during `create` and `add`, and expand `personalDataDirectories` with `Library/Containers`, `Library/Group Containers`, `Library/HTTPStorages`, `.zsh_history`, and `.bash_history`.
 
----
-
-### Priority 1 (P1) — Functional Bugs, Path Normalization & Concurrency Races
-
-#### 7. ⬜ [P1] `ArchiveTree.renamedPath` Trailing Slash Corruption & Duplicate Sibling Collision Check in `rename`
-- **Status:** ⬜ Open
+#### R2-7. ✅ [P1] `ArchiveTree.renamedPath` Trailing Slash Corruption & Duplicate Sibling Collision Check in `rename`
+- **Status:** ✅ Done — `ArchiveTree.renamedPath` finds the parent without the trailing `/` and keeps that spelling (`klasor/` → `yeni/`); `AppModel.renameConflicts` (sibling names, case-insensitive like APFS; a case-only rename of the item itself is allowed) disables the Rename button and `rename` refuses with the new `renameExists` message. Tests `renamedPathKeepsTrailingSlashSpelling`, `renameRejectsSiblingNames`.
 - **Locations:**
   - `Sources/ArhivarCore/ArchiveEditing.swift` (`ArchiveTree.renamedPath`, lines 236–245)
   - `Sources/Arhivar/AppModel.swift` (`rename`, lines 1090–1112)
@@ -102,8 +111,8 @@
   2. In `7zz rn -y`, renaming `a.txt` to an existing sibling `b.txt` succeeds without error and creates **two entries with identical `Path = b.txt`** inside the archive.
 - **Fix:** Strip any trailing `/` before computing `parent(of:)` in `ArchiveTree.renamedPath` (preserving the trailing `/` on the resulting path if the original had one), and reject renames in `AppModel.rename` and `EditDialogs` when a sibling node already exists at the target normalized path.
 
-#### 8. ⬜ [P1] `AddPlan.make` Leading `./` Prefix Bug, `..` Component Normalization in `ListingParser` / `ItemExtractor`, and Duplicate Entry Deduplication in `ArchiveStatistics`
-- **Status:** ⬜ Open
+#### R2-8. ✅ [P1] `AddPlan.make` Leading `./` Prefix Bug, `..` Component Normalization in `ListingParser` / `ItemExtractor`, and Duplicate Entry Deduplication in `ArchiveStatistics`
+- **Status:** ✅ Done — `AddPlan.make` normalizes the target folder; `ListingParser.normalizedPath` drops `..` components exactly like 7zz (`a/../x` → `a/x`); `ItemExtractor` locates targets by normalized path; `ArchiveStatistics` counts only the latest of duplicate file entries (like `ArchiveTree.build`). Tests `normalizesEntryPaths`, `addPlanNormalizesDotPrefixedFolder`, `statisticsCountAppendedDuplicatesOnce`, `dotDotEntriesAndAppendedDuplicates`.
 - **Locations:**
   - `Sources/ArhivarCore/ArchiveEditing.swift` (`AddPlan.make`, lines 83–103; `ItemExtractor.extract`, lines 162–168)
   - `Sources/ArhivarCore/ArchiveListing.swift` (`ListingParser.normalizedPath`, lines 193–212; `ArchiveStatistics.init`, lines 267–296)
@@ -113,8 +122,8 @@
   3. When a `.tar` archive contains appended/updated duplicate entries for the same file path (`tar -rf`), `ArchiveTree.build` keeps the latest entry per path while `ArchiveStatistics.init` sums all duplicate entries, inflating `fileCount` and `totalSize`.
 - **Fix:** Normalize `folder` in `AddPlan.make` with `ListingParser.normalizedPath(folder)`, filter out `".."` components in `ListingParser.normalizedPath` (matching `7zz`'s path sanitization) and use `ListingParser.normalizedPath` when computing `targets` in `ItemExtractor.extract`, and deduplicate file entries by normalized path in `ArchiveStatistics.init` (keeping the latest entry's size, matching `ArchiveTree.build`).
 
-#### 9. ⬜ [P1] Nested Archive Navigation Trap in Tree View (`⌘2`) and Search + Folder `Return`/`⌘↓` in Tree View
-- **Status:** ⬜ Open
+#### R2-9. ✅ [P1] Nested Archive Navigation Trap in Tree View (`⌘2`) and Search + Folder `Return`/`⌘↓` in Tree View
+- **Status:** ✅ Done — `AppModel.showsPathBar` (folder view, or any view inside a nested archive) drives the path bar, whose folder crumbs appear only in folder view; ⌘↑ is enabled by `canGoUp && operation == nil` in every view (in tree view and search it returns to the parent archive); `primaryAction` on a folder switches to folder view and enters it. Test `treeViewKeepsTheWayBackFromNestedArchives`.
 - **Locations:**
   - `Sources/Arhivar/Views/ArchiveBrowserView.swift` (`body`, line 72)
   - `Sources/Arhivar/ArhivarApp.swift` (`goUp`, line 150)
@@ -124,8 +133,8 @@
   2. In Tree View, pressing `Return` or `⌘↓` (`primaryAction`) on a folder does nothing (`if browserMode == .folders || !searchText.isEmpty`), whereas choosing **Open** from the context menu switches to `.folders` mode and enters the folder.
 - **Fix:** Show `PathBar` whenever `(model.browserMode == .folders && model.searchText.isEmpty) || !model.archiveStack.isEmpty`, enable `⌘↑` whenever `model.canGoUp && model.operation == nil` (in Tree View or search, `goUp()` returns to the parent archive when `!archiveStack.isEmpty`), and make `primaryAction()` on a folder in Tree View switch `browserMode = .folders` and navigate into the folder.
 
-#### 10. ⬜ [P1] `closeArchive()` Zombie Resurrection During Active Operations & Unchecked Cancellation After `ensureEngine()` in `perform()`
-- **Status:** ⬜ Open
+#### R2-10. ✅ [P1] `closeArchive()` Zombie Resurrection During Active Operations & Unchecked Cancellation After `ensureEngine()` in `perform()`
+- **Status:** ✅ Done — `closeArchive()` is ignored while an operation runs and ⇧⌘W is disabled unless `canOperate`; `perform` does not start the operation if it was cancelled while the engine was being checked. Tests `closeAndDropWaitForTheRunningOperation`, `cancellingWhileTheEngineIsCheckedStopsTheOperation`.
 - **Locations:**
   - `Sources/Arhivar/AppModel.swift` (`closeArchive`, lines 544–559; `perform`, lines 1328–1338)
   - `Sources/Arhivar/ArhivarApp.swift` (`menuCloseArchive`, lines 96–98)
@@ -134,12 +143,8 @@
   2. In `AppModel.perform`, when `!engineChecked`, `currentTask` awaits `ensureEngine()` and then unconditionally calls `perform(...)` even if `cancelOperation()` was called while `ensureEngine()` was running.
 - **Fix:** Guard `guard operation == nil else { return }` in `closeArchive()` (and disable `menuCloseArchive` when `!model.canOperate`), and check `guard !Task.isCancelled else { return }` after `await ensureEngine()` in `perform()`.
 
----
-
-### Priority 2 (P2) — Security Hardening & UX Consistency
-
-#### 11. ⬜ [P2] Expand `OpenSafety` for `.workflow`, `.action`, `.osax`, `.url`, `.webloc` & Default-Ignorable Unicode Code Points
-- **Status:** ⬜ Open
+#### R2-11. ✅ [P2] Expand `OpenSafety` for `.workflow`, `.action`, `.osax`, `.url`, `.webloc` & Default-Ignorable Unicode Code Points
+- **Status:** ✅ Done — `workflow`, `action`, `osax`, `url` and `webloc` added to `OpenSafety.riskyExtensions`; default-ignorable code points are flagged, except an emoji variation selector (U+FE0E / U+FE0F) right after an emoji. Test `moreRiskyExtensionsAndInvisibleCharacters`.
 - **Locations:**
   - `Sources/ArhivarCore/OpenSafety.swift` (`riskyExtensions`, lines 13–25; `containsSpoofingCharacters`, lines 56–68)
 - **Problems (verified on macOS 26):**
@@ -147,16 +152,16 @@
   2. `containsSpoofingCharacters` does not check `scalar.properties.isDefaultIgnorableCodePoint`, missing invisible `nonspacingMark` spoofing code points such as `U+034F` (Combining Grapheme Joiner) and `U+17B4`/`U+17B5` (Khmer inherent vowels).
 - **Fix:** Add `"workflow"`, `"action"`, `"osax"`, `"url"`, and `"webloc"` to `OpenSafety.riskyExtensions`, and include `scalar.properties.isDefaultIgnorableCodePoint` in `containsSpoofingCharacters`.
 
-#### 12. ⬜ [P2] Preserve `SidebarView` Selection & Cached Password When Navigating Nested Archives
-- **Status:** ⬜ Open
+#### R2-12. ✅ [P2] Preserve `SidebarView` Selection & Cached Password When Navigating Nested Archives
+- **Status:** ✅ Done — the sidebar selection follows `rootArchiveURL`, and `openArchive(_:)` of the root archive while nested calls `returnToArchive(level: 0)` (no reload, password and folder kept). Test `reopeningTheRootArchiveReturnsWithItsPassword`.
 - **Locations:**
   - `Sources/Arhivar/Views/SidebarView.swift` (`selection`, lines 45–56)
   - `Sources/Arhivar/AppModel.swift` (`openArchive`, line 481)
 - **Problem:** `SidebarView` binds its `List` selection to `model.archiveURL` instead of `model.rootArchiveURL`. Entering a nested archive deselects the root archive in the sidebar; clicking the root archive in the sidebar then calls `model.openArchive(url)` where `url == archiveURL` is `false` (since `archiveURL` is the nested archive in the temp session folder), which reloads the root archive from disk and discards its cached password instead of calling `returnToArchive(level: 0)`.
 - **Fix:** Bind `SidebarView` selection to `model.rootArchiveURL`, and in `openArchive(_:)` return via `returnToArchive(level: 0)` when `url == rootArchiveURL && !archiveStack.isEmpty`.
 
-#### 13. ⬜ [P2] Guard `handleDrop` During Active Operations, Context-Menu `toggleQuickLook` Target Switching, Single `rebuildDisplay()` in `apply`, and Shell Script Hardening (`release.sh`, `package.sh`, `update-7zip.sh`)
-- **Status:** ⬜ Open
+#### R2-13. ✅ [P2] Guard `handleDrop` During Active Operations, Context-Menu `toggleQuickLook` Target Switching, Single `rebuildDisplay()` in `apply`, and Shell Script Hardening (`release.sh`, `package.sh`, `update-7zip.sh`)
+- **Status:** ✅ Done — `handleDrop` ignores drops during an operation; `toggleQuickLook(path)` switches the preview to a different item (same item or Space closes it); `apply`, `returnToArchive` and `closeArchive` change tree/folder/search inside `updatingDisplayOnce` (one rebuild); `release.sh` matches the CHANGELOG heading literally with `index()`, `package.sh` lists outputs space-safely, `update-7zip.sh` ad-hoc signs the fallback-folder `7zz`. Tests `closeAndDropWaitForTheRunningOperation`, `quickLookSwitchesItemsAndDisplayIsRebuiltOnce`.
 - **Locations:**
   - `Sources/Arhivar/AppModel.swift` (`handleDrop`, lines 540–541; `toggleQuickLook`, lines 652–662; `apply`, lines 824–831)
   - `Scripts/release.sh` (line 56), `Scripts/package.sh` (line 64), `Scripts/update-7zip.sh` (line 222)
@@ -168,17 +173,6 @@
 - **Fix:** Guard `guard operation == nil else { return }` at the start of `handleDrop`, switch preview targets in `toggleQuickLook(_:)` when an explicit `path` differs from the currently previewed item, suppress the duplicate `rebuildDisplay()` in `apply(_:keepFolder:)`, escape `.` in `Scripts/release.sh`, use space-safe output in `Scripts/package.sh`, and ad-hoc sign `$dest/7zz` in `Scripts/update-7zip.sh`.
 
 ---
-
-### Upstream-Dependent Items
-
-#### 14. 🟡 [Medium] Zstandard (`.zst` / `.tar.zst`) Archive Creation
-- **Status:** 🟡 Partially done — one-step `.tar.gz`, `.tar.xz`, and `.tar.bz2` creation is completed (tests `tarCompressionCommands`, `createsCompressedTar`, `createsTarGzInOneStep`).
-- ⬜ **Remaining:** Zstandard (`.zst` and `.tar.zst`) creation is currently **blocked upstream**: the official 7-Zip `7zz` (26.04) extracts `.zst` / `.tzst` (`K` flag in `7zz i`) but does not implement `zstd` archive creation (`7zz a -tzstd` fails with `E_NOTIMPL`).
-- **Next steps:** Offer `.zst` and `.tar.zst` in `ArchiveFormat` (`Sources/ArhivarCore/ArchiveOptions.swift`) once upstream `7zz` enables `C` (Create) support for `zstd`, or dynamically when the active engine reports `zstd` creation capability. `.tar.zst` will directly reuse `SevenZipCommand.tarStage` and `compressTarStage`.
-
----
-
-## Done
 
 ### Priority 0 (P0) — Critical Bugs, Security, Crash Prevention & Data Integrity
 

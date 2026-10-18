@@ -29,6 +29,12 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 - 7zz no longer gets read access to `~/.kube`, `~/.docker`, `~/.npmrc`, `~/.pypirc`, `~/.git-credentials` and browser profiles while reading an archive.
 - AppleScript, Shortcuts, preference panes and Quick Look generators ask for confirmation before opening, and names hidden with Braille or Hangul blank characters are flagged as deceptive.
 - A 7zz process that ignores the cancel request is killed after 2 seconds, so cancelling never hangs.
+- A multi-line archive comment can no longer add fake items to the list or change the archive's type or size: the listing is split at 7-Zip's last separator line and the comment is read between its braces.
+- Extracting selected items from a subfolder, dragging, copying and previewing check symbolic links against what is actually moved: links to sibling folders or absolute targets are dropped, a link selected on its own is not handed out, and the empty placeholder 7-Zip leaves for a rejected link no longer overwrites an existing file or shows up as content.
+- Read-only and execute-only files (`0555`, `0444`, `0111`, `0000`, e.g. app binaries and `.command` scripts) now get the quarantine flag; macOS refused to write it, so they could open without a Gatekeeper check.
+- Folders containing named pipes (FIFOs), sockets or device files no longer hang 7-Zip forever when creating an archive or adding files; those items are skipped.
+- Creating archives and adding files keep 7-Zip away from personal folders (`~/.ssh`, Keychains, …) unless a source was picked from there, so a symbolic link inside a source folder cannot pull a key into the archive. Shell histories, app containers and HTTP storage were added to the protected folders.
+- `.workflow`, `.action`, `.osax`, `.url` and `.webloc` files ask for confirmation before opening, and names hiding characters such as U+034F are flagged as deceptive (emoji presentation selectors are allowed).
 
 ### Fixed
 
@@ -54,11 +60,22 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 - Creating an archive from sources with the same name is refused with a clear message even when the New Archive sheet is bypassed.
 - Copying (⌘C) and calculating checksums show their own symbols in the progress overlay.
 - Reloading an archive after an edit removes stale preview files; "Reset All Settings" no longer leaves the language or browser mode preference behind.
+- An archive whose name or folder contains `*` or `?` (e.g. `backup*1.7z`) no longer lists, tests, extracts or checksums the other archives matching it.
+- Extracting over earlier results with "Replace it" works when the existing files or folders are read-only.
+- Temporary and staging folders that contain read-only folders are deleted instead of being left behind.
+- Renaming a folder whose stored path ends with `/` no longer moves it into itself, and renaming to the name of another item in the same folder is refused (7-Zip would create two items with the same path).
+- Adding files to a folder of a `./`-prefixed TAR archive works; items with `..` in their stored path are shown and extracted where 7-Zip writes them; a TAR with appended copies of a file counts it once.
+- Inside a nested archive in tree view or while searching, the path bar and ⌘↑ lead back to the enclosing archive; Return and ⌘↓ on a folder in tree view open it.
+- Closing the archive (⇧⌘W) while an operation runs is ignored (the archive used to come back when the operation finished), and an operation cancelled while 7-Zip is being located does not start afterwards.
+- Choosing the outer archive in the sidebar while inside a nested archive returns to it without reloading it, keeping its password; the sidebar keeps it selected.
+- Dropping files while an operation runs no longer opens the New Archive sheet, Quick Look from the context menu switches to the chosen item, and the table is rebuilt once when an archive loads.
+- `release.sh` finds the CHANGELOG section of the exact version, `package.sh` lists outputs whose paths contain spaces, and `update-7zip.sh` signs 7-Zip installed into the fallback folder.
 
 ### Changed
 
 - The archive listing is parsed without building an intermediate array of lines, and cached path icons are bounded.
 - The `.dmg` is staged with `ditto` so bundle metadata is preserved.
+- Creating an archive with the name of an existing one now **replaces** it instead of adding to it (gzip/xz, split and name-encrypted archives used to fail). The archive is built in a staging folder and moved into place only on success, so cancelling leaves nothing behind; stale split volumes are removed. The New Archive sheet warns about an existing first volume (`.001`) and rejects `.` and `..` as names.
 
 ## [1.0.2] — 2026-10-17
 
