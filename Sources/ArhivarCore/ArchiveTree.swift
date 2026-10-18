@@ -93,15 +93,15 @@ public enum ArchiveTree {
         return root.order.compactMap { root.children[$0].map(convert) }
     }
 
-    /// Ham yolun ilk `count` anlamlı bileşenini (boş ve "." bileşenler sayılmaz) yazıldığı gibi döndürür:
-    /// "./a//b/c.txt", 2 → "./a//b".
+    /// Ham yolun ilk `count` anlamlı bileşenini (boş, "." ve ".." bileşenler sayılmaz; `ListingParser.normalizedPath`
+    /// onları atar) yazıldığı gibi döndürür: "./a//b/c.txt", 2 → "./a//b"; "../a/b.txt", 1 → "../a".
     static func rawPrefix(_ raw: String, components count: Int) -> String {
         var seen = 0
         var index = raw.startIndex
         while index < raw.endIndex {
             let end = raw[index...].firstIndex(of: "/") ?? raw.endIndex
             let component = raw[index..<end]
-            if !component.isEmpty && component != "." {
+            if !component.isEmpty && component != "." && component != ".." {
                 seen += 1
                 if seen == count { return String(raw[..<end]) }
             }
