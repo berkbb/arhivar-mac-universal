@@ -1156,4 +1156,30 @@ struct AppModelTests {
         #expect(model.alert?.message == refusal)
     }
 
+    /// R3-3: yalnızca FIFO seçildiyse ekleme ve oluşturma 7zz'yi çalıştırmaz (boş ad listesi tüm klasörü eklerdi).
+    @Test func onlySpecialFilesAreRefused() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let pipe = fixture.workspace.appendingPathComponent("boru")
+        #expect(mkfifo(pipe.path, 0o644) == 0)
+        let archive = try await fixture.makeArchive("ozel.7z", format: .sevenZip)
+        let model = fixture.model
+        model.openArchive(archive)
+        await fixture.settle()
+        let before = model.tree.map(\.id)
+
+        model.addFiles([pipe])
+        await fixture.settle()
+        #expect(model.alert?.message == fixture.settings.t(.nothingToArchive))
+        #expect(model.tree.map(\.id) == before)
+        model.alert = nil
+
+        let destination = fixture.workspace.appendingPathComponent("bos.zip")
+        model.createArchive(CreateOptions(sources: [pipe], destination: destination, format: .zip, level: .fast))
+        await fixture.settle()
+        #expect(model.alert?.message == fixture.settings.t(.nothingToArchive))
+        #expect(!FileManager.default.fileExists(atPath: destination.path))
+    }
+
 }

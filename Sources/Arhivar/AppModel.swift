@@ -1109,7 +1109,9 @@ final class AppModel {
             let compresses = archiveType?.lowercased() != "tar"
             let sourceBytes = compresses ? 0 : await Self.measure(sources)
             try self.checkSpaceForWriting(archive: archive, sourceBytes: sourceBytes, compresses: compresses)
-            let plan = try AddPlan.make(sources: sources, into: folderPath, stagingRoot: ItemExtractor.temporaryRoot)
+            let plan = try AddPlan.make(
+                sources: sources, into: folderPath, stagingRoot: ItemExtractor.temporaryRoot, followingSymlinks: !storeSymlinks
+            )
             defer {
                 if let staging = plan.stagingDirectory { StagedExtraction.removeTree(at: staging) }
             }
@@ -1311,6 +1313,11 @@ final class AppModel {
             // "Duplicate filename on disk" hatası yerine anlaşılır bir ileti verilsin.
             let duplicates = AddPlan.duplicateNames(in: options.sources)
             guard duplicates.isEmpty else { throw AddPlan.DuplicateNameError(names: duplicates) }
+            // Kaynakların hepsi atlanan özel dosyalarsa (FIFO, soket) boş bir arşiv oluşturulmaz.
+            let followsLinks = !(options.storeSymlinks && options.format.supportsSymlinks)
+            guard options.sources.contains(where: { !SpecialFiles.isSpecial(atPath: $0.path, followingSymlinks: followsLinks) }) else {
+                throw AddPlan.NothingToArchiveError()
+            }
             let fileManager = FileManager.default
             let directory = options.destination.deletingLastPathComponent()
             let name = options.destination.lastPathComponent
@@ -1323,7 +1330,6 @@ final class AppModel {
 
             // FIFO, soket ve aygıt dosyaları arşive alınmaz: 7zz bir FIFO'yu okurken sonsuza dek bekler.
             var staged = options
-            let followsLinks = !(options.storeSymlinks && options.format.supportsSymlinks)
             staged.excludedPaths = await Self.specialFiles(in: options.sources, followingSymlinks: followsLinks)
 
             // Arşiv hedefle aynı birimdeki bir hazırlık klasöründe oluşturulur, yalnızca başarıda yerine taşınır:
@@ -1492,6 +1498,9 @@ final class AppModel {
         }
         if let duplicate = error as? AddPlan.DuplicateNameError {
             return t(.duplicateNames, duplicate.names.joined(separator: ", "))
+        }
+        if error is AddPlan.NothingToArchiveError {
+            return t(.nothingToArchive)
         }
         if let link = error as? ItemExtractor.SymbolicLinkError {
             let name = link.paths.first.map { (ListingParser.normalizedPath($0) as NSString).lastPathComponent } ?? ""

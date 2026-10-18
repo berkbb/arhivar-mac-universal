@@ -245,6 +245,7 @@
 "warningRemovedLinks" = "Legăturile simbolice care indică în afara destinației au fost omise: %@";
 "renameExists" = "În acest dosar există deja un element numit „%@”.";
 "symbolicLinkItem" = "„%@” este o legătură simbolică. Nu poate fi deschisă, previzualizată, copiată sau trasă singură; extrageți în schimb dosarul care o conține.";
+"nothingToArchive" = "Nu există nimic de arhivat: canalele numite (FIFO), socket-urile și fișierele de dispozitiv sunt omise.";
 "contextCopy" = "Copiază";
 "toastCopied" = "%ld elemente copiate";
 "contextBrowse" = "Deschide în Arhivar";

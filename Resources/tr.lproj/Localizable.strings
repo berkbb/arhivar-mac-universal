@@ -245,6 +245,7 @@
 "warningRemovedLinks" = "Hedefin dışını gösteren sembolik bağlantılar atlandı: %@";
 "renameExists" = "Bu klasörde “%@” adlı bir öğe zaten var.";
 "symbolicLinkItem" = "“%@” bir sembolik bağlantı. Tek başına açılamaz, önizlenemez, kopyalanamaz ya da sürüklenemez; bunun yerine bulunduğu klasörü çıkarın.";
+"nothingToArchive" = "Arşivlenecek bir şey yok: adlandırılmış borular (FIFO), soketler ve aygıt dosyaları atlanır.";
 "contextCopy" = "Kopyala";
 "toastCopied" = "%ld öğe kopyalandı";
 "contextBrowse" = "Arhivar'da Aç";

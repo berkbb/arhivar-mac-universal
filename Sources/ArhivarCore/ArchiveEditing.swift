@@ -65,6 +65,12 @@ public struct AddPlan: Sendable, Equatable {
         }
     }
 
+    /// Kaynakların hepsi atlanan özel dosyalarsa (FIFO, soket, aygıt) arşive eklenecek bir şey kalmaz. 7zz'ye boş
+    /// ad listesi verilirse çalışma klasörünün tamamını ("*") eklerdi.
+    public struct NothingToArchiveError: Error, Equatable, Sendable {
+        public init() {}
+    }
+
     /// Aynı son yol bileşenini (adı) paylaşan kaynakların adları (büyük/küçük harf duyarsız, APFS gibi).
     public static func duplicateNames(in sources: [URL]) -> [String] {
         var seen: [String: String] = [:]
@@ -80,9 +86,14 @@ public struct AddPlan: Sendable, Equatable {
         return duplicates
     }
 
+    /// - Parameter followingSymlinks: Bağlantılar bağlantı olarak saklanmayacaksa true; 7zz o zaman bağlantının
+    ///   gösterdiğini okur, FIFO'yu gösteren bağlantı da FIFO gibi atlanır.
     public static func make(
-        sources: [URL], into folder: String, stagingRoot: URL, fileManager: FileManager = .default
+        sources: [URL], into folder: String, stagingRoot: URL, followingSymlinks: Bool = false, fileManager: FileManager = .default
     ) throws -> AddPlan {
+        // FIFO ve soketler kopyalanamaz (ENOTSUP) ve 7zz'yi kilitler; kopyalanmadan atlanır.
+        let sources = sources.filter { !SpecialFiles.isSpecial(atPath: $0.path, followingSymlinks: followingSymlinks) }
+        guard !sources.isEmpty else { throw NothingToArchiveError() }
         let duplicates = duplicateNames(in: sources)
         guard duplicates.isEmpty else { throw DuplicateNameError(names: duplicates) }
         // "./belgeler" gibi ham yazımlar: ilk bileşen "." olursa 7zz'ye ad olarak "." verilirdi.
@@ -99,12 +110,12 @@ public struct AddPlan: Sendable, Equatable {
         let target = folder.isEmpty ? staging : staging.appendingPathComponent(folder, isDirectory: true)
         do {
             try fileManager.createDirectory(at: target, withIntermediateDirectories: true)
-            // FIFO ve soketler kopyalanamaz (ENOTSUP) ve 7zz'yi kilitler; kopyalanmadan atlanır.
-            let skipping = SpecialFiles.SkippingCopier()
+            // Klasörlerin içindeki özel dosyalar da kopyalanmaz.
+            let skipping = SpecialFiles.SkippingCopier(followingSymlinks: followingSymlinks)
             let copier = FileManager()
             copier.delegate = skipping
             var names: [String] = []
-            for source in sources where !SpecialFiles.isSpecial(atPath: source.path) {
+            for source in sources {
                 try copier.copyItem(at: source, to: target.appendingPathComponent(source.lastPathComponent))
                 names.append(source.lastPathComponent)
             }
@@ -112,7 +123,8 @@ public struct AddPlan: Sendable, Equatable {
             let topLevel = folder.split(separator: "/").first.map(String.init)
             return AddPlan(workingDirectory: staging, names: topLevel.map { [$0] } ?? names, stagingDirectory: staging)
         } catch {
-            try? fileManager.removeItem(at: staging)
+            // Önce kopyalanan salt okunur (0555) bir klasör `removeItem` ile silinemezdi.
+            StagedExtraction.removeTree(at: staging, fileManager: fileManager)
             throw error
         }
     }
@@ -137,32 +149,50 @@ public enum SpecialFiles {
 
     /// Kaynakların içindeki özel dosyalar, arşivde alacakları yollarla ("klasör/alt/pipe").
     /// 7zz bir kaynağı son yol bileşeniyle saklar; `-x!` ile verilen bu yollar yalnızca o öğeyi dışlar.
+    /// - Parameter followingSymlinks: Bağlantılar bağlantı olarak saklanmayacaksa true. 7zz o zaman klasörü gösteren
+    ///   bağlantıların içine de iner; içlerindeki FIFO'lar da bağlantının yoluyla ("klasör/bag/pipe") bulunur.
     public static func archivePaths(in sources: [URL], followingSymlinks: Bool = false, fileManager: FileManager = .default) -> [String] {
         var result: [String] = []
-        for source in sources {
-            let name = source.lastPathComponent
-            if isSpecial(atPath: source.path, followingSymlinks: followingSymlinks) {
-                result.append(name)
-                continue
+        // Döngüye giren bağlantılar ("a/geri → ..") için yalnızca o yoldaki üst klasörler tutulur: aynı klasöre iki
+        // ayrı bağlantıdan inilirse 7zz ikisini de okur, ikisinin özel dosyaları da dışlanmalı.
+        func visit(_ path: String, as archivePath: String, ancestors: Set<FileIdentity>) {
+            var info = stat()
+            guard lstat(path, &info) == 0 else { return }
+            if info.st_mode & S_IFMT == S_IFLNK {
+                guard followingSymlinks, stat(path, &info) == 0 else { return }
             }
-            guard StagedExtraction.itemType(source, fileManager: fileManager) == .typeDirectory,
-                  let enumerator = fileManager.enumerator(atPath: source.path) else { continue }
-            while let relative = enumerator.nextObject() as? String {
-                let type = enumerator.fileAttributes?[.type] as? FileAttributeType
-                guard type != .typeRegular, type != .typeDirectory else { continue }
-                if type == .typeSymbolicLink, !followingSymlinks { continue }
-                if isSpecial(atPath: (source.path as NSString).appendingPathComponent(relative), followingSymlinks: followingSymlinks) {
-                    result.append(name + "/" + relative)
+            switch info.st_mode & S_IFMT {
+            case S_IFREG:
+                return
+            case S_IFDIR:
+                let identity = FileIdentity(device: info.st_dev, inode: info.st_ino)
+                guard !ancestors.contains(identity) else { return }
+                for child in (try? fileManager.contentsOfDirectory(atPath: path)) ?? [] {
+                    visit((path as NSString).appendingPathComponent(child), as: archivePath + "/" + child, ancestors: ancestors.union([identity]))
                 }
+            default:
+                result.append(archivePath)
             }
         }
+        for source in sources { visit(source.path, as: source.lastPathComponent, ancestors: []) }
         return result
     }
 
-    /// Kopyalarken özel dosyaları atlayan `FileManager` temsilcisi.
+    private struct FileIdentity: Hashable {
+        let device: dev_t
+        let inode: ino_t
+    }
+
+    /// Kopyalarken özel dosyaları (bağlantılar izlenecekse FIFO'yu gösteren bağlantıları da) atlayan `FileManager` temsilcisi.
     final class SkippingCopier: NSObject, FileManagerDelegate {
+        let followingSymlinks: Bool
+
+        init(followingSymlinks: Bool = false) {
+            self.followingSymlinks = followingSymlinks
+        }
+
         func fileManager(_ fileManager: FileManager, shouldCopyItemAt srcURL: URL, to dstURL: URL) -> Bool {
-            !SpecialFiles.isSpecial(atPath: srcURL.path)
+            !SpecialFiles.isSpecial(atPath: srcURL.path, followingSymlinks: followingSymlinks)
         }
     }
 }

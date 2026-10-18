@@ -245,6 +245,7 @@
 "warningRemovedLinks" = "Symbolic links pointing outside the destination were skipped: %@";
 "renameExists" = "An item named “%@” already exists in this folder.";
 "symbolicLinkItem" = "“%@” is a symbolic link. It can’t be opened, previewed, copied or dragged on its own; extract the folder that contains it instead.";
+"nothingToArchive" = "There is nothing to archive: named pipes (FIFOs), sockets and device files are skipped.";
 "contextCopy" = "Copy";
 "toastCopied" = "%ld items copied";
 "contextBrowse" = "Open in Arhivar";

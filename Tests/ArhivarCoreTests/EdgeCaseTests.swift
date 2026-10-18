@@ -38,6 +38,70 @@ private func temporaryFolder(_ name: String) throws -> URL {
     #expect(index["x/y"]?.archivePath == "x/../y")
 }
 
+// MARK: - R3-3 Özel dosyalar ve bağlantılı klasörler
+
+/// Bağlantılar izlenirken (bağlantı olarak saklanmıyorken) 7zz klasörü gösteren bağlantının içine de iner;
+/// oradaki FIFO da bağlantının yoluyla dışlanır. Döngüye giren bağlantı taramayı bitirmeyi engellemez.
+@Test func specialFilesBehindSymlinkedFolders() throws {
+    let root = try temporaryFolder("bagli")
+    defer { StagedExtraction.removeTree(at: root) }
+    let outside = root.appendingPathComponent("dis", isDirectory: true)
+    let source = root.appendingPathComponent("k", isDirectory: true)
+    for folder in [outside, source] { try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) }
+    #expect(mkfifo(outside.appendingPathComponent("boru").path, 0o644) == 0)
+    try FileManager.default.createSymbolicLink(atPath: source.appendingPathComponent("bag").path, withDestinationPath: outside.path)
+    try FileManager.default.createSymbolicLink(atPath: source.appendingPathComponent("ikinci").path, withDestinationPath: outside.path)
+    try FileManager.default.createSymbolicLink(atPath: source.appendingPathComponent("geri").path, withDestinationPath: "..")
+
+    #expect(SpecialFiles.archivePaths(in: [source]).isEmpty)
+    // "geri" üst klasöre döner: oradan "dis/boru"ya da ulaşılır; "k"ye ikinci kez inilmez (döngü).
+    #expect(SpecialFiles.archivePaths(in: [source], followingSymlinks: true).sorted() == ["k/bag/boru", "k/geri/dis/boru", "k/ikinci/boru"])
+    // Kaynağın kendisi klasörü gösteren bir bağlantıysa da.
+    let linkedSource = root.appendingPathComponent("kaynak-bag")
+    try FileManager.default.createSymbolicLink(atPath: linkedSource.path, withDestinationPath: outside.path)
+    #expect(SpecialFiles.archivePaths(in: [linkedSource], followingSymlinks: true) == ["kaynak-bag/boru"])
+}
+
+/// Kaynakların hepsi özel dosyaysa ekleme planı boş ad listesi (7zz'de "*") ya da boş klasör üretmez.
+@Test func addPlanRefusesOnlySpecialSources() throws {
+    let root = try temporaryFolder("bos")
+    defer { StagedExtraction.removeTree(at: root) }
+    let first = root.appendingPathComponent("a", isDirectory: true)
+    let second = root.appendingPathComponent("b", isDirectory: true)
+    for folder in [first, second] { try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) }
+    let pipes = [first.appendingPathComponent("boru1"), second.appendingPathComponent("boru2")]
+    for pipe in pipes { #expect(mkfifo(pipe.path, 0o644) == 0) }
+    let stagingRoot = root.appendingPathComponent("hazirlik")
+
+    #expect(throws: AddPlan.NothingToArchiveError()) { try AddPlan.make(sources: pipes, into: "", stagingRoot: stagingRoot) }
+    #expect(throws: AddPlan.NothingToArchiveError()) { try AddPlan.make(sources: [pipes[0]], into: "", stagingRoot: stagingRoot) }
+    #expect(throws: AddPlan.NothingToArchiveError()) { try AddPlan.make(sources: [pipes[0]], into: "alt", stagingRoot: stagingRoot) }
+    // FIFO'yu gösteren bağlantı, bağlantılar izlenecekse FIFO gibi atlanır; saklanacaksa bağlantı olarak eklenir.
+    let link = root.appendingPathComponent("bag")
+    try FileManager.default.createSymbolicLink(atPath: link.path, withDestinationPath: pipes[0].path)
+    #expect(throws: AddPlan.NothingToArchiveError()) {
+        try AddPlan.make(sources: [link], into: "", stagingRoot: stagingRoot, followingSymlinks: true)
+    }
+    #expect(try AddPlan.make(sources: [link], into: "", stagingRoot: stagingRoot).names == ["bag"])
+    #expect((try? FileManager.default.contentsOfDirectory(atPath: stagingRoot.path)) ?? [] == [])
+}
+
+/// Kopyalama yarıda kalırsa önce kopyalanan salt okunur klasörler de silinir.
+@Test func addPlanCleansUpReadOnlyCopiesOnFailure() throws {
+    let root = try temporaryFolder("yarim")
+    defer { StagedExtraction.removeTree(at: root) }
+    let folder = root.appendingPathComponent("salt", isDirectory: true)
+    try FileManager.default.createDirectory(at: folder.appendingPathComponent("ic"), withIntermediateDirectories: true)
+    try "x".write(to: folder.appendingPathComponent("ic/f.txt"), atomically: true, encoding: .utf8)
+    chmod(folder.appendingPathComponent("ic").path, 0o555)
+    let stagingRoot = root.appendingPathComponent("hazirlik")
+    #expect(throws: (any Error).self) {
+        try AddPlan.make(sources: [folder, root.appendingPathComponent("yok.txt")], into: "hedef", stagingRoot: stagingRoot)
+    }
+    #expect(try FileManager.default.contentsOfDirectory(atPath: stagingRoot.path).isEmpty)
+    chmod(folder.appendingPathComponent("ic").path, 0o755)
+}
+
 // MARK: - Gerçek 7zz
 
 @Suite(.enabled(if: engineURL != nil, "7zz bulunamadı"), .serialized)
@@ -90,4 +154,21 @@ struct EdgeCaseIntegrationTests {
         #expect(try FileManager.default.destinationOfSymbolicLink(atPath: folder.appendingPathComponent("iyi").path) == "f.txt")
     }
 
+    /// R3-3: bağlantılar izlenirken (gz, ya da "bağlantıları sakla" kapalı) bağlı klasördeki FIFO 7zz'yi kilitlemez.
+    @Test func fifoBehindSymlinkedFolderDoesNotHang() async throws {
+        defer { cleanUp() }
+        let outside = workspace.appendingPathComponent("dis", isDirectory: true)
+        let source = workspace.appendingPathComponent("k", isDirectory: true)
+        for folder in [outside, source] { try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) }
+        try "d".write(to: outside.appendingPathComponent("d.txt"), atomically: true, encoding: .utf8)
+        #expect(mkfifo(outside.appendingPathComponent("boru").path, 0o644) == 0)
+        try FileManager.default.createSymbolicLink(atPath: source.appendingPathComponent("bag").path, withDestinationPath: outside.path)
+
+        var options = CreateOptions(sources: [source], destination: workspace.appendingPathComponent("bag.zip"), format: .zip, level: .fast, storeSymlinks: false)
+        options.excludedPaths = SpecialFiles.archivePaths(in: [source], followingSymlinks: true)
+        #expect(options.excludedPaths == ["k/bag/boru"])
+        try SevenZipError.check(try await runner.run(SevenZipCommand.create(options), timeout: 30))
+        let listed = try await runner.run(SevenZipCommand.list(archive: options.destination), timeout: 30)
+        #expect(ListingParser.parse(listed.stdout).entries.map(\.path).sorted() == ["k", "k/bag", "k/bag/d.txt"])
+    }
 }
