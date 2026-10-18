@@ -20,6 +20,18 @@
 
 ## Done
 
+### Fuzz & Security Testing Round — Deeply Nested Path Stack Overflow (2026-10-18)
+
+A deterministic seeded fuzz suite (`FuzzTests.swift`) was added over all pure parsers and path helpers. It found a real crash: `ArchiveTree.build` (and the recursive `convert`/`sorted`/`search`/`index`, plus SwiftUI `Table` and value-tree teardown) recurse once per path-segment depth, so an archive declaring a path with thousands of segments overflowed the stack (SIGBUS) just when the archive was **listed/opened** — no extraction needed. 7-Zip metadata has no depth limit, so this is a trivially crafted open-a-file DoS.
+
+#### S1. ✅ [P1] Unbounded Browse-Tree Depth Stack Overflow in `ArchiveTree.build`
+- **Status:** ✅ Done — `ArchiveTree.maxDepth` (100) bounds the synthesized browse tree; entries deeper than the cap stay in `listing.entries` (stats and whole-archive extraction are unaffected) but are not individually browsable past the cap. The cap is far beyond any macOS-extractable path (PATH_MAX ≈ 1024 bytes limits real on-disk depth to ~200) and well under the stack-overflow threshold (~250 on a 512 KB thread). Tests `deeplyNestedEntryIsCappedAndDoesNotCrash`, `deepEntryStaysInListingForStatsAndExtraction`, `normalDepthIsUnaffected`, and fuzz `largeInputsDoNotExplode`.
+- **Verified safe (no change needed):** the on-disk recursions used during extraction (`StagedExtraction.secureSymlinks`, `removeTree`, `DiskSpace.totalSize`, `Quarantine.propagate`, `SpecialFiles.archivePaths`) recurse per real directory depth, which is doubly bounded: the OS caps creatable depth at PATH_MAX (~213 from a temp prefix, `ENAMETOOLONG`), and once an absolute child path exceeds PATH_MAX the recursion’s own `lstat`/`contentsOfDirectory` fail and it stops rather than overflowing.
+- **Location:** `Sources/ArhivarCore/ArchiveTree.swift` (`build`, `maxDepth`)
+
+---
+
+
 ### Post-1.1.0 Fixes (2026-10-18)
 
 #### P1. ✅ [P2] Split ZIP Detection False Positives (`.z64`, `.z80`, …) in `ArchiveNaming.isArchive`

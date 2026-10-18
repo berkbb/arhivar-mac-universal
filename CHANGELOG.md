@@ -8,6 +8,11 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 ### Added
 
 - Comprehensive 11-discipline chaos and security test matrix (`ChaosAndSecurityMatrixTests.swift`) with 17 dedicated automated tests covering Security (Zip-Slip traversal, zero CLI password exposure), Stress (2,000 flat entries, 35-level hierarchy depth, rapid parsing), Destructive (0-byte archives, corrupt random bytes), Penetration (quarantine user-approval bit stripping), Load & Volume (zip bomb `Int64.max` saturating sum), Endurance (multi-cycle staging cleanup under read-only permissions), Vulnerability Scanning (option injection shielding, Trojan Source Unicode spoofing detection, risky executable UTType detection), Red Team (standalone symlink exfiltration rejection, read-only and multi-volume in-place edit blocking), Fuzzing (listing parser mutations, malformed braces and negative sizes), and Chaos (process termination SIGKILL timeout after 2s grace period, `0o000`/`0o555` owner permissions recovery, high-concurrency reentrancy). Total automated test count increased to 230 tests.
+- Deterministic, seeded fuzz suite (`FuzzTests.swift`) that feeds hostile and grammar-like input to every pure parser and path helper (listing, checksum, progress, timestamp, path normalization, tree build, naming, quarantine, open-safety) and asserts no crash, termination, and invariants (non-negative sizes, normalized ids), plus a depth regression suite (`ArchiveTreeDepthTests.swift`). Total automated test count is now 237.
+
+### Fixed
+
+- Opening an archive whose metadata declared a very deeply nested entry path (thousands of path segments) could crash the app with a stack overflow while building the browse tree — triggered just by listing the archive, before any extraction. The browse tree is now depth-bounded (`ArchiveTree.maxDepth`); such entries remain fully counted and extractable, they are only not individually browsable past the cap. Found by the new fuzz suite.
 
 ## [1.1.2] — 2026-10-18
 
