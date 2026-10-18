@@ -122,7 +122,7 @@ struct ContentView: View {
             } label: {
                 Label(settings.t(.toolbarAdd), systemImage: "plus.rectangle.on.folder")
             }
-            .help(model.isEditable ? settings.t(.editAddFiles) : settings.t(.readOnlyArchive))
+            .help(model.isEditable ? settings.t(.editAddFiles) : settings.t(model.readOnlyReason))
             .disabled(!model.canOperate || !model.isEditable)
 
             InfoToolbarButton()

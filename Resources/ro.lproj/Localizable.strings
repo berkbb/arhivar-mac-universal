@@ -233,6 +233,7 @@
 "progressUpdating" = "Se actualizează arhiva…";
 "toastUpdated" = "Arhiva a fost actualizată";
 "readOnlyArchive" = "Acest tip de arhivă nu poate fi editat. Extrage-o și creează o arhivă nouă.";
+"readOnlyLocation" = "Această arhivă este blocată sau se află pe un disc doar în citire, deci nu poate fi editată. Extrage-o și creează o arhivă nouă.";
 
 "subfolderSmart" = "Când există mai multe elemente";
 "subfolderAlways" = "Întotdeauna";

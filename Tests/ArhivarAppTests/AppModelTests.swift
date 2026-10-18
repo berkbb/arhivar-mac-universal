@@ -1252,4 +1252,24 @@ struct AppModelTests {
         #expect(fixture.model.recentArchives.isEmpty)
     }
 
+    /// R5-2: salt okunur (0444) arşiv düzenlenemez: ekle, sil ve yeniden adlandır kapalıdır, nedeni söylenir,
+    /// pencereye bırakılan dosyalar eklemeyi değil yeni arşivi önerir.
+    @Test func readOnlyArchiveIsNotOfferedForEditing() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let archive = try await fixture.makeArchive("salt.7z", format: .sevenZip)
+        chmod(archive.path, 0o444)
+        defer { chmod(archive.path, 0o644) }
+        let model = fixture.model
+        model.openArchive(archive)
+        await fixture.settle()
+
+        #expect(model.listing != nil)
+        #expect(!model.isEditable)
+        #expect(model.readOnlyReason == .readOnlyLocation)
+        model.handleDrop([fixture.workspace.appendingPathComponent("kaynak/not.txt")])
+        #expect(model.addRequest == nil)
+        #expect(model.createRequest != nil)
+    }
 }

@@ -233,6 +233,7 @@
 "progressUpdating" = "Updating archive…";
 "toastUpdated" = "Archive updated";
 "readOnlyArchive" = "This archive type can’t be edited. Extract it and create a new archive instead.";
+"readOnlyLocation" = "This archive is locked or on a read-only disk, so it can’t be edited. Extract it and create a new archive instead.";
 
 "subfolderSmart" = "When there is more than one item";
 "subfolderAlways" = "Always";

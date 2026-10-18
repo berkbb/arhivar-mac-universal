@@ -112,7 +112,7 @@ public enum LKey: String, CaseIterable, Sendable {
     case viewFolders, viewTree, viewModeLabel, navUp, contextQuickLook
     case toolbarAdd, editAddFiles, editDelete, editRename, buttonAdd, buttonDelete, buttonRename
     case deleteConfirmTitle, deleteConfirmMessage, renameTitle, renameField, addConfirmTitle
-    case progressUpdating, toastUpdated, readOnlyArchive
+    case progressUpdating, toastUpdated, readOnlyArchive, readOnlyLocation
     case openRiskyTitle, openRiskyMessage, openAnyway, deceptiveNameReason, deceptiveNameHelp
     case appUpdateSection, appUpdateAvailable, appUpdateUpToDate, appUpdateDownload, appUpdateNoReleases, menuCheckAppUpdates
     case consentTitle, consentMessage, consentAllow, consentDeny, aboutRepository

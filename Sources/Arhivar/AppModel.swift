@@ -211,6 +211,14 @@ final class AppModel {
 
     var canOperate: Bool { listing != nil && operation == nil }
 
+    /// Arşiv neden düzenlenemiyor: biçim (rar, gz, bölünmüş, iç içe) ya da konum (salt okunur, kilitli, salt okunur disk).
+    var readOnlyReason: LKey {
+        guard let archiveURL, archiveStack.isEmpty,
+              ArchiveCapabilities.supportsEditing(type: listing?.info.type, url: archiveURL),
+              !ArchiveCapabilities.isWritable(archiveURL) else { return .readOnlyArchive }
+        return .readOnlyLocation
+    }
+
     func node(_ id: ArchiveNode.ID) -> ArchiveNode? { nodeIndex[id] }
 
     /// Görünümdeki (normalleştirilmiş) kimliğin 7zz'nin tanıdığı ham yolu ("./a/b" gibi arşivler için).
@@ -547,6 +555,7 @@ final class AppModel {
         statistics = ArchiveStatistics(listing: loaded.listing)
         headersEncrypted = loaded.headersEncrypted
         // İç içe açılan arşiv geçici bir kopyadır; değişiklikler kaybolacağı için düzenlenemez.
+        // Salt okunur (kilitli) arşiv ya da salt okunur diskteki arşiv de düzenlenemez: 7zz "Permission denied" verirdi.
         isEditable = archiveStack.isEmpty && ArchiveCapabilities.isEditable(type: loaded.listing.info.type, url: loaded.url)
         symbolicLinks = Self.symbolicLinks(in: loaded.listing)
         previewCache = [:]

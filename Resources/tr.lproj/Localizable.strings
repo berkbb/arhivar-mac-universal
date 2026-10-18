@@ -233,6 +233,7 @@
 "progressUpdating" = "Arşiv güncelleniyor…";
 "toastUpdated" = "Arşiv güncellendi";
 "readOnlyArchive" = "Bu arşiv türü düzenlenemez. Çıkarıp yeni bir arşiv oluşturun.";
+"readOnlyLocation" = "Bu arşiv kilitli ya da salt okunur bir diskte olduğu için düzenlenemez. Çıkarıp yeni bir arşiv oluşturun.";
 
 "subfolderSmart" = "Birden çok öğe varsa";
 "subfolderAlways" = "Her zaman";

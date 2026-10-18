@@ -8,11 +8,24 @@ public enum ArchiveCapabilities {
     /// 7zz'nin güncelleyebildiği (a / d / rn) türler.
     static let editableTypes: Set<String> = ["7z", "zip", "tar", "wim"]
 
-    public static func isEditable(type: String?, url: URL) -> Bool {
+    /// Biçim yerinde güncellenebilir ve arşiv yazılabilir bir yerde mi?
+    public static func isEditable(type: String?, url: URL, fileManager: FileManager = .default) -> Bool {
+        supportsEditing(type: type, url: url) && isWritable(url, fileManager: fileManager)
+    }
+
+    /// Biçim 7zz ile yerinde güncellenebilir mi? Bölünmüş arşivler (.001, .002, …) güncellenemez.
+    public static func supportsEditing(type: String?, url: URL) -> Bool {
         guard let type, editableTypes.contains(type.lowercased()) else { return false }
-        // Bölünmüş arşivler (.001, .002, …) güncellenemez.
         let ext = url.pathExtension
         return !(ext.count == 3 && ext.allSatisfy(\.isNumber))
+    }
+
+    /// 7zz güncellenmiş kopyayı arşivin yanına yazıp eskisinin yerine koyar: arşiv ve klasörü yazılabilir olmalı.
+    /// Salt okunur (0444) ya da kilitli arşiv, salt okunur disk görüntüsü veya paylaşım "errno=13 : Permission denied"
+    /// verirdi. Diskte olmayan yol engellenmez.
+    public static func isWritable(_ url: URL, fileManager: FileManager = .default) -> Bool {
+        guard fileManager.fileExists(atPath: url.path) else { return true }
+        return fileManager.isWritableFile(atPath: url.path) && fileManager.isWritableFile(atPath: url.deletingLastPathComponent().path)
     }
 }
 
