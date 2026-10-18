@@ -29,6 +29,29 @@ A deterministic seeded fuzz suite (`FuzzTests.swift`) was added over all pure pa
 - **Verified safe (no change needed):** the on-disk recursions used during extraction (`StagedExtraction.secureSymlinks`, `removeTree`, `DiskSpace.totalSize`, `Quarantine.propagate`, `SpecialFiles.archivePaths`) recurse per real directory depth, which is doubly bounded: the OS caps creatable depth at PATH_MAX (~213 from a temp prefix, `ENAMETOOLONG`), and once an absolute child path exceeds PATH_MAX the recursion’s own `lstat`/`contentsOfDirectory` fail and it stops rather than overflowing.
 - **Location:** `Sources/ArhivarCore/ArchiveTree.swift` (`build`, `maxDepth`)
 
+#### S2. ✅ [P1] Listing Memory-Exhaustion DoS (unbounded `7zz` output buffer)
+- **Status:** ✅ Done — a crafted archive declaring tens of millions of tiny entries made `7zz l -slt` emit gigabytes of output, all buffered in memory while merely opening the archive. `CommandRunner` now caps accumulated subprocess output (`maxOutputBytes`, 512 MiB); past the cap the process is terminated and the run fails with a clear error. 512 MiB still allows ~2M real entries. Test `commandRunnerCapsHugeOutput`.
+- **Location:** `Sources/ArhivarCore/CommandRunner.swift`
+
+#### S3. ✅ [P2] `.term` (Terminal session) opened without a warning
+- **Status:** ✅ Done — `OpenSafety` flagged `.terminal` but not `.term` (`com.apple.terminal.session`), which runs its `ExecutionString` on open. Added `com.apple.terminal.session` and the `term`/`terminal` extensions. Test `terminalSessionFilesAreRisky`.
+- **Location:** `Sources/ArhivarCore/OpenSafety.swift`
+
+#### S4. ✅ [P2] Personal-data denylist missed mainstream cloud/dev credential stores
+- **Status:** ✅ Done — added `~/.config/gcloud`, `~/.azure`, `~/.oci`, `~/.terraform.d`, `~/.m2`, `~/.gradle`, `~/.cargo`, `~/.gem` and VS Code settings to `SandboxProfile.personalDataDirectories`, so a symlink from an archived source into them is not dereferenced into the archive. (A path-based denylist is inherently incomplete — see S6.) Test `denylistCoversCloudAndDevCredentials`.
+- **Location:** `Sources/ArhivarCore/Sandbox.swift`
+
+#### S5. ✅ [P2] 0-byte dangerous-link placeholder not removed inside a read-only folder
+- **Status:** ✅ Done — `StagedExtraction.removeLinkPlaceholders` now grants temporary owner write/exec on the placeholder's parent (restoring it) so a `7zz` dangerous-link placeholder inside a `0555` folder is deleted; otherwise "Replace it" could zero an existing same-named file. Test `linkPlaceholderRemovedInsideReadOnlyDirectory`.
+- **Location:** `Sources/ArhivarCore/StagedExtraction.swift`
+
+#### S6. ⬜ [P3] Accepted limitations / lower priority (reported by the audit, not fixed)
+- **Hardlink to a secret in a create/add source:** a local process can plant a hardlink to `~/.ssh/id_rsa` inside a tree the user archives; the sandbox denies by *path*, so a second name for the inode outside the denied subpath is read and packed. Inherent to path-based `sandbox-exec`; precondition is local write to the user's source tree. Mitigation (stat sources for `st_nlink > 1` whose realpath resolves under a personal dir and exclude with `-x!`) is possible but deferred.
+- **Decompression bomb with no/under-declared size** (single-stream `.bz2`/raw `.lzma`): `DiskSpace` pre-flight sees `nil`/too-small size and allows extraction, which fills the disk transiently; staging is same-volume and atomic, so the destination is untouched and `7zz` fails. Low.
+- **Benign filename containing "wrong password"/"Cannot open encrypted archive"** can be misclassified as `.wrongPassword`. Niche; tightening risks weakening real wrong-password detection. Low.
+- **Critic-only ideas (unverified):** self-update URL host validation, hardlink *entries inside* an archive on extraction, localization format-string validator gaps, listing TOCTOU between open and operation, and silent fail-open when `sandbox-exec` is unavailable. Tracked for future tests.
+- **Location:** n/a (design notes)
+
 ---
 
 
