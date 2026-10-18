@@ -126,13 +126,16 @@ struct AppCommands: Commands {
                 .disabled(!model.canOperate)
             Button(settings.t(.contextQuickLook)) { model.toggleQuickLook() }
                 .keyboardShortcut("y")
-                .disabled(!model.canOperate || model.selection.count != 1)
+                .disabled(!model.canOperate || model.selection.count != 1 || model.selectionIsSymbolicLink)
             // Finder'daki gibi: ⌘↓ seçili klasöre girer ya da dosyayı açar (arşivse içine girer).
             Button(settings.t(.contextOpen)) { model.primaryAction(model.selection) }
                 .keyboardShortcut(.downArrow, modifiers: .command)
-                .disabled(!model.canOperate || model.selection.count != 1)
+                .disabled(!model.canOperate || model.selection.count != 1 || model.selectionIsSymbolicLink)
             Button(settings.t(.contextChecksums)) { model.showChecksums() }
-                .disabled(!model.canOperate || model.selection.count != 1 || model.selection.first.flatMap(model.node)?.isDirectory != false)
+                .disabled(
+                    !model.canOperate || model.selection.count != 1 || model.selection.first.flatMap(model.node)?.isDirectory != false
+                        || model.selectionIsSymbolicLink
+                )
             Button(settings.t(.toolbarInfo)) { model.showInfo.toggle() }
                 .keyboardShortcut("i")
                 .disabled(model.listing == nil)

@@ -153,7 +153,7 @@ struct HardeningIntegrationTests {
         )
         let folder = try await extractor.extract("kaynak/a/b")
         #expect(try fileManager.contentsOfDirectory(atPath: folder.path) == ["f.txt"])
-        await #expect(throws: SevenZipError.self) { try await extractor.extract("kaynak/kotu") }
+        await #expect(throws: ItemExtractor.SymbolicLinkError(paths: ["kaynak/kotu"])) { try await extractor.extract("kaynak/kotu") }
     }
 
     /// P1-8: ".." bileşenli girdi, 7zz'nin yazdığı yerde ("a/x.txt") bulunur; aynı yollu girdiler bir kez sayılır.

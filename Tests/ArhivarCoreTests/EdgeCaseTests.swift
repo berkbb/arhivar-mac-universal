@@ -72,4 +72,22 @@ struct EdgeCaseIntegrationTests {
         #expect(!FileManager.default.fileExists(atPath: url.deletingLastPathComponent().appendingPathComponent("z").path))
     }
 
+    /// R3-2: bağlantı listesi verilmese de tek başına çıkarılan bağlantı açık bir hatayla reddedilir ("kod 0" değil).
+    @Test func standaloneLinkIsRefusedWithAClearError() async throws {
+        defer { cleanUp() }
+        let source = workspace.appendingPathComponent("k", isDirectory: true)
+        try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
+        try "f".write(to: source.appendingPathComponent("f.txt"), atomically: true, encoding: .utf8)
+        try FileManager.default.createSymbolicLink(atPath: source.appendingPathComponent("iyi").path, withDestinationPath: "f.txt")
+        let archive = workspace.appendingPathComponent("bag.7z")
+        let options = CreateOptions(sources: [source], destination: archive, format: .sevenZip, level: .fast)
+        try SevenZipError.check(try await runner.run(SevenZipCommand.create(options), timeout: 30))
+
+        let extractor = ItemExtractor(runner: runner, archive: archive, password: nil, root: workspace.appendingPathComponent("oturum"))
+        await #expect(throws: ItemExtractor.SymbolicLinkError(paths: ["k/iyi"])) { try await extractor.extract("k/iyi") }
+        // Klasörün içindeki güvenli bağlantı klasörle birlikte gelir.
+        let folder = try await extractor.extract("k")
+        #expect(try FileManager.default.destinationOfSymbolicLink(atPath: folder.appendingPathComponent("iyi").path) == "f.txt")
+    }
+
 }

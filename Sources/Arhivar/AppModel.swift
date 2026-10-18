@@ -587,7 +587,7 @@ final class AppModel {
 
     /// Arşivin içindeki bir arşivi (ör. .zip içindeki .tar.gz) geçici klasöre çıkarıp tarayıcıda açar.
     func browseArchive(_ path: String) {
-        guard let archive = archiveURL, operation == nil, node(path)?.isDirectory == false else { return }
+        guard let archive = archiveURL, operation == nil, node(path)?.isDirectory == false, !refuseSymbolicLink(path) else { return }
         if needsPassword(for: [path]) {
             passwordRequest = PasswordRequest(archive: archive, isRetry: false, action: .browse(path: path))
             return
@@ -837,7 +837,7 @@ final class AppModel {
 
     /// Bir dosyayı geçici klasöre çıkarıp varsayılan uygulamasıyla açar.
     func openItem(_ path: String) {
-        guard node(path)?.isDirectory == false else { return }
+        guard node(path)?.isDirectory == false, !refuseSymbolicLink(path) else { return }
         withExtractedItem(path, retry: .openItem(path: path)) { url in
             if let reason = self.openRisk(for: url, path: path) {
                 // Çalıştırılabilir ya da adı yanıltıcı dosyalar sormadan Terminal'e / Yükleyici'ye verilmez.
@@ -869,8 +869,23 @@ final class AppModel {
                 return
             }
         }
-        guard let path = path ?? selection.sorted().first, node(path)?.isDirectory == false else { return }
+        guard let path = path ?? selection.sorted().first, node(path)?.isDirectory == false, !refuseSymbolicLink(path) else { return }
         withExtractedItem(path, retry: .quickLook(path: path)) { self.quickLookURL = $0 }
+    }
+
+    /// Öğe arşivde bir sembolik bağlantı mı? (Tek başına açılamaz, önizlenemez, kopyalanamaz, sürüklenemez.)
+    func isSymbolicLink(_ id: ArchiveNode.ID) -> Bool { symbolicLinks.contains(id) }
+
+    /// Tek seçili öğe bir sembolik bağlantı mı? (Menüde Hızlı Bakış, Aç ve sağlama değerleri kapalıdır.)
+    var selectionIsSymbolicLink: Bool { selection.count == 1 && selection.first.map(isSymbolicLink) == true }
+
+    /// Sembolik bağlantıyı tek başına açma, önizleme ya da sağlama değeri isteği: gösterdiği yer çıkarılmadığı için
+    /// 7zz'yi çalıştırmak yerine nedeni açıklanır.
+    /// - Returns: Öğe bir bağlantıysa (istek reddedildiyse) true.
+    private func refuseSymbolicLink(_ path: String) -> Bool {
+        guard isSymbolicLink(path) else { return false }
+        alert = AlertItem(title: t(.warningTitle), message: t(.symbolicLinkItem, OpenSafety.visibleName((path as NSString).lastPathComponent)))
+        return true
     }
 
     /// Öğeyi (önbellekte yoksa) geçici klasöre çıkarır ve sonucu verir.
@@ -933,7 +948,8 @@ final class AppModel {
 
     /// Listeden Finder'a sürüklenecek öğe; parola gerekiyorsa ve bilinmiyorsa sürükleme kapalıdır.
     func dragItem(for node: ArchiveNode) -> ArchiveItemTransfer? {
-        guard let archive = archiveURL, let engineURL, !needsPassword(for: [node.id]) else { return nil }
+        // Tek başına bir bağlantı taşındığı yerde dışarıyı gösterir ya da boşa düşer; sürüklenmez.
+        guard let archive = archiveURL, let engineURL, !isSymbolicLink(node.id), !needsPassword(for: [node.id]) else { return nil }
         let session = sessionDirectory()
         let runner = confined(CommandRunner(executableURL: engineURL), archive: archive, writable: [session])
         let extractor = ItemExtractor(runner: runner, archive: archive, password: password, root: session, symbolicLinks: symbolicLinks)
@@ -946,8 +962,15 @@ final class AppModel {
     /// ⌘C: seçili öğeleri oturum klasörüne çıkarır ve dosya olarak panoya koyar; Finder'da ⌘V ile yapıştırılabilir.
     /// (Geçici dosyalar arşiv kapanınca silinir; yapıştırma arşiv açıkken yapılmalıdır.)
     func copyItems(_ ids: [String]? = nil, to pasteboard: NSPasteboard = .general) {
-        let items = ids ?? selection.sorted()
-        guard let archive = archiveURL, operation == nil, !items.isEmpty else { return }
+        let requested = ids ?? selection.sorted()
+        guard let archive = archiveURL, operation == nil, !requested.isEmpty else { return }
+        // Seçimdeki (ör. ⌘A) tek başına bağlantılar atlanır, kalanlar kopyalanır; yalnızca bağlantılar seçildiyse
+        // nedeni açıklanır. Seçilen klasörlerin içindeki bağlantılar ise klasörle birlikte (güvenli olanlar) gelir.
+        let items = requested.filter { !isSymbolicLink($0) }
+        guard !items.isEmpty else {
+            _ = refuseSymbolicLink(requested[0])
+            return
+        }
         if needsPassword(for: items) {
             passwordRequest = PasswordRequest(archive: archive, isRetry: false, action: .copy(items: items))
             return
@@ -1018,7 +1041,7 @@ final class AppModel {
     /// Seçili dosyanın CRC32, SHA-256 ve BLAKE2sp değerlerini (7zz h) gösterir.
     func showChecksums(_ path: String? = nil) {
         guard let path = path ?? (selection.count == 1 ? selection.first : nil), node(path)?.isDirectory == false,
-              let archive = archiveURL, operation == nil else { return }
+              let archive = archiveURL, operation == nil, !refuseSymbolicLink(path) else { return }
         if needsPassword(for: [path]) {
             passwordRequest = PasswordRequest(archive: archive, isRetry: false, action: .checksums(path: path))
             return
@@ -1469,6 +1492,10 @@ final class AppModel {
         }
         if let duplicate = error as? AddPlan.DuplicateNameError {
             return t(.duplicateNames, duplicate.names.joined(separator: ", "))
+        }
+        if let link = error as? ItemExtractor.SymbolicLinkError {
+            let name = link.paths.first.map { (ListingParser.normalizedPath($0) as NSString).lastPathComponent } ?? ""
+            return t(.symbolicLinkItem, OpenSafety.visibleName(name))
         }
         guard let error = error as? SevenZipError else { return error.localizedDescription }
         switch error {

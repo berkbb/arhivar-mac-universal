@@ -93,7 +93,8 @@ struct ArchiveBrowserView: View {
                     model.browserMode = .folders
                     model.enterFolder(single.id)
                 }
-            } else {
+            } else if !model.isSymbolicLink(single.id) {
+                // Tek başına bir bağlantı açılamaz, önizlenemez; yalnızca çıkarılabilir.
                 if ArchiveNaming.isBrowsable(single.name) {
                     Button(settings.t(.contextBrowse), systemImage: "archivebox") { model.browseArchive(single.id) }
                 }
@@ -105,6 +106,7 @@ struct ArchiveBrowserView: View {
         if !ids.isEmpty {
             Button(settings.t(.contextExtract), systemImage: "arrow.up.bin") { model.extract(items: ids.sorted()) }
             Button(settings.t(.contextCopy), systemImage: "doc.on.doc") { model.copyItems(ids.sorted()) }
+                .disabled(ids.allSatisfy(model.isSymbolicLink))
         }
         if model.isEditable {
             Divider()

@@ -1106,4 +1106,54 @@ struct AppModelTests {
         #expect(Quarantine.value(of: extracted) == value)
         #expect(Quarantine.value(of: output.appendingPathComponent("kaynak/salt.txt")) == value)
     }
+
+    // MARK: - .agents/context/roadmap.md: üçüncü tur
+
+    /// R3-2: tek başına bağlantılar sürüklenmez; ⌘A + ⌘C kalanları kopyalar; açma, Hızlı Bakış ve sağlama değeri
+    /// "kod 0" hatası yerine nedenini söyler.
+    @Test func symbolicLinkRowsAreSkippedOrExplained() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        try FileManager.default.createSymbolicLink(
+            atPath: fixture.workspace.appendingPathComponent("kaynak/iyi").path, withDestinationPath: "not.txt"
+        )
+        let archive = try await fixture.makeArchive("bag.7z", format: .sevenZip)
+        let model = fixture.model
+        model.openArchive(archive)
+        await fixture.settle()
+        let refusal = fixture.settings.t(.symbolicLinkItem, "iyi")
+
+        #expect(model.isSymbolicLink("kaynak/iyi"))
+        #expect(model.dragItem(for: try #require(model.node("kaynak/iyi"))) == nil)
+        #expect(model.dragItem(for: try #require(model.node("kaynak/not.txt"))) != nil)
+        model.selection = ["kaynak/iyi"]
+        #expect(model.selectionIsSymbolicLink)
+
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("ArhivarTests-\(UUID().uuidString)"))
+        defer { pasteboard.releaseGlobally() }
+        model.copyItems(["kaynak/alt", "kaynak/iyi", "kaynak/not.txt"], to: pasteboard)
+        await fixture.settle()
+        #expect(model.alert == nil)
+        let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] ?? []
+        #expect(urls.map(\.lastPathComponent) == ["alt", "not.txt"])
+
+        model.copyItems(["kaynak/iyi"], to: pasteboard)
+        #expect(model.operation == nil)
+        #expect(model.alert?.message == refusal)
+        model.alert = nil
+        model.openItem("kaynak/iyi")
+        #expect(model.operation == nil)
+        #expect(model.alert?.message == refusal)
+        model.alert = nil
+        model.toggleQuickLook("kaynak/iyi")
+        #expect(model.operation == nil)
+        #expect(model.quickLookURL == nil)
+        #expect(model.alert?.message == refusal)
+        model.alert = nil
+        model.showChecksums("kaynak/iyi")
+        #expect(model.operation == nil)
+        #expect(model.alert?.message == refusal)
+    }
+
 }

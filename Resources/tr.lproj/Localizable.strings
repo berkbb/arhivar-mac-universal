@@ -244,6 +244,7 @@
 "createPasswordConfirmHint" = "Onaylamak için parolayı yeniden girin.";
 "warningRemovedLinks" = "Hedefin dışını gösteren sembolik bağlantılar atlandı: %@";
 "renameExists" = "Bu klasörde “%@” adlı bir öğe zaten var.";
+"symbolicLinkItem" = "“%@” bir sembolik bağlantı. Tek başına açılamaz, önizlenemez, kopyalanamaz ya da sürüklenemez; bunun yerine bulunduğu klasörü çıkarın.";
 "contextCopy" = "Kopyala";
 "toastCopied" = "%ld öğe kopyalandı";
 "contextBrowse" = "Arhivar'da Aç";

@@ -177,6 +177,17 @@ public struct ItemExtractor: Sendable {
     /// Arşivdeki sembolik bağlantı girdilerinin normalleştirilmiş yolları (bkz. `ArchiveEntry.isSymbolicLink`).
     public let symbolicLinks: Set<String>
 
+    /// Tek başına istenen sembolik bağlantı verilmez: taşındığı yerde (Finder, pano) hedef ağacın dışını gösterir ya da
+    /// boşa düşer; 7zz reddettiyse yerinde 0 baytlık sahte bir dosya vardır.
+    public struct SymbolicLinkError: Error, Equatable, Sendable {
+        /// İstenen bağlantıların 7zz'nin tanıdığı (ham) yolları.
+        public let paths: [String]
+
+        public init(paths: [String]) {
+            self.paths = paths
+        }
+    }
+
     public init(
         runner: CommandRunner, archive: URL, password: String?, root: URL = ItemExtractor.temporaryRoot,
         symbolicLinks: Set<String> = []
@@ -231,6 +242,9 @@ public struct ItemExtractor: Sendable {
         let targets = normalized.map { directory.appendingPathComponent($0).standardizedFileURL }
         // Arşivdeki "../" gibi yollar geçici klasörün dışına çıkamasın.
         guard !paths.isEmpty else { throw SevenZipError.failed(code: 0, message: "") }
+        // Listede bağlantı olduğu bilinen öğe için 7zz hiç çalıştırılmaz.
+        let requestedLinks = zip(paths, normalized).filter { symbolicLinks.contains($0.1) }.map(\.0)
+        guard requestedLinks.isEmpty else { throw SymbolicLinkError(paths: requestedLinks) }
         if let escaping = zip(paths, targets).first(where: { $0.1.path == directory.standardizedFileURL.path || !$0.1.path.hasPrefix(base) }) {
             throw SevenZipError.failed(code: 0, message: escaping.0)
         }
@@ -242,12 +256,12 @@ public struct ItemExtractor: Sendable {
             let options = ExtractOptions(archive: archive, destination: directory, items: paths, password: password, overwrite: .replace)
             let result = try await runner.run(SevenZipCommand.extract(options), workingDirectory: options.workingDirectory, input: options.input, onProgress: onProgress)
             try SevenZipError.check(result)
-            for (path, target) in zip(normalized, targets) {
+            var links: [String] = []
+            for (raw, (path, target)) in zip(paths, zip(normalized, targets)) {
                 let type = StagedExtraction.itemType(target, fileManager: fileManager)
-                if symbolicLinks.contains(path) || type == .typeSymbolicLink {
-                    // Tek başına bir bağlantı, taşındığı yerde (Finder, pano) hedef ağacın dışını gösterir ya da
-                    // boşa düşer; 7zz reddettiyse yerinde 0 baytlık sahte bir dosya vardır. Verilmez.
-                    try? fileManager.removeItem(at: target)
+                if type == .typeSymbolicLink {
+                    // Bağlantı listesi verilmemişse çıkarılan öğenin kendisine bakılır.
+                    links.append(raw)
                     continue
                 }
                 guard type == .typeDirectory else { continue }
@@ -258,6 +272,7 @@ public struct ItemExtractor: Sendable {
                 // taşınır, kardeş klasörleri ("../dış") ve mutlak hedefler yanında gitmez.
                 StagedExtraction.secureSymlinks(in: target, extractionRoot: directory, fileManager: fileManager)
             }
+            guard links.isEmpty else { throw SymbolicLinkError(paths: links) }
             if let missing = zip(paths, targets).first(where: { StagedExtraction.itemType($0.1, fileManager: fileManager) == nil }) {
                 throw SevenZipError.failed(code: result.exitCode, message: missing.0)
             }
