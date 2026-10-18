@@ -1285,4 +1285,37 @@ struct AppModelTests {
         #expect(fixture.model.operation == nil)
         #expect(fixture.model.createRequest?.sources == [rom])
     }
+
+    /// Akıllı kip, Finder'ın "Sıkıştır" ile yaptığı tek klasörlü arşivi doğrudan hedefe çıkarırken yanındaki macOS üst
+    /// verisini taşımaz: hedefe "__MACOSX" dağılmaz, hedef klasörün kendi ".DS_Store"u arşivinkiyle ezilmez.
+    @Test func smartExtractionLeavesFinderMetadataOut() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let source = fixture.workspace.appendingPathComponent("finder", isDirectory: true)
+        try FileManager.default.createDirectory(at: source.appendingPathComponent("Proje"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: source.appendingPathComponent("__MACOSX/Proje"), withIntermediateDirectories: true)
+        try "a".write(to: source.appendingPathComponent("Proje/a.txt"), atomically: true, encoding: .utf8)
+        try "ad".write(to: source.appendingPathComponent("__MACOSX/Proje/._a.txt"), atomically: true, encoding: .utf8)
+        try "arsiv".write(to: source.appendingPathComponent(".DS_Store"), atomically: true, encoding: .utf8)
+        let archive = fixture.workspace.appendingPathComponent("Proje.zip")
+        let options = CreateOptions(
+            sources: ["Proje", "__MACOSX", ".DS_Store"].map { source.appendingPathComponent($0) }, destination: archive, format: .zip, level: .fast
+        )
+        try SevenZipError.check(try await fixture.runner.run(SevenZipCommand.create(options)))
+        let output = fixture.useExtractFolder()
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        try "kullanici".write(to: output.appendingPathComponent(".DS_Store"), atomically: true, encoding: .utf8)
+        fixture.settings.subfolderMode = .smart
+        fixture.settings.overwriteMode = .replace
+
+        fixture.model.openArchive(archive)
+        await fixture.settle()
+        fixture.model.extract(items: [])
+        await fixture.settle()
+        #expect(fixture.model.alert == nil)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: output.path).sorted() == [".DS_Store", "Proje"])
+        #expect(try String(contentsOf: output.appendingPathComponent(".DS_Store"), encoding: .utf8) == "kullanici")
+        #expect(try String(contentsOf: output.appendingPathComponent("Proje/a.txt"), encoding: .utf8) == "a")
+    }
 }

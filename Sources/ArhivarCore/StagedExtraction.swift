@@ -48,10 +48,33 @@ public enum StagedExtraction {
             let roots = (try? fileManager.contentsOfDirectory(atPath: content.path)) ?? []
             // .DS_Store, __MACOSX ve AppleDouble (._*) üst verileri sayılmaz: Finder'ın "Sıkıştır" ile yaptığı
             // tek klasörlü arşivlerin kökündeki __MACOSX, "akıllı" kipin "Ad/Ad/…" iç içe klasörü oluşturmasına yol açmasın.
-            let meaningful = roots.filter { $0 != ".DS_Store" && $0 != "__MACOSX" && !$0.hasPrefix("._") }
+            let meaningful = roots.filter { !isMacMetadata($0) }
             let count = meaningful.isEmpty ? roots.count : meaningful.count
             return count > 1 ? subfolder : base
         }
+    }
+
+    /// macOS üst veri öğesi mi: Finder görünüm ayarları (.DS_Store), AppleDouble kopyaları (._*) ya da Arşiv İzlencesi'nin
+    /// kaynak çatalı klasörü (__MACOSX)?
+    public static func isMacMetadata(_ name: String) -> Bool {
+        name == ".DS_Store" || name == "__MACOSX" || name.hasPrefix("._")
+    }
+
+    /// Akıllı kural, kökteki tek anlamlı öğenin yanında yalnızca macOS üst verisi olduğu için içeriği doğrudan hedefe
+    /// çıkarıyorsa o üst veri hedefe taşınmaz: kullanıcının klasörüne "__MACOSX" dağılmaz, klasörün kendi ".DS_Store"u
+    /// (Finder görünüm ayarları) arşivinkiyle ezilmez. Arşivde üst veriden başka bir şey yoksa ya da içerik bir alt
+    /// klasöre çıkıyorsa hiçbir şey bırakılmaz.
+    /// - Returns: Hazırlıkta bırakılan (taşınmayacak) kök öğelerin adları.
+    @discardableResult
+    public static func leaveOutRootMetadata(
+        in content: URL, destination: URL, base: URL, mode: SubfolderMode, fileManager: FileManager = .default
+    ) -> [String] {
+        guard mode == .smart, destination == base else { return [] }
+        let roots = (try? fileManager.contentsOfDirectory(atPath: content.path)) ?? []
+        let metadata = roots.filter(isMacMetadata)
+        guard !metadata.isEmpty, metadata.count < roots.count else { return [] }
+        for name in metadata { removeTree(at: content.appendingPathComponent(name), fileManager: fileManager) }
+        return metadata.sorted()
     }
 
     /// Hazırlık klasöründeki öğeleri hedefe taşır ve üzerine yazma politikasını uygular.

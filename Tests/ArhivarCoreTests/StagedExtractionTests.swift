@@ -127,3 +127,39 @@ private struct Sandbox {
     #expect(StagedExtraction.destination(for: staging, base: base, archiveName: "Proje", mode: .smart).lastPathComponent == "Proje")
 }
 
+
+/// Akıllı kip içeriği doğrudan hedefe çıkarırken kökteki macOS üst verisi bırakılır; yalnızca üst veri olan arşivde,
+/// alt klasöre çıkarken ya da başka kiplerde hiçbir şey bırakılmaz.
+@Test func smartLeavesRootMetadataOutOnlyWhenExtractingIntoTheBase() throws {
+    let box = try Sandbox()
+    defer { box.cleanUp() }
+    let base = box.root.appendingPathComponent("indirilenler", isDirectory: true)
+    func staging(_ name: String, folders: [String], files: [String]) throws -> URL {
+        let url = box.root.appendingPathComponent(name, isDirectory: true)
+        for folder in folders { try FileManager.default.createDirectory(at: url.appendingPathComponent(folder), withIntermediateDirectories: true) }
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        for file in files { try Data("x".utf8).write(to: url.appendingPathComponent(file)) }
+        return url
+    }
+    func leaveOut(_ content: URL, mode: SubfolderMode) -> [String] {
+        let destination = StagedExtraction.destination(for: content, base: base, archiveName: "Proje", mode: mode)
+        return StagedExtraction.leaveOutRootMetadata(in: content, destination: destination, base: base, mode: mode)
+    }
+
+    // FileManager "._" ile başlayan sıradan dosyaları listelemez; "._Proje" ne sayılır ne taşınır (merge de görmez).
+    let finder = try staging("finder", folders: ["Proje", "__MACOSX/Proje"], files: [".DS_Store", "._Proje"])
+    #expect(leaveOut(finder, mode: .smart) == [".DS_Store", "__MACOSX"])
+    #expect(try FileManager.default.contentsOfDirectory(atPath: finder.path) == ["Proje"])
+
+    // Arşivde üst veriden başka bir şey yoksa çıkarılan tek şey odur; bırakılmaz.
+    let onlyMetadata = try staging("yalniz", folders: [], files: [".DS_Store"])
+    #expect(leaveOut(onlyMetadata, mode: .smart).isEmpty)
+    // Birden çok anlamlı öğe: içerik arşiv adıyla bir alt klasöre gider, üst veri onunla birlikte kalır.
+    let several = try staging("cok", folders: ["Proje", "Belgeler", "__MACOSX"], files: [])
+    #expect(leaveOut(several, mode: .smart).isEmpty)
+    // Kullanıcı "Her zaman" ya da "Hiçbir zaman" seçtiyse arşiv olduğu gibi çıkar.
+    let always = try staging("her", folders: ["Proje", "__MACOSX"], files: [])
+    #expect(leaveOut(always, mode: .always).isEmpty)
+    #expect(leaveOut(always, mode: .never).isEmpty)
+    #expect(StagedExtraction.isMacMetadata("._a.txt") && !StagedExtraction.isMacMetadata("a.DS_Store"))
+}

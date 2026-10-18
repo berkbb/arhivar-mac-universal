@@ -822,9 +822,16 @@ final class AppModel {
 
             // 5. Alt klasör kuralına göre hedefi belirle ve seçilen üzerine yazma kuralıyla taşı.
             let destination = StagedExtraction.destination(for: content, base: base, archiveName: archiveName, mode: subfolderMode)
+            // Tüm arşiv akıllı kuralla doğrudan hedefe çıkıyorsa Finder'ın eklediği üst veri (__MACOSX, .DS_Store, ._*)
+            // hedefe dağılmaz. Kullanıcının açıkça seçtiği öğelere dokunulmaz.
+            if items.isEmpty {
+                StagedExtraction.leaveOutRootMetadata(in: content, destination: destination, base: base, mode: subfolderMode)
+            }
             let changed = try StagedExtraction.merge(from: content, into: destination, policy: policy)
-            // Doğrudan hedefe tek öğe çıktıysa Finder o öğeyi seçsin.
-            let reveal = destination == base && changed.count == 1 ? changed[0] : destination
+            // Doğrudan hedefe tek anlamlı öğe çıktıysa Finder o öğeyi seçsin (macOS üst verileri sayılmaz).
+            let meaningfulChanged = changed.filter { !StagedExtraction.isMacMetadata($0.lastPathComponent) }
+            let targetItems = meaningfulChanged.isEmpty ? changed : meaningfulChanged
+            let reveal = destination == base && targetItems.count == 1 ? targetItems[0] : destination
             let warning = warnings.isEmpty ? nil : warnings.joined(separator: "\n\n")
             self.finish(message: self.t(.toastExtracted, reveal.lastPathComponent), reveal: reveal, warning: warning)
         }
