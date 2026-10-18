@@ -58,6 +58,13 @@ private final class TreeBuilderNode {
 }
 
 public enum ArchiveTree {
+    /// Gösterim ağacının en çok derinliği. Ağaç bir değer tipidir ve özyinelemeli tüketilir (`convert`, `sorted`,
+    /// `search`, `index`, SwiftUI `Table`, ARC yıkımı); sınırsız derinlik yığını taşırır. Kötü niyetli bir arşiv
+    /// metaverisinde binlerce bileşenli bir yol bildirebilir ve arşiv yalnızca AÇILIRKEN (listelenirken) uygulamayı
+    /// çökertirdi. macOS'ta zaten PATH_MAX (1024 bayt) bu derinlikte bir yolu diske çıkaramaz. Bu sınırdan derin
+    /// girdiler ağaçta gösterilmez ama `listing.entries` içinde kalır: istatistikler ve "Tümünü Çıkar" etkilenmez.
+    public static let maxDepth = 100
+
     /// Düz girdi listesini klasör ağacına çevirir; arşivde açıkça bulunmayan ara klasörleri de oluşturur.
     public static func build(from entries: [ArchiveEntry]) -> [ArchiveNode] {
         let root = TreeBuilderNode(path: "", name: "", archivePath: "", isDirectory: true)
@@ -68,7 +75,11 @@ public enum ArchiveTree {
             let raw = entry.archivePath == entry.path ? nil : entry.archivePath
             var current = root
             var currentPath = ""
-            for (index, component) in components.enumerated() {
+            // Çok derin yollarda yalnızca ilk `maxDepth` düzey ağaca girer (yığın taşmasını önler); daha derin kuyruk
+            // gösterilmez. Girdinin kendisi listede kalır, bu yüzden tam çıkarma ve sayımlar eksilmez.
+            let depth = Swift.min(components.count, maxDepth)
+            for index in 0..<depth {
+                let component = components[index]
                 currentPath = currentPath.isEmpty ? component : currentPath + "/" + component
                 let isLast = index == components.count - 1
                 if let existing = current.children[component] {
