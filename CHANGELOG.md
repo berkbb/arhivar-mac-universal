@@ -74,6 +74,9 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 - Symbolic links in the list: selecting all (⌘A) and copying (⌘C) copies everything except standalone links instead of failing with "code 0"; opening, previewing or checksumming a link explains why it can't be done, and links can't be dragged on their own.
 - Adding or creating from nothing but named pipes, sockets or device files is refused with a clear message (adding used to pick up the whole source folder or an empty folder). A folder reached through a symbolic link is checked for pipes too when links are not stored as links, and a failed add removes its read-only temporary copies.
 - New Archive (⌘N) and Open Archive (⌘O) are disabled while an operation runs (their result used to be dropped silently).
+- Extracting with "Replace it" over folders left read-only (`0555`), unreadable or unenterable (`0444`, `0000`) by an earlier extraction works, also when a folder has to be replaced by a file; symbolic links inside such folders are checked and removed like any other, and the folders keep their permissions.
+- "Extract Here" on the archive that is open and unlocked uses its password instead of asking again and forgetting it.
+- The New Archive sheet says right away when the chosen items are only named pipes, sockets or device files, and keeps Create disabled.
 
 ### Changed
 

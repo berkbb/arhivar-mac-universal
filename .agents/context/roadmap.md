@@ -9,10 +9,23 @@
 
 ## Open / In Progress
 
-### Priority 1 (P1) — Security & Reliability Hardening
+### Upstream-Dependent Items
 
-#### 1. ⬜ [P1] Read-Only Directory Tree (`0o555` / `0o444`) Permission Immunity in `StagedExtraction.mergeItem` and `secureSymlinks`
-- **Status:** ⬜ Open
+#### 1. 🟡 [Medium] Zstandard (`.zst` / `.tar.zst`) Archive Creation
+- **Status:** 🟡 Partially done — one-step `.tar.gz`, `.tar.xz`, and `.tar.bz2` creation is completed (tests `tarCompressionCommands`, `createsCompressedTar`, `createsTarGzInOneStep`).
+- ⬜ **Remaining:** Zstandard (`.zst` and `.tar.zst`) creation is currently **blocked upstream**: the official 7-Zip `7zz` (26.04) extracts `.zst` / `.tzst` (`K` flag in `7zz i`) but does not implement `zstd` archive creation (`7zz a -tzstd` fails with `E_NOTIMPL`).
+- **Next steps:** Offer `.zst` and `.tar.zst` in `ArchiveFormat` (`Sources/ArhivarCore/ArchiveOptions.swift`) once upstream `7zz` enables `C` (Create) support for `zstd`, or dynamically when the active engine reports `zstd` creation capability. `.tar.zst` will directly reuse `SevenZipCommand.tarStage` and `compressTarStage`.
+
+---
+
+## Done
+
+### Fourth Hardening Round — Read-Only Trees, Extract Here Password & Special-File Validation (2026-10-18)
+
+All three items were reproduced with failing tests before the fix; the suite grew from 189 to 194 tests.
+
+#### R4-1. ✅ [P1] Read-Only Directory Tree (`0o555` / `0o444`) Permission Immunity in `StagedExtraction.mergeItem` and `secureSymlinks`
+- **Status:** ✅ Done — `mergeItem` replaces a folder by a file with `removeTree` (read-only contents no longer abort with Cocoa 513), grants `S_IWUSR | S_IXUSR` on the target folder and `S_IRWXU` on the staged folder while merging (`0444` / `0000` targets, `0311` / `0555` staged folders), restoring both modes. `secureSymlinks` walks the tree itself and grants owner access to folders it can't read, enter or modify, so links inside `0000` / `0311` / `0555` folders are found, removed or rewritten; the modes are restored deepest-first (`OwnerAccess.addTree` / `restore`, also used by `removeTree`). Tests `replacingAFolderWithReadOnlyContentsByAFile`, `mergingThroughFoldersWithoutSearchPermission`, `linksInsideReadOnlyFoldersAreStillSecured`.
 - **Locations:**
   - `Sources/ArhivarCore/StagedExtraction.swift` (`mergeItem`, lines 75–105; `secureSymlinks`, lines 171–178)
 - **Problem:**
@@ -21,36 +34,21 @@
   3. In `StagedExtraction.secureSymlinks`, lines 171–178 delete (`removals`) or rewrite (`rewrites`) symbolic links. If a symbolic link is inside an extracted or existing directory with mode `0o555` (no write permission on parent), `try? fileManager.removeItem(atPath: link)` silently fails with `EACCES`. The escaping link is not removed, yet it is reported in `removals` and subsequently moved into the destination tree. The parent directory should have `S_IWUSR | S_IXUSR` granted during removal/rewrite.
 - **Fix:** Use `removeTree` for target directory removal in `mergeItem`, grant `S_IWUSR | S_IXUSR` on target directories during merge, and temporarily grant `S_IWUSR | S_IXUSR` on the immediate parent directory when removing or rewriting symbolic links in `secureSymlinks`.
 
-#### 2. ⬜ [P1] Preserve Unlocked Archive Password in `AppModel.extractHere`
-- **Status:** ⬜ Open
+#### R4-2. ✅ [P1] Preserve Unlocked Archive Password in `AppModel.extractHere`
+- **Status:** ✅ Done — `extractHere` passes the password already verified in this session (`knownPassword(for:)`: the open archive, or the outermost archive while browsing a nested one), so the open archive is not asked again and its password is not cleared. Test `extractHereReusesTheOpenArchivePassword`.
 - **Locations:**
   - `Sources/Arhivar/AppModel.swift` (`extractHere`, lines 1242–1260; `handle`, line 1488)
 - **Problem:** When an encrypted archive (`sifreli.zip` or `sifreli.7z`) is currently open and already unlocked in the main window (`archive == archiveURL` and `password != nil`), invoking "Extract Here" (`extractHere`) from Finder Services or the context menu passes `password: nil` to `runExtract`. Extraction fails with `.wrongPassword`, triggering line 1488 in `AppModel.handle`: `if archive == archiveURL { password = nil }`. This wipes out the user's previously validated password for the open archive and unnecessarily displays a password prompt.
 - **Fix:** In `extractHere`, pass `password: archive == archiveURL ? password : nil` to `runExtract` so that the unlocked password is reused without clearing `self.password` or prompting again.
 
----
-
-### Priority 2 (P2) — UI & Validation Polish
-
-#### 3. ⬜ [P2] In-Form Validation for Special-File-Only Sources in `CreateArchiveSheet`
-- **Status:** ⬜ Open
+#### R4-3. ✅ [P2] In-Form Validation for Special-File-Only Sources in `CreateArchiveSheet`
+- **Status:** ✅ Done — `SpecialFiles.containsOnlySpecialFiles(_:followingSymlinks:)` drives `CreateArchiveSheet.onlySpecialProblem` (shows `nothingToArchive`, disables Create) and the same check in `AppModel.createArchive`. Test `detectsSourcesMadeOnlyOfSpecialFiles`.
 - **Locations:**
   - `Sources/Arhivar/Views/CreateArchiveSheet.swift` (`validationMessage`, lines 196–209; `isValid`, lines 218–220)
 - **Problem:** When a user drops or selects only FIFOs, sockets, or device nodes into `CreateArchiveSheet`, the form allows clicking **Create** because `singleFileProblem` and `duplicateNames` do not trigger. Only after the sheet dismisses does `AppModel.createArchive` throw `AddPlan.NothingToArchiveError`, causing a post-dismissal error alert.
 - **Fix:** Add an `onlySpecialProblem` check in `CreateArchiveSheet` (`!sources.isEmpty && sources.allSatisfy { SpecialFiles.isSpecial(atPath: $0.path, followingSymlinks: !(storeSymlinks && format.supportsSymlinks)) }`), display `settings.t(.nothingToArchive)` in `validationMessage`, and disable the **Create** button (`isValid == false`).
 
 ---
-
-### Upstream-Dependent Items
-
-#### 4. 🟡 [Medium] Zstandard (`.zst` / `.tar.zst`) Archive Creation
-- **Status:** 🟡 Partially done — one-step `.tar.gz`, `.tar.xz`, and `.tar.bz2` creation is completed (tests `tarCompressionCommands`, `createsCompressedTar`, `createsTarGzInOneStep`).
-- ⬜ **Remaining:** Zstandard (`.zst` and `.tar.zst`) creation is currently **blocked upstream**: the official 7-Zip `7zz` (26.04) extracts `.zst` / `.tzst` (`K` flag in `7zz i`) but does not implement `zstd` archive creation (`7zz a -tzstd` fails with `E_NOTIMPL`).
-- **Next steps:** Offer `.zst` and `.tar.zst` in `ArchiveFormat` (`Sources/ArhivarCore/ArchiveOptions.swift`) once upstream `7zz` enables `C` (Create) support for `zstd`, or dynamically when the active engine reports `zstd` creation capability. `.tar.zst` will directly reuse `SevenZipCommand.tarStage` and `compressTarStage`.
-
----
-
-## Done
 
 ### Third Hardening Round — `..` Prefixes, Symlink Rows, Special-File Sources & Busy-State Guards (2026-10-18)
 
