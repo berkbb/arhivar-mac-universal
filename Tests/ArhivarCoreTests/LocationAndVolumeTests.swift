@@ -118,6 +118,24 @@ private func temporaryFolder(_ name: String) throws -> URL {
     #expect(ArchiveNaming.baseName(of: folder.appendingPathComponent("yedek.z01")) == "yedek")
 }
 
+/// ".z64" (Nintendo 64 kalıbı), ".z80" (ZX Spectrum) gibi dosyalar yalnızca adlarına bakılarak bölünmüş ZIP parçası
+/// sayılmaz: yanında aynı adlı ".zip" yoksa sıradan dosyadır (bırakılınca yeni arşiv önerilir, açılmaya çalışılmaz).
+@Test func zipLikeExtensionsWithoutAZipAreNotArchives() throws {
+    let folder = try temporaryFolder("z64")
+    defer { StagedExtraction.removeTree(at: folder) }
+    for name in ["oyun.z64", "spectrum.z80", "yedek.zip", "yedek.z64"] {
+        try Data("x".utf8).write(to: folder.appendingPathComponent(name))
+    }
+    #expect(!ArchiveNaming.isArchive(folder.appendingPathComponent("oyun.z64")))
+    #expect(!ArchiveNaming.isArchive(folder.appendingPathComponent("spectrum.z80")))
+    // Yanında ".zip" ana parçası olan 64. parça bölünmüş ZIP'in parçasıdır.
+    #expect(ArchiveNaming.isArchive(folder.appendingPathComponent("yedek.z64")))
+    #expect(ArchiveNaming.firstVolume(of: folder.appendingPathComponent("oyun.z64")) == folder.appendingPathComponent("oyun.z64"))
+    // Bir arşivin içindeki tek bir parça (yanında ".zip" olmadan) iç içe gezilemez; varsayılan uygulamasıyla açılır.
+    #expect(!ArchiveNaming.isBrowsable("oyun.z64"))
+    #expect(!ArchiveNaming.isBrowsable("yedek.z01"))
+}
+
 // MARK: - R6-3 Çok parçalı arşivlerin düzenlenememesi
 
 /// 7-Zip çok parçalı arşivleri yerinde güncellemeyi (ekleme, silme, yeniden adlandırma) desteklemez.

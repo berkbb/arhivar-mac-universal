@@ -146,11 +146,13 @@ public enum ArchiveNaming {
         "lzh", "lha", "xar", "vhd", "vhdx", "vmdk", "qcow2", "squashfs", "udf", "apfs", "hfs",
     ]
 
+    /// Yalnızca uzantıya bakarak arşiv mi? Bölünmüş ZIP parçaları (".z01") burada sayılmaz: aynı uzantıyı başka dosyalar
+    /// da kullanır (bkz. `isArchive(_:fileManager:)`).
     static func isArchiveExtension(_ ext: String) -> Bool {
         let ext = ext.lowercased()
         if archiveExtensions.contains(ext) { return true }
-        // Bölünmüş arşiv parçaları: .001, .002, …, eski RAR (.r00…) ve bölünmüş ZIP (.z01…)
-        return (ext.count == 3 && ext.allSatisfy(\.isNumber)) || isOldRarVolume(ext) || isSplitZipVolume(ext)
+        // Bölünmüş arşiv parçaları: .001, .002, … ve eski RAR (.r00…)
+        return (ext.count == 3 && ext.allSatisfy(\.isNumber)) || isOldRarVolume(ext)
     }
 
     /// Eski adlandırmalı çok bölümlü RAR'ın ".r00" … ".r99" bölümü (ilk bölüm ".rar" dosyasıdır).
@@ -171,8 +173,16 @@ public enum ArchiveNaming {
         return !digits.isEmpty && digits.allSatisfy { $0.isASCII && $0.isNumber }
     }
 
-    public static func isArchive(_ url: URL) -> Bool {
-        isArchiveExtension(url.pathExtension)
+    /// Dosya bir arşiv (ya da açılabilir bir arşivin parçası) mı?
+    ///
+    /// ".z01" … ".z99" bölünmüş ZIP parçası olabildiği gibi başka bir dosya da olabilir (".z64" Nintendo 64 kalıbı, ".z80"
+    /// ZX Spectrum anlık görüntüsü). Yalnızca yanında aynı adlı ".zip" ana parçası varsa arşiv sayılır; yoksa bırakılınca
+    /// açılmaya çalışılmaz, yeni arşiv önerilir.
+    public static func isArchive(_ url: URL, fileManager: FileManager = .default) -> Bool {
+        let ext = url.pathExtension
+        if isArchiveExtension(ext) { return true }
+        guard isSplitZipVolume(ext) else { return false }
+        return fileManager.fileExists(atPath: url.deletingPathExtension().appendingPathExtension("zip").path)
     }
 
     /// Arşiv içindeyken çift tıklayınca Arhivar'da açılacak (iç içe gezinilecek) öğeler: arşivler ve yükleyici paketleri.
@@ -226,7 +236,7 @@ public enum ArchiveNaming {
         var name = url.lastPathComponent
         for _ in 0..<3 {
             let ext = (name as NSString).pathExtension
-            guard !ext.isEmpty, isArchiveExtension(ext) || isPartVolumeSuffix(ext) else { break }
+            guard !ext.isEmpty, isArchiveExtension(ext) || isSplitZipVolume(ext) || isPartVolumeSuffix(ext) else { break }
             name = (name as NSString).deletingPathExtension
         }
         return name.isEmpty ? url.lastPathComponent : name

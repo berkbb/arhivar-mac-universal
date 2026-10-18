@@ -1272,4 +1272,17 @@ struct AppModelTests {
         #expect(model.addRequest == nil)
         #expect(model.createRequest != nil)
     }
+
+    /// Bölünmüş ZIP tespiti: ".z64" gibi bir dosya bırakılınca arşiv olarak açılmaya çalışılmaz, yeni arşiv önerilir.
+    @Test func droppingAZipLikeRomOffersANewArchive() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let rom = fixture.workspace.appendingPathComponent("oyun.z64")
+        try Data("rom".utf8).write(to: rom)
+
+        fixture.model.handleDrop([rom])
+        #expect(fixture.model.operation == nil)
+        #expect(fixture.model.createRequest?.sources == [rom])
+    }
 }
