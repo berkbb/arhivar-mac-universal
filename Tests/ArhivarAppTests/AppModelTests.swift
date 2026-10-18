@@ -805,6 +805,55 @@ struct AppModelTests {
 
     // MARK: - .agents/context/roadmap.md: 13 açık madde
 
+    /// P0-3: var olan arşivin yerine yenisi konur (eklenmez); gz ve adları şifreli 7z'nin üzerine de yazılır.
+    @Test func creatingReplacesAnExistingArchive() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let model = fixture.model
+        let extra = fixture.workspace.appendingPathComponent("ek.txt")
+        try "ek".write(to: extra, atomically: true, encoding: .utf8)
+
+        for (name, format, password) in [("a.zip", ArchiveFormat.zip, nil), ("b.7z", .sevenZip, "p"), ("c.tar.gz", .tarGzip, nil)] as [(String, ArchiveFormat, String?)] {
+            let archive = try await fixture.makeArchive(name, format: format, password: password, encryptNames: password != nil)
+            model.createArchive(CreateOptions(sources: [extra], destination: archive, format: format, level: .fast))
+            await fixture.settle()
+            #expect(model.alert == nil, "\(name)")
+            #expect(model.passwordRequest == nil, "\(name)")
+            model.openArchive(archive)
+            await fixture.settle()
+            let expected = format == .tarGzip ? ["c.tar"] : ["ek.txt"]
+            #expect(model.tree.map(\.id) == expected, "\(name)")
+        }
+        let gzip = fixture.workspace.appendingPathComponent("tek.txt.gz")
+        for _ in 0..<2 {
+            model.createArchive(CreateOptions(sources: [extra], destination: gzip, format: .gzip, level: .fast))
+            await fixture.settle()
+            #expect(model.alert == nil)
+        }
+    }
+
+    /// P0-3: bölünmüş arşiv yeniden oluşturulunca eski parçaların fazlası kalmaz.
+    @Test func creatingASplitArchiveRemovesStaleVolumes() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let source = fixture.workspace.appendingPathComponent("rastgele.bin")
+        var bytes = [UInt8](repeating: 0, count: 2_500_000)
+        arc4random_buf(&bytes, bytes.count)
+        try Data(bytes).write(to: source)
+        let destination = fixture.workspace.appendingPathComponent("parca.7z")
+        for index in 1...6 {
+            try "eski".write(to: destination.appendingPathExtension(String(format: "%03d", index)), atomically: true, encoding: .utf8)
+        }
+        fixture.model.createArchive(CreateOptions(sources: [source], destination: destination, format: .sevenZip, level: .store, volumeSizeMB: 1))
+        await fixture.settle()
+        #expect(fixture.model.alert == nil)
+        let volumes = try FileManager.default.contentsOfDirectory(atPath: fixture.workspace.path).filter { $0.hasPrefix("parca.7z.") }.sorted()
+        #expect(volumes == ["parca.7z.001", "parca.7z.002", "parca.7z.003"])
+        #expect(fixture.model.recentArchives.first == destination.appendingPathExtension("001"))
+    }
+
     /// P0-6: FIFO içeren klasörler oluşturma ve eklemede 7zz'yi kilitlemez; FIFO arşive girmez.
     @Test func fifosAreSkippedWhenCreatingAndAdding() async throws {
         let fixture = try Fixture()

@@ -93,7 +93,7 @@
 "createSplit" = "Split into volumes";
 "createSplitNone" = "Don't split";
 "createSingleFileOnly" = "This format can compress only a single file. Use 7z or ZIP for multiple items.";
-"createExistsWarning" = "An archive with this name already exists. New files will be added to it.";
+"createExistsWarning" = "An archive with this name already exists. The new archive will replace it.";
 "createButton" = "Create Archive";
 
 "levelStore" = "Store (no compression)";

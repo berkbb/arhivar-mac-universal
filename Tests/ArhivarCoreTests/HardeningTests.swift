@@ -322,3 +322,37 @@ private func mode(of url: URL) -> UInt16? {
     #expect(StagedExtraction.itemType(root, fileManager: .default) == nil)
 }
 
+// MARK: - P0-3 Arşivin yerine konması
+
+@Test func installedArchiveReplacesOldOneAndStaleVolumes() throws {
+    let root = try temporaryFolder("kur")
+    defer { StagedExtraction.removeTree(at: root) }
+    let staging = root.appendingPathComponent("hazirlik", isDirectory: true)
+    let directory = root.appendingPathComponent("hedef", isDirectory: true)
+    for folder in [staging, directory] { try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) }
+
+    try "yeni".write(to: staging.appendingPathComponent("a.zip"), atomically: true, encoding: .utf8)
+    let old = directory.appendingPathComponent("a.zip")
+    try "eski".write(to: old, atomically: true, encoding: .utf8)
+    chmod(old.path, 0o444)
+    #expect(try StagedExtraction.installArchive(named: "a.zip", from: staging, into: directory, split: false) == old)
+    #expect(try String(contentsOf: old, encoding: .utf8) == "yeni")
+
+    // Bölünmüş: yeni iki parça gelir, eski üç parçanın fazlası kalmaz; benzer adlı dosyalara dokunulmaz.
+    for index in 1...2 { try "y\(index)".write(to: staging.appendingPathComponent("b.7z.00\(index)"), atomically: true, encoding: .utf8) }
+    for name in ["b.7z.001", "b.7z.002", "b.7z.003", "b.7z.notlar", "b.7z"] {
+        try "eski".write(to: directory.appendingPathComponent(name), atomically: true, encoding: .utf8)
+    }
+    let first = try StagedExtraction.installArchive(named: "b.7z", from: staging, into: directory, split: true)
+    #expect(first.lastPathComponent == "b.7z.001")
+    let names = try FileManager.default.contentsOfDirectory(atPath: directory.path).filter { $0.hasPrefix("b.7z") }.sorted()
+    #expect(names == ["b.7z", "b.7z.001", "b.7z.002", "b.7z.notlar"])
+    #expect(try String(contentsOf: directory.appendingPathComponent("b.7z.002"), encoding: .utf8) == "y2")
+
+    // Aynı adlı bir klasör silinmez.
+    try "c".write(to: staging.appendingPathComponent("c.zip"), atomically: true, encoding: .utf8)
+    try FileManager.default.createDirectory(at: directory.appendingPathComponent("c.zip"), withIntermediateDirectories: true)
+    #expect(throws: CocoaError.self) { try StagedExtraction.installArchive(named: "c.zip", from: staging, into: directory, split: false) }
+    #expect(StagedExtraction.itemType(directory.appendingPathComponent("c.zip"), fileManager: .default) == .typeDirectory)
+}
+

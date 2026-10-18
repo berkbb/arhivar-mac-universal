@@ -93,7 +93,7 @@
 "createSplit" = "Parçalara böl";
 "createSplitNone" = "Bölme";
 "createSingleFileOnly" = "Bu biçim yalnızca tek bir dosyayı sıkıştırabilir. Birden fazla öğe için 7z veya ZIP kullanın.";
-"createExistsWarning" = "Bu adda bir arşiv zaten var. Yeni dosyalar ona eklenecek.";
+"createExistsWarning" = "Bu adda bir arşiv zaten var. Yeni arşiv onun yerini alacak.";
 "createButton" = "Arşivi Oluştur";
 
 "levelStore" = "Depola (sıkıştırma yok)";

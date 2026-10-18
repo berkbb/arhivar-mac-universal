@@ -1248,6 +1248,7 @@ final class AppModel {
             guard duplicates.isEmpty else { throw AddPlan.DuplicateNameError(names: duplicates) }
             let fileManager = FileManager.default
             let directory = options.destination.deletingLastPathComponent()
+            let name = options.destination.lastPathComponent
             let isTwoStep = options.format.tarCompression != nil
 
             // Sıkıştırmasız biçimler (ve tar.* biçimlerinin ara tar dosyası) kaynakların tamamı kadar yer ister.
@@ -1260,18 +1261,20 @@ final class AppModel {
             let followsLinks = !(options.storeSymlinks && options.format.supportsSymlinks)
             staged.excludedPaths = await Self.specialFiles(in: options.sources, followingSymlinks: followsLinks)
 
-            // tar.*: önce aynı birimdeki geçici bir klasöre tar, sonra hedefe sıkıştırılmış hâli yazılır.
-            var stagingDirectory: URL?
-            if isTwoStep { stagingDirectory = try StagedExtraction.makeStagingDirectory(for: directory) }
-            defer { if let stagingDirectory { try? fileManager.removeItem(at: stagingDirectory) } }
+            // Arşiv hedefle aynı birimdeki bir hazırlık klasöründe oluşturulur, yalnızca başarıda yerine taşınır:
+            // aynı adlı eski arşive eklenmez (onun yerini alır), iptal ya da hata hedefte yarım bir dosya bırakmaz.
+            let staging = try StagedExtraction.makeStagingDirectory(for: directory)
+            defer { StagedExtraction.removeTree(at: staging) }
+            staged.destination = staging.appendingPathComponent(name)
             // Kişisel veri klasörleri, kullanıcı oradan açıkça bir kaynak seçmedikçe okunamaz.
-            let writer = self.confined(
-                runner, archive: options.destination, writable: [directory] + (stagingDirectory.map { [$0] } ?? []), readable: options.sources
-            )
+            let writer = self.confined(runner, archive: staged.destination, writable: [staging], readable: options.sources)
 
             var warnings: [String] = []
-            if let stagingDirectory {
-                let stage = SevenZipCommand.tarStage(for: options.destination, in: stagingDirectory)
+            if isTwoStep {
+                // tar.*: önce ayrı bir klasöre sıkıştırmasız tar, sonra hazırlık klasörüne sıkıştırılmış hâli yazılır.
+                let tarFolder = staging.appendingPathComponent("tar", isDirectory: true)
+                try fileManager.createDirectory(at: tarFolder, withIntermediateDirectories: false)
+                let stage = SevenZipCommand.tarStage(for: options.destination, in: tarFolder)
                 let first = try await writer.run(SevenZipCommand.create(staged, tarStage: stage)) { progress($0 * 0.5) }
                 if let warning = try SevenZipError.check(first) { warnings.append(warning) }
                 let command = SevenZipCommand.compressTarStage(staged, tarStage: stage) ?? []
@@ -1282,13 +1285,12 @@ final class AppModel {
                 if let warning = try SevenZipError.check(result) { warnings.append(warning) }
             }
 
-            // Bölünmüş arşivde açılacak dosya "ad.7z.001"dir.
-            let output = options.firstOutput
-            let exists = fileManager.fileExists(atPath: output.path)
-            if exists { self.addRecent(output) }
+            // Bölünmüş arşivde açılacak dosya "ad.7z.001"dir; hedefteki eski parçalar yenileriyle değiştirilir.
+            let output = try StagedExtraction.installArchive(named: name, from: staging, into: directory, split: options.isSplit)
+            self.addRecent(output)
             self.finish(
                 message: self.t(.toastCreated, output.lastPathComponent),
-                reveal: exists ? output : directory,
+                reveal: output,
                 warning: warnings.isEmpty ? nil : warnings.joined(separator: "\n\n")
             )
         }

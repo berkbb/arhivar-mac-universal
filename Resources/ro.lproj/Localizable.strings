@@ -93,7 +93,7 @@
 "createSplit" = "Împarte în volume";
 "createSplitNone" = "Nu împărți";
 "createSingleFileOnly" = "Acest format poate comprima un singur fișier. Folosește 7z sau ZIP pentru mai multe elemente.";
-"createExistsWarning" = "Există deja o arhivă cu acest nume. Fișierele noi vor fi adăugate în ea.";
+"createExistsWarning" = "Există deja o arhivă cu acest nume. Noua arhivă o va înlocui.";
 "createButton" = "Creează arhiva";
 
 "levelStore" = "Stocare (fără comprimare)";

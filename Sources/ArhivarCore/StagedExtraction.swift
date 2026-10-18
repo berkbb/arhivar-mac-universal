@@ -216,6 +216,60 @@ public enum StagedExtraction {
         }
     }
 
+    /// Hazırlık klasöründe oluşturulmuş arşivi hedef klasöre taşır; aynı adlı eski arşivin yerini tek adımda alır.
+    ///
+    /// 7zz var olan bir arşive yazarsa onu değiştirmez, içine ekler (eski girdiler kalır); gzip/xz ve bölünmüş
+    /// arşivlerde ise hata verir. İptal ya da hata, yarım bir arşivi hedefte bırakmasın diye arşiv önce hazırlık
+    /// klasöründe oluşturulur, yalnızca başarıda buraya taşınır.
+    /// - Parameters:
+    ///   - name: Arşivin adı ("yedek.7z"); bölünmüşse parçalar "yedek.7z.001", "yedek.7z.002", …
+    ///   - split: Bölünmüş arşiv mi? Öyleyse hedefteki eski parçalar ("yedek.7z.00N") önce silinir.
+    /// - Returns: Hedefte açılabilecek ilk dosya.
+    @discardableResult
+    public static func installArchive(
+        named name: String, from staging: URL, into directory: URL, split: Bool, fileManager: FileManager = .default
+    ) throws -> URL {
+        let sources = split ? try volumes(of: name, in: staging, fileManager: fileManager) : [staging.appendingPathComponent(name)]
+        guard let firstSource = sources.first, itemType(firstSource, fileManager: fileManager) == .typeRegular else {
+            throw CocoaError(.fileNoSuchFile, userInfo: [NSFilePathErrorKey: staging.appendingPathComponent(name).path])
+        }
+        let stale = split ? try volumes(of: name, in: directory, fileManager: fileManager) : []
+        let targets = sources.map { directory.appendingPathComponent($0.lastPathComponent) }
+        // Aynı adlı bir klasör arşivle değiştirilmez (kullanıcının klasörü silinmesin).
+        if let folder = (stale + targets).first(where: { itemType($0, fileManager: fileManager) == .typeDirectory }) {
+            throw CocoaError(.fileWriteFileExists, userInfo: [NSFilePathErrorKey: folder.path])
+        }
+        for volume in stale { try fileManager.removeItem(at: volume) }
+        for (source, target) in zip(sources, targets) {
+            switch itemType(target, fileManager: fileManager) {
+            case nil:
+                try fileManager.moveItem(at: source, to: target)
+            case .typeRegular?:
+                _ = try OwnerAccess.granting(S_IWUSR, on: target.path, restoring: false) {
+                    try fileManager.replaceItemAt(target, withItemAt: source, options: .usingNewMetadataOnly)
+                }
+            default:
+                // Aynı adlı sembolik bağlantı: bağlantının gösterdiği dosyaya değil, bağlantının yerine yazılır.
+                try fileManager.removeItem(at: target)
+                try fileManager.moveItem(at: source, to: target)
+            }
+        }
+        return targets[0]
+    }
+
+    /// Klasördeki "ad.001", "ad.002", … parçaları (sırayla).
+    static func volumes(of name: String, in directory: URL, fileManager: FileManager) throws -> [URL] {
+        let prefix = name + "."
+        return try fileManager.contentsOfDirectory(atPath: directory.path)
+            .filter { item in
+                guard item.hasPrefix(prefix) else { return false }
+                let suffix = item.dropFirst(prefix.count)
+                return suffix.count >= 3 && suffix.allSatisfy(\.isASCII) && suffix.allSatisfy(\.isNumber)
+            }
+            .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+            .map { directory.appendingPathComponent($0) }
+    }
+
     /// `link` (köke göre göreli bağlantı yolu) konumundan, köke göre `target` bileşenlerine giden göreli yol.
     static func relativePath(from link: String, to target: [String]) -> String {
         let directory = link.split(separator: "/").dropLast().map(String.init)

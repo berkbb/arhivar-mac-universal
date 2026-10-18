@@ -168,9 +168,11 @@ struct CreateArchiveSheet: View {
     // MARK: - Doğrulama
 
     private var sanitizedName: String {
-        name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "/", with: "-")
             .replacingOccurrences(of: ":", with: "-")
+        // "." ve ".." gizli ya da bozuk adlar üretirdi (".7z", "..7z").
+        return name == "." || name == ".." ? "" : name
     }
 
     private var destination: URL? {
@@ -199,10 +201,18 @@ struct CreateArchiveSheet: View {
             // Onay boşken düğmenin neden kapalı olduğu da söylenir.
             return settings.t(confirmation.isEmpty ? .createPasswordConfirmHint : .createPasswordMismatch)
         }
-        if let destination, FileManager.default.fileExists(atPath: destination.path) {
+        // Bölünmüş arşivde diskte oluşan ilk dosya "ad.7z.001"dir.
+        if let destination, FileManager.default.fileExists(atPath: firstOutput(for: destination).path) {
             return settings.t(.createExistsWarning)
         }
         return nil
+    }
+
+    private func firstOutput(for destination: URL) -> URL {
+        CreateOptions(
+            sources: sources, destination: destination, format: format, level: level,
+            volumeSizeMB: volumeSizeMB > 0 ? volumeSizeMB : nil
+        ).firstOutput
     }
 
     private var isValid: Bool {
