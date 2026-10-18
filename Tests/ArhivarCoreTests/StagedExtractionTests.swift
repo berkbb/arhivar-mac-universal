@@ -108,3 +108,22 @@ private struct Sandbox {
         try InsufficientSpaceError.check(required: Int64.max / 2, at: FileManager.default.temporaryDirectory)
     }
 }
+
+@Test func smartDestinationIgnoresMacMetadata() throws {
+    let box = try Sandbox()
+    defer { box.cleanUp() }
+    let staging = box.root.appendingPathComponent("smart-meta", isDirectory: true)
+    let base = box.root.appendingPathComponent("smart-base", isDirectory: true)
+    try FileManager.default.createDirectory(at: staging.appendingPathComponent("Proje"), withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: staging.appendingPathComponent("__MACOSX"), withIntermediateDirectories: true)
+    try Data("x".utf8).write(to: staging.appendingPathComponent(".DS_Store"))
+    try Data("y".utf8).write(to: staging.appendingPathComponent("._Proje"))
+
+    // Tek anlamlı kök öğe ("Proje") ve yanında macOS üst verileri varken akıllı kip doğrudan hedefe çıkarır (çift klasör yapmaz).
+    #expect(StagedExtraction.destination(for: staging, base: base, archiveName: "Proje", mode: .smart) == base)
+
+    // Birden fazla anlamlı kök öğe varken ise arşiv adıyla alt klasöre çıkarır.
+    try FileManager.default.createDirectory(at: staging.appendingPathComponent("Belgeler"), withIntermediateDirectories: true)
+    #expect(StagedExtraction.destination(for: staging, base: base, archiveName: "Proje", mode: .smart).lastPathComponent == "Proje")
+}
+

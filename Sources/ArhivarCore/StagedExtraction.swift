@@ -46,7 +46,11 @@ public enum StagedExtraction {
         case .never: return base
         case .smart:
             let roots = (try? fileManager.contentsOfDirectory(atPath: content.path)) ?? []
-            return roots.count > 1 ? subfolder : base
+            // .DS_Store, __MACOSX ve AppleDouble (._*) üst verileri sayılmaz: Finder'ın "Sıkıştır" ile yaptığı
+            // tek klasörlü arşivlerin kökündeki __MACOSX, "akıllı" kipin "Ad/Ad/…" iç içe klasörü oluşturmasına yol açmasın.
+            let meaningful = roots.filter { $0 != ".DS_Store" && $0 != "__MACOSX" && !$0.hasPrefix("._") }
+            let count = meaningful.isEmpty ? roots.count : meaningful.count
+            return count > 1 ? subfolder : base
         }
     }
 

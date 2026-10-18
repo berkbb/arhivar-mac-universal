@@ -26,6 +26,10 @@
 - **Status:** ✅ Done — `isSplitZipVolume` (from `R6-2`) matched any `z` + digits extension by name alone, so a Nintendo 64 ROM (`.z64`) or a ZX Spectrum snapshot (`.z80`) was treated as an archive: dropping one started an open operation that failed instead of offering a new archive, and inside an archive it was offered for nested browsing. Split ZIP volumes are now excluded from the name-only `isArchiveExtension` (used by `isBrowsable` for items inside an archive) and accepted by `isArchive(_:fileManager:)` only when a sibling `.zip` with the same name exists; `baseName` and `supportsEditing` still recognize the suffix. Tests `zipLikeExtensionsWithoutAZipAreNotArchives`, `droppingAZipLikeRomOffersANewArchive`.
 - **Location:** `Sources/ArhivarCore/Engine.swift` (`ArchiveNaming.isArchiveExtension`, `isArchive(_:fileManager:)`, `baseName(of:)`)
 
+#### P2. ✅ [P2] macOS Metadata Ignored in Smart Subfolder Destination (`StagedExtraction.destination`)
+- **Status:** ✅ Done — In `.smart` subfolder mode, `StagedExtraction.destination(for:base:archiveName:mode:)` previously counted all directory entries in the staging root using `FileManager.contentsOfDirectory(atPath:)`. For ZIP archives created on macOS (e.g. via Finder "Compress" or archive tools), AppleDouble metadata (`__MACOSX/`, `.DS_Store`, and `._*` files) caused `roots.count > 1` even when there was only a single payload folder, triggering unnecessary wrapper folder creation and resulting in `Name/Name/…` double nesting. Meaningful entries now filter out `.DS_Store`, `__MACOSX`, and `._*` prefixes. Test `smartDestinationIgnoresMacMetadata`.
+- **Location:** `Sources/ArhivarCore/StagedExtraction.swift` (`StagedExtraction.destination(for:base:archiveName:mode:)`)
+
 ---
 
 ### Sixth Hardening Round — RAR Multi-Part Name Stripping, Split ZIP `.z01` Handling & Multi-Volume In-Place Edit Guard (2026-10-18)

@@ -137,5 +137,17 @@
   - Inside an archive, `isBrowsable` offered them for nested archive browsing rather than launching the default external app.
 - **Lesson & Guardrail:** Name-only `isArchiveExtension` must exclude split ZIP secondary volumes (`.z01`..`.z99`). Instead, `ArchiveNaming.isArchive(url, fileManager:)` verifies the existence of a sibling `.zip` master volume on disk before accepting a `.zNN` file as an archive. Inside an archive (where sibling checks cannot be performed), `.zNN` files open with the user's default external application.
 
+---
+
+## Episode 17: macOS Metadata Filtering in Smart Subfolder Destination Extraction
+- **Context:** Extracting single-folder ZIP archives created on macOS (e.g. via Finder's "Compress" contextual menu or command-line `zip`) using the default `.smart` subfolder extraction mode.
+- **Root Cause:**
+  - Finder creates AppleDouble metadata directories/files (`__MACOSX/`, `.DS_Store`, and `._*`) alongside the compressed payload folder.
+  - In `StagedExtraction.destination(for:base:archiveName:mode:)`, `.smart` mode inspected the staging directory root using `fileManager.contentsOfDirectory(atPath: content.path)`.
+  - Because `roots.count` included `__MACOSX` or `.DS_Store` along with the single project folder (e.g., `["Proje", "__MACOSX"]`, count = 2), `roots.count > 1` evaluated to true.
+  - This caused `StagedExtraction.destination` to return `subfolder`, extracting into `base/Proje/Proje/...` (unwanted double nesting).
+- **Lesson & Guardrail:** Filter out macOS metadata (`.DS_Store`, `__MACOSX`, and `._*`) from root content entries when evaluating whether an archive has a single root or multiple roots in `.smart` mode. If filtering leaves only meaningful entries, evaluate based on the meaningful count; if all items were metadata, fall back to the raw count. Test `smartDestinationIgnoresMacMetadata`.
+
+
 
 
