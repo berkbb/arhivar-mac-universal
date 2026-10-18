@@ -73,15 +73,19 @@ public enum StagedExtraction {
             return target
         }
         if itemType(source, fileManager: fileManager) == .typeDirectory, targetType == .typeDirectory {
-            // Önceki bir çıkarmadan kalan salt okunur (0555) klasöre yazılabilmesi için yazma izni geçici olarak açılır.
-            return try OwnerAccess.granting(S_IWUSR, on: target.path) {
-                var touched = false
-                for child in try fileManager.contentsOfDirectory(at: source, includingPropertiesForKeys: nil) {
-                    if try mergeItem(child, into: target.appendingPathComponent(child.lastPathComponent), policy: policy, fileManager: fileManager) != nil {
-                        touched = true
+            // Önceki bir çıkarmadan kalan salt okunur (0555) ya da içine girilemeyen (0444, 0000) hedef klasöre yazılabilmesi,
+            // hazırlıktaki okunamayan (0311) ya da salt okunur (0555) klasörün listelenip boşaltılabilmesi için izinler
+            // geçici olarak açılır.
+            return try OwnerAccess.granting(S_IWUSR | S_IXUSR, on: target.path) {
+                try OwnerAccess.granting(S_IRWXU, on: source.path) {
+                    var touched = false
+                    for child in try fileManager.contentsOfDirectory(at: source, includingPropertiesForKeys: nil) {
+                        if try mergeItem(child, into: target.appendingPathComponent(child.lastPathComponent), policy: policy, fileManager: fileManager) != nil {
+                            touched = true
+                        }
                     }
+                    return touched ? target : nil
                 }
-                return touched ? target : nil
             }
         }
         switch policy {
@@ -99,7 +103,8 @@ public enum StagedExtraction {
                 Quarantine.ensure(mark, on: result)
                 return result
             }
-            try fileManager.removeItem(at: target)
+            // Türü farklı öğe (ör. dosyanın yerine klasör): içinde salt okunur klasörler olsa da silinir.
+            removeTree(at: target, fileManager: fileManager)
             try fileManager.moveItem(at: source, to: target)
             return target
         case .rename:
@@ -125,11 +130,27 @@ public enum StagedExtraction {
     /// - Returns: Silinen bağlantıların `root`'a göre yolları.
     @discardableResult
     public static func secureSymlinks(in root: URL, extractionRoot: URL? = nil, fileManager: FileManager = .default) -> [String] {
-        guard let enumerator = fileManager.enumerator(atPath: root.path) else { return [] }
+        // Okunamayan ya da içine girilemeyen (0000, 0311, 0444) klasörlerdeki bağlantılar taramada görünmez, salt okunur
+        // (0555) klasördeki bağlantı silinemez ya da yeniden yazılamazdı: tarama sırasında klasörlere sahibi için geçici
+        // olarak tam izin verilir, sonunda eski kipler (önce alt klasörler) geri yüklenir.
         var links: [String] = []
-        while let relative = enumerator.nextObject() as? String {
-            if enumerator.fileAttributes?[.type] as? FileAttributeType == .typeSymbolicLink { links.append(relative) }
+        var changed: [(path: String, mode: mode_t)] = []
+        func walk(_ path: String, relative: String) {
+            if let original = OwnerAccess.add(S_IRWXU, on: path) { changed.append((path, original)) }
+            for child in (try? fileManager.contentsOfDirectory(atPath: path)) ?? [] {
+                let childPath = (path as NSString).appendingPathComponent(child)
+                let childRelative = relative.isEmpty ? child : relative + "/" + child
+                var info = stat()
+                guard lstat(childPath, &info) == 0 else { continue }
+                switch info.st_mode & S_IFMT {
+                case S_IFLNK: links.append(childRelative)
+                case S_IFDIR: walk(childPath, relative: childRelative)
+                default: break
+                }
+            }
         }
+        walk(root.path, relative: "")
+        defer { OwnerAccess.restore(changed.reversed()) }
         guard !links.isEmpty else { return [] }
 
         let rootPath = root.standardizedFileURL.path
@@ -202,18 +223,8 @@ public enum StagedExtraction {
     /// hazırlık ve geçici klasörler diskte kalmasın diye önce sahibine yazma izni verilir.
     public static func removeTree(at url: URL, fileManager: FileManager = .default) {
         if (try? fileManager.removeItem(at: url)) != nil || itemType(url, fileManager: fileManager) == nil { return }
-        grantOwnerAccess(below: url.path, fileManager: fileManager)
+        _ = OwnerAccess.addTree(S_IRWXU, below: url.path, fileManager: fileManager)
         try? fileManager.removeItem(at: url)
-    }
-
-    /// Klasöre sahibi için okuma, yazma ve geçiş izni verir; içerik ancak bundan sonra listelenebilir (0000 klasör).
-    private static func grantOwnerAccess(below path: String, fileManager: FileManager) {
-        var info = stat()
-        guard lstat(path, &info) == 0, info.st_mode & S_IFMT == S_IFDIR else { return }
-        _ = OwnerAccess.add(S_IRWXU, on: path)
-        for child in (try? fileManager.contentsOfDirectory(atPath: path)) ?? [] {
-            grantOwnerAccess(below: (path as NSString).appendingPathComponent(child), fileManager: fileManager)
-        }
     }
 
     /// Hazırlık klasöründe oluşturulmuş arşivi hedef klasöre taşır; aynı adlı eski arşivin yerini tek adımda alır.
@@ -351,6 +362,24 @@ enum OwnerAccess {
         guard lstat(path, &info) == 0, info.st_mode & S_IFMT != S_IFLNK, info.st_mode & bits != bits else { return nil }
         let original = info.st_mode & 0o7777
         return chmod(path, original | bits) == 0 ? original : nil
+    }
+
+    /// Ağaçtaki klasörlere (kök dahil) eksikse `bits` izinlerini verir; bir klasör ancak bundan sonra listelenebilir (0000).
+    /// - Returns: Değişen klasörler ve eski kipleri; alt klasörler üstlerinden önce gelir (`restore` bu sırayla geri yükler).
+    static func addTree(_ bits: mode_t, below path: String, fileManager: FileManager = .default) -> [(path: String, mode: mode_t)] {
+        var info = stat()
+        guard lstat(path, &info) == 0, info.st_mode & S_IFMT == S_IFDIR else { return [] }
+        let own = add(bits, on: path).map { [(path: path, mode: $0)] } ?? []
+        var inner: [(path: String, mode: mode_t)] = []
+        for child in (try? fileManager.contentsOfDirectory(atPath: path)) ?? [] {
+            inner += addTree(bits, below: (path as NSString).appendingPathComponent(child), fileManager: fileManager)
+        }
+        return inner + own
+    }
+
+    /// Eski kipleri verilen sırayla geri yükler (alt klasörler önce: üst klasörün geçiş izni o sırada hâlâ açıktır).
+    static func restore<S: Sequence>(_ changes: S) where S.Element == (path: String, mode: mode_t) {
+        for change in changes { chmod(change.path, change.mode) }
     }
 
     /// `body` süresince sahibine `bits` izinlerini verir, sonra eski kipi geri yükler.
