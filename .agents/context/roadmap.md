@@ -9,10 +9,23 @@
 
 ## Open / In Progress
 
+### Upstream-Dependent Items
+
+#### 1. 🟡 [Medium] Zstandard (`.zst` / `.tar.zst`) Archive Creation
+- **Status:** 🟡 Partially done — one-step `.tar.gz`, `.tar.xz`, and `.tar.bz2` creation is completed (tests `tarCompressionCommands`, `createsCompressedTar`, `createsTarGzInOneStep`).
+- ⬜ **Remaining:** Zstandard (`.zst` and `.tar.zst`) creation is currently **blocked upstream**: the official 7-Zip `7zz` (26.04) extracts `.zst` / `.tzst` (`K` flag in `7zz i`) but does not implement `zstd` archive creation (`7zz a -tzstd` fails with `E_NOTIMPL`).
+- **Next steps:** Offer `.zst` and `.tar.zst` in `ArchiveFormat` (`Sources/ArhivarCore/ArchiveOptions.swift`) once upstream `7zz` enables `C` (Create) support for `zstd`, or dynamically when the active engine reports `zstd` creation capability. `.tar.zst` will directly reuse `SevenZipCommand.tarStage` and `compressTarStage`.
+
+---
+
+## Done
+
 ### Fifth Hardening Round — Existing Directory Conflicts, Read-Only Archive In-Place Guard, Old RAR Multi-Volume & Saturating Negative Size (2026-10-18)
 
-#### R5-1. ⬜ [P1] Existing Target Directory Collision & Pre-Flight Validation in `CreateArchiveSheet` & `AppModel.createArchive`
-- **Status:** ⬜ Open
+All four items were confirmed before the fix (7zz `errno=13` on a `0444` archive; the core tests fail on the previous commit); the suite grew from 194 to 199 tests.
+
+#### R5-1. ✅ [P1] Existing Target Directory Collision & Pre-Flight Validation in `CreateArchiveSheet` & `AppModel.createArchive`
+- **Status:** ✅ Done — `CreateArchiveSheet.folderConflict` shows `renameExists` and disables Create when the first output (`.001` for split archives) is a folder; `createExistsWarning` is shown only for existing files. `AppModel.createArchive` throws `CocoaError(.fileWriteFileExists)` before staging or running 7zz, and `message(for:)` turns that error (also from `installArchive`) into the localized `renameExists`. `StagedExtraction.itemType` is now public. Test `creatingOverAFolderIsRefusedUpFront`.
 - **Locations:**
   - `Sources/Arhivar/Views/CreateArchiveSheet.swift` (`validationMessage`, lines 212–215; `isValid`, lines 225–227)
   - `Sources/Arhivar/AppModel.swift` (`createArchive`, lines 1323–1355)
@@ -33,8 +46,8 @@
     }
     ```
 
-#### R5-2. ⬜ [P1] Read-Only Archive & Directory Immunity for In-Place Editing (`ArchiveCapabilities.isEditable`)
-- **Status:** ⬜ Open
+#### R5-2. ✅ [P1] Read-Only Archive & Directory Immunity for In-Place Editing (`ArchiveCapabilities.isEditable`)
+- **Status:** ✅ Done — `ArchiveCapabilities.isEditable(type:url:fileManager:)` = `supportsEditing` (format, not split) and `isWritable` (archive file and its folder writable; covers `0444`, the Finder “Locked” flag and read-only volumes). `AppModel.readOnlyReason` tells the format case (`readOnlyArchive`) from the new location case (`readOnlyLocation`, tr/en/ro) for the toolbar tooltip; drops on such an archive go to the New Archive sheet. Tests `readOnlyArchivesAreNotEditable`, `readOnlyArchiveIsNotOfferedForEditing`.
 - **Locations:**
   - `Sources/ArhivarCore/ArchiveEditing.swift` (`ArchiveCapabilities.isEditable`, lines 11–16)
   - `Sources/Arhivar/AppModel.swift` (`apply`, line 550)
@@ -54,8 +67,8 @@
       ```
     - When read-only, `isEditable` evaluates to `false`, editing controls are disabled with the tooltip `settings.t(.readOnlyArchive)` (*"This archive type can't be edited"*), and file drops onto the window trigger the New Archive flow instead of impossible additions.
 
-#### R5-3. ⬜ [P2] Old-Style Multi-Volume RAR Archive Recognition & First-Volume Resolution (`.r00`..`.r99`)
-- **Status:** ⬜ Open
+#### R5-3. ✅ [P2] Old-Style Multi-Volume RAR Archive Recognition & First-Volume Resolution (`.r00`..`.r99`)
+- **Status:** ✅ Done — `ArchiveNaming.isOldRarVolume` accepts `.r00` … `.r99` (any case) in `isArchiveExtension`, and `firstVolume(of:)` resolves them to the sibling `.rar` when it exists (open, drop, Extract Here). `Info.plist` is unchanged: like `.002`, secondary volumes are not associated with Arhivar in Finder. Test `oldStyleRarVolumesOpenFromTheRarFile`.
 - **Locations:**
   - `Sources/ArhivarCore/Engine.swift` (`ArchiveNaming.archiveExtensions`, lines 143–154; `ArchiveNaming.firstVolume`, lines 169–190)
 - **Problem:**
@@ -67,8 +80,8 @@
   - In `ArchiveNaming.isArchiveExtension`, match `r\d\d` extensions (`ext.count == 3 && ext.lowercased().hasPrefix("r") && ext.dropFirst().allSatisfy(\.isNumber)`).
   - In `ArchiveNaming.firstVolume`, if the extension matches `r\d\d`, check if `archive.rar` exists in the same directory and return it as the first volume.
 
-#### R5-4. ⬜ [P2] Non-Negative Size Accumulation Guard in `DiskSpace.requiredBytes`
-- **Status:** ⬜ Open
+#### R5-4. ✅ [P2] Non-Negative Size Accumulation Guard in `DiskSpace.requiredBytes`
+- **Status:** ✅ Done — `DiskSpace.requiredBytes` adds `max(0, size)`. The listing parser also reads sizes as unsigned (`ListingParser.parseSize`): a size above `Int64.max` (e.g. `18446744073709551615` in a crafted zip64) used to become `nil` and count as 0 bytes in the disk-space check; it now saturates at `Int64.max`, and a negative value is rejected. Test `requiredBytesNeverShrinkAndHugeSizesSaturate`.
 - **Location:**
   - `Sources/ArhivarCore/StagedExtraction.swift` (`DiskSpace.requiredBytes`, lines 419–425)
 - **Problem:**
@@ -77,16 +90,7 @@
 - **Fix:**
   - Wrap entry size with `max(0, entry.size ?? 0)` to guarantee strictly non-negative accumulation.
 
-### Upstream-Dependent Items
-
-#### 1. 🟡 [Medium] Zstandard (`.zst` / `.tar.zst`) Archive Creation
-- **Status:** 🟡 Partially done — one-step `.tar.gz`, `.tar.xz`, and `.tar.bz2` creation is completed (tests `tarCompressionCommands`, `createsCompressedTar`, `createsTarGzInOneStep`).
-- ⬜ **Remaining:** Zstandard (`.zst` and `.tar.zst`) creation is currently **blocked upstream**: the official 7-Zip `7zz` (26.04) extracts `.zst` / `.tzst` (`K` flag in `7zz i`) but does not implement `zstd` archive creation (`7zz a -tzstd` fails with `E_NOTIMPL`).
-- **Next steps:** Offer `.zst` and `.tar.zst` in `ArchiveFormat` (`Sources/ArhivarCore/ArchiveOptions.swift`) once upstream `7zz` enables `C` (Create) support for `zstd`, or dynamically when the active engine reports `zstd` creation capability. `.tar.zst` will directly reuse `SevenZipCommand.tarStage` and `compressTarStage`.
-
 ---
-
-## Done
 
 ### Fourth Hardening Round — Read-Only Trees, Extract Here Password & Special-File Validation (2026-10-18)
 

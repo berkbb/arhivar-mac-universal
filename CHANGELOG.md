@@ -77,6 +77,10 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 - Extracting with "Replace it" over folders left read-only (`0555`), unreadable or unenterable (`0444`, `0000`) by an earlier extraction works, also when a folder has to be replaced by a file; symbolic links inside such folders are checked and removed like any other, and the folders keep their permissions.
 - "Extract Here" on the archive that is open and unlocked uses its password instead of asking again and forgetting it.
 - The New Archive sheet says right away when the chosen items are only named pipes, sockets or device files, and keeps Create disabled.
+- If a folder already has the new archive's name, the New Archive sheet says so and keeps Create disabled (it used to promise to replace it, compress everything and then fail); the folder is never touched.
+- Archives that are read-only, locked or on a read-only disk are no longer offered for editing (adding, deleting or renaming failed with "Permission denied"); the toolbar explains why, and dropped files go to the New Archive sheet.
+- Old-style multi-volume RAR archives (`.rar` with `.r00`, `.r01`, …) open from any volume, also with Extract Here.
+- An archive declaring a negative size, or a size too large for a signed 64-bit number, can no longer shrink or skip the free-space check before extraction.
 
 ### Changed
 
