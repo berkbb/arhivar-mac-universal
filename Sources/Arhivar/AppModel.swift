@@ -1328,7 +1328,7 @@ final class AppModel {
             guard duplicates.isEmpty else { throw AddPlan.DuplicateNameError(names: duplicates) }
             // Kaynakların hepsi atlanan özel dosyalarsa (FIFO, soket) boş bir arşiv oluşturulmaz.
             let followsLinks = !(options.storeSymlinks && options.format.supportsSymlinks)
-            guard options.sources.contains(where: { !SpecialFiles.isSpecial(atPath: $0.path, followingSymlinks: followsLinks) }) else {
+            guard !SpecialFiles.containsOnlySpecialFiles(options.sources, followingSymlinks: followsLinks) else {
                 throw AddPlan.NothingToArchiveError()
             }
             let fileManager = FileManager.default

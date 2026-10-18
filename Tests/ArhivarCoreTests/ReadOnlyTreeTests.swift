@@ -88,3 +88,22 @@ private func mode(of url: URL) -> UInt16? {
     #expect(try FileManager.default.destinationOfSymbolicLink(atPath: readOnly.appendingPathComponent("ic").path) == "../f.txt")
 }
 
+// MARK: - R4-3 Yalnızca özel dosyalar
+
+@Test func detectsSourcesMadeOnlyOfSpecialFiles() throws {
+    let root = try temporaryFolder("ozel")
+    defer { StagedExtraction.removeTree(at: root) }
+    let pipe = root.appendingPathComponent("boru")
+    let file = root.appendingPathComponent("dosya.txt")
+    let link = root.appendingPathComponent("bag")
+    #expect(mkfifo(pipe.path, 0o644) == 0)
+    try "x".write(to: file, atomically: true, encoding: .utf8)
+    try FileManager.default.createSymbolicLink(atPath: link.path, withDestinationPath: pipe.path)
+
+    #expect(SpecialFiles.containsOnlySpecialFiles([pipe]))
+    #expect(!SpecialFiles.containsOnlySpecialFiles([pipe, file]))
+    #expect(!SpecialFiles.containsOnlySpecialFiles([]))
+    // FIFO'yu gösteren bağlantı yalnızca bağlantılar izlenecekse özel sayılır.
+    #expect(!SpecialFiles.containsOnlySpecialFiles([link]))
+    #expect(SpecialFiles.containsOnlySpecialFiles([link], followingSymlinks: true))
+}

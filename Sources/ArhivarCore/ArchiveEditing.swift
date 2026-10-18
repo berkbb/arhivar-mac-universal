@@ -147,6 +147,11 @@ public enum SpecialFiles {
         return type != S_IFREG && type != S_IFDIR && type != S_IFLNK
     }
 
+    /// Kaynakların hepsi atlanacak özel dosyalar mı? O zaman arşivlenecek bir şey kalmaz (bkz. `AddPlan.NothingToArchiveError`).
+    public static func containsOnlySpecialFiles(_ sources: [URL], followingSymlinks: Bool = false) -> Bool {
+        !sources.isEmpty && sources.allSatisfy { isSpecial(atPath: $0.path, followingSymlinks: followingSymlinks) }
+    }
+
     /// Kaynakların içindeki özel dosyalar, arşivde alacakları yollarla ("klasör/alt/pipe").
     /// 7zz bir kaynağı son yol bileşeniyle saklar; `-x!` ile verilen bu yollar yalnızca o öğeyi dışlar.
     /// - Parameter followingSymlinks: Bağlantılar bağlantı olarak saklanmayacaksa true. 7zz o zaman klasörü gösteren

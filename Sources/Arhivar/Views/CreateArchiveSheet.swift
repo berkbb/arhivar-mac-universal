@@ -188,12 +188,19 @@ struct CreateArchiveSheet: View {
         format.supportsEncryption && password != confirmation
     }
 
+    /// Kaynakların hepsi atlanacak özel dosyalarsa (FIFO, soket, aygıt) arşivlenecek bir şey yoktur; sayfa kapandıktan
+    /// sonra hata vermek yerine burada söylenir.
+    private var onlySpecialProblem: Bool {
+        SpecialFiles.containsOnlySpecialFiles(sources, followingSymlinks: !(settings.storeSymlinks && format.supportsSymlinks))
+    }
+
     /// Farklı klasörlerden gelen aynı adlı kaynaklar (küçük harfle); 7zz "Duplicate filename" hatasıyla dururdu.
     private var duplicateNames: Set<String> {
         Set(AddPlan.duplicateNames(in: sources).map { $0.lowercased() })
     }
 
     private var validationMessage: String? {
+        if onlySpecialProblem { return settings.t(.nothingToArchive) }
         if singleFileProblem { return settings.t(.createSingleFileOnly) }
         let duplicates = AddPlan.duplicateNames(in: sources)
         if !duplicates.isEmpty { return settings.t(.duplicateNames, duplicates.joined(separator: ", ")) }
@@ -216,7 +223,7 @@ struct CreateArchiveSheet: View {
     }
 
     private var isValid: Bool {
-        !sources.isEmpty && destination != nil && !singleFileProblem && !passwordProblem && duplicateNames.isEmpty
+        !sources.isEmpty && destination != nil && !singleFileProblem && !passwordProblem && duplicateNames.isEmpty && !onlySpecialProblem
     }
 
     // MARK: - Eylemler
