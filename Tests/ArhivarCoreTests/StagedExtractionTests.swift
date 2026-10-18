@@ -146,9 +146,9 @@ private struct Sandbox {
         return StagedExtraction.leaveOutRootMetadata(in: content, destination: destination, base: base, mode: mode)
     }
 
-    // FileManager "._" ile başlayan sıradan dosyaları listelemez; "._Proje" ne sayılır ne taşınır (merge de görmez).
+    // "._Proje" eşi ("Proje") yanında olduğu için AppleDouble üst verisidir.
     let finder = try staging("finder", folders: ["Proje", "__MACOSX/Proje"], files: [".DS_Store", "._Proje"])
-    #expect(leaveOut(finder, mode: .smart) == [".DS_Store", "__MACOSX"])
+    #expect(leaveOut(finder, mode: .smart) == [".DS_Store", "._Proje", "__MACOSX"])
     #expect(try FileManager.default.contentsOfDirectory(atPath: finder.path) == ["Proje"])
 
     // Arşivde üst veriden başka bir şey yoksa çıkarılan tek şey odur; bırakılmaz.
@@ -161,5 +161,5 @@ private struct Sandbox {
     let always = try staging("her", folders: ["Proje", "__MACOSX"], files: [])
     #expect(leaveOut(always, mode: .always).isEmpty)
     #expect(leaveOut(always, mode: .never).isEmpty)
-    #expect(StagedExtraction.isMacMetadata("._a.txt") && !StagedExtraction.isMacMetadata("a.DS_Store"))
+    #expect(StagedExtraction.isMacMetadata(".DS_Store", in: always) && !StagedExtraction.isMacMetadata("a.DS_Store", in: always))
 }

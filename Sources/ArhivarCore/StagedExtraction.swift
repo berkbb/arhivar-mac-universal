@@ -45,19 +45,44 @@ public enum StagedExtraction {
         case .always: return subfolder
         case .never: return base
         case .smart:
-            let roots = (try? fileManager.contentsOfDirectory(atPath: content.path)) ?? []
+            let roots = (try? entries(ofDirectory: content.path)) ?? []
             // .DS_Store, __MACOSX ve AppleDouble (._*) üst verileri sayılmaz: Finder'ın "Sıkıştır" ile yaptığı
             // tek klasörlü arşivlerin kökündeki __MACOSX, "akıllı" kipin "Ad/Ad/…" iç içe klasörü oluşturmasına yol açmasın.
-            let meaningful = roots.filter { !isMacMetadata($0) }
+            let meaningful = roots.filter { !isMacMetadata($0, in: content) }
             let count = meaningful.isEmpty ? roots.count : meaningful.count
             return count > 1 ? subfolder : base
         }
     }
 
-    /// macOS üst veri öğesi mi: Finder görünüm ayarları (.DS_Store), AppleDouble kopyaları (._*) ya da Arşiv İzlencesi'nin
-    /// kaynak çatalı klasörü (__MACOSX)?
-    public static func isMacMetadata(_ name: String) -> Bool {
-        name == ".DS_Store" || name == "__MACOSX" || name.hasPrefix("._")
+    /// `directory` içindeki `name` bir macOS üst veri öğesi mi: Finder görünüm ayarları (.DS_Store), Arşiv İzlencesi'nin
+    /// kaynak çatalı klasörü (__MACOSX) ya da bir AppleDouble dosyası ("._ad")?
+    ///
+    /// "._" ile başlayan her dosya üst veri değildir ("._config" gibi veri dosyaları olabilir): yalnızca AppleDouble
+    /// imzasını (0x00051607) taşıyan ya da yanında eşi ("ad") bulunan dosyalar sayılır.
+    public static func isMacMetadata(_ name: String, in directory: URL) -> Bool {
+        if name == ".DS_Store" || name == "__MACOSX" { return true }
+        guard name.hasPrefix("._"), name.count > 2 else { return false }
+        let url = directory.appendingPathComponent(name)
+        guard itemType(url) == .typeRegular else { return false }
+        if itemType(directory.appendingPathComponent(String(name.dropFirst(2)))) != nil { return true }
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
+        defer { try? handle.close() }
+        return (try? handle.read(upToCount: 4)) == Data([0x00, 0x05, 0x16, 0x07])
+    }
+
+    /// Klasörün tüm öğelerinin adları (`readdir`). `FileManager.contentsOfDirectory` ve numaralandırıcıları "._" ile
+    /// başlayan sıradan dosyaları hiç listelemez: bunlar çıkarmada hedefe taşınmaz, karantina işareti almaz, boş alan
+    /// hesabına girmezdi. Klasör, bağlantı ve FIFO'lar her iki yolla da listelenir.
+    public static func entries(ofDirectory path: String) throws -> [String] {
+        guard let directory = opendir(path) else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+        defer { closedir(directory) }
+        var names: [String] = []
+        while let entry = readdir(directory) {
+            let length = Int(entry.pointee.d_namlen)
+            let name = withUnsafeBytes(of: entry.pointee.d_name) { String(decoding: $0.prefix(length), as: UTF8.self) }
+            if name != "." && name != ".." { names.append(name) }
+        }
+        return names
     }
 
     /// Akıllı kural, kökteki tek anlamlı öğenin yanında yalnızca macOS üst verisi olduğu için içeriği doğrudan hedefe
@@ -70,8 +95,8 @@ public enum StagedExtraction {
         in content: URL, destination: URL, base: URL, mode: SubfolderMode, fileManager: FileManager = .default
     ) -> [String] {
         guard mode == .smart, destination == base else { return [] }
-        let roots = (try? fileManager.contentsOfDirectory(atPath: content.path)) ?? []
-        let metadata = roots.filter(isMacMetadata)
+        let roots = (try? entries(ofDirectory: content.path)) ?? []
+        let metadata = roots.filter { isMacMetadata($0, in: content) }
         guard !metadata.isEmpty, metadata.count < roots.count else { return [] }
         for name in metadata { removeTree(at: content.appendingPathComponent(name), fileManager: fileManager) }
         return metadata.sorted()
@@ -86,8 +111,9 @@ public enum StagedExtraction {
     ) throws -> [URL] {
         try fileManager.createDirectory(at: destination, withIntermediateDirectories: true)
         var changed: [URL] = []
-        for item in try fileManager.contentsOfDirectory(at: staging, includingPropertiesForKeys: nil) {
-            if let result = try mergeItem(item, into: destination.appendingPathComponent(item.lastPathComponent), policy: policy, fileManager: fileManager) {
+        for name in try entries(ofDirectory: staging.path) {
+            let item = staging.appendingPathComponent(name)
+            if let result = try mergeItem(item, into: destination.appendingPathComponent(name), policy: policy, fileManager: fileManager) {
                 changed.append(result)
             }
         }
@@ -106,8 +132,9 @@ public enum StagedExtraction {
             return try OwnerAccess.granting(S_IWUSR | S_IXUSR, on: target.path) {
                 try OwnerAccess.granting(S_IRWXU, on: source.path) {
                     var touched = false
-                    for child in try fileManager.contentsOfDirectory(at: source, includingPropertiesForKeys: nil) {
-                        if try mergeItem(child, into: target.appendingPathComponent(child.lastPathComponent), policy: policy, fileManager: fileManager) != nil {
+                    for name in try entries(ofDirectory: source.path) {
+                        let child = source.appendingPathComponent(name)
+                        if try mergeItem(child, into: target.appendingPathComponent(name), policy: policy, fileManager: fileManager) != nil {
                             touched = true
                         }
                     }
@@ -164,7 +191,7 @@ public enum StagedExtraction {
         var changed: [(path: String, mode: mode_t)] = []
         func walk(_ path: String, relative: String) {
             if let original = OwnerAccess.add(S_IRWXU, on: path) { changed.append((path, original)) }
-            for child in (try? fileManager.contentsOfDirectory(atPath: path)) ?? [] {
+            for child in (try? entries(ofDirectory: path)) ?? [] {
                 let childPath = (path as NSString).appendingPathComponent(child)
                 let childRelative = relative.isEmpty ? child : relative + "/" + child
                 var info = stat()
@@ -459,11 +486,24 @@ public enum DiskSpace {
             guard let type = StagedExtraction.itemType(url, fileManager: fileManager) else { continue }
             if type == .typeRegular {
                 total = total.saturatingAdding(size(of: url, fileManager: fileManager))
-            } else if type == .typeDirectory, let enumerator = fileManager.enumerator(atPath: url.path) {
-                while enumerator.nextObject() != nil {
-                    guard enumerator.fileAttributes?[.type] as? FileAttributeType == .typeRegular else { continue }
-                    total = total.saturatingAdding((enumerator.fileAttributes?[.size] as? NSNumber)?.int64Value ?? 0)
-                }
+            } else if type == .typeDirectory {
+                total = total.saturatingAdding(regularFileBytes(below: url.path))
+            }
+        }
+        return total
+    }
+
+    /// Klasör ağacındaki sıradan dosyaların boyutu ("._" ile başlayanlar dahil; bağlantılar izlenmez).
+    static func regularFileBytes(below path: String) -> Int64 {
+        var total: Int64 = 0
+        for name in (try? StagedExtraction.entries(ofDirectory: path)) ?? [] {
+            let child = (path as NSString).appendingPathComponent(name)
+            var info = stat()
+            guard lstat(child, &info) == 0 else { continue }
+            switch info.st_mode & S_IFMT {
+            case S_IFREG: total = total.saturatingAdding(Int64(info.st_size))
+            case S_IFDIR: total = total.saturatingAdding(regularFileBytes(below: child))
+            default: break
             }
         }
         return total

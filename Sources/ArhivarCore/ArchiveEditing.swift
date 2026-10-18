@@ -188,7 +188,7 @@ public enum SpecialFiles {
             case S_IFDIR:
                 let identity = FileIdentity(device: info.st_dev, inode: info.st_ino)
                 guard !ancestors.contains(identity) else { return }
-                for child in (try? fileManager.contentsOfDirectory(atPath: path)) ?? [] {
+                for child in (try? StagedExtraction.entries(ofDirectory: path)) ?? [] {
                     visit((path as NSString).appendingPathComponent(child), as: archivePath + "/" + child, ancestors: ancestors.union([identity]))
                 }
             default:

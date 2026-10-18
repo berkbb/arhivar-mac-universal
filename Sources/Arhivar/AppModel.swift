@@ -829,7 +829,7 @@ final class AppModel {
             }
             let changed = try StagedExtraction.merge(from: content, into: destination, policy: policy)
             // Doğrudan hedefe tek anlamlı öğe çıktıysa Finder o öğeyi seçsin (macOS üst verileri sayılmaz).
-            let meaningfulChanged = changed.filter { !StagedExtraction.isMacMetadata($0.lastPathComponent) }
+            let meaningfulChanged = changed.filter { !StagedExtraction.isMacMetadata($0.lastPathComponent, in: destination) }
             let targetItems = meaningfulChanged.isEmpty ? changed : meaningfulChanged
             let reveal = destination == base && targetItems.count == 1 ? targetItems[0] : destination
             let warning = warnings.isEmpty ? nil : warnings.joined(separator: "\n\n")

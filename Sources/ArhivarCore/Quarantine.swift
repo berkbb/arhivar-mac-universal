@@ -68,7 +68,6 @@ public enum Quarantine {
         let mark = derivedValue(from: archiveValue)
         // Dosya sistemi zaman çözünürlüğü için küçük pay.
         let threshold = start.addingTimeInterval(-1)
-        let keys: [URLResourceKey] = [.attributeModificationDateKey, .isDirectoryKey, .isSymbolicLinkKey]
 
         func isFresh(_ url: URL) -> Bool {
             guard let changed = try? url.resourceValues(forKeys: [.attributeModificationDateKey]).attributeModificationDate else {
@@ -78,8 +77,10 @@ public enum Quarantine {
         }
 
         var topLevel = Set(roots.compactMap { $0.split(separator: "/").first.map(String.init) })
-        if let entries = try? fileManager.contentsOfDirectory(at: destination, includingPropertiesForKeys: keys) {
-            for entry in entries where isFresh(entry) { topLevel.insert(entry.lastPathComponent) }
+        // "._" ile başlayan sıradan dosyalar da (FileManager listelemez) işaretlenir; yoksa "._calis.command" Gatekeeper
+        // denetimi olmadan açılırdı.
+        for name in (try? StagedExtraction.entries(ofDirectory: destination.path)) ?? [] where isFresh(destination.appendingPathComponent(name)) {
+            topLevel.insert(name)
         }
 
         var count = 0
@@ -90,8 +91,8 @@ public enum Quarantine {
             var info = stat()
             guard lstat(url.path, &info) == 0, info.st_mode & S_IFMT == S_IFDIR else { return }
             OwnerAccess.granting(S_IRUSR | S_IXUSR, on: url.path) {
-                for child in (try? fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: keys)) ?? [] {
-                    visit(child)
+                for name in (try? StagedExtraction.entries(ofDirectory: url.path)) ?? [] {
+                    visit(url.appendingPathComponent(name))
                 }
             }
         }

@@ -1320,4 +1320,34 @@ struct AppModelTests {
         #expect(fixture.model.toast?.revealURL?.lastPathComponent == "Proje")
         #expect(fixture.model.toast?.message == fixture.settings.t(.toastExtracted, "Proje"))
     }
+
+    /// "._" ile başlayan sıradan dosyalar (ör. "._config") arşivden çıkarılırken sessizce düşmez ve karantina işaretini alır.
+    @Test func dotUnderscoreFilesAreExtractedAndQuarantined() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let source = fixture.workspace.appendingPathComponent("ad", isDirectory: true)
+        try FileManager.default.createDirectory(at: source.appendingPathComponent("Proje"), withIntermediateDirectories: true)
+        try "kok".write(to: source.appendingPathComponent("._config"), atomically: false, encoding: .utf8)
+        try "ic".write(to: source.appendingPathComponent("Proje/._notlar"), atomically: false, encoding: .utf8)
+        let archive = fixture.workspace.appendingPathComponent("Ayarlar.zip")
+        let options = CreateOptions(
+            sources: ["._config", "Proje"].map { source.appendingPathComponent($0) }, destination: archive, format: .zip, level: .fast
+        )
+        try SevenZipError.check(try await fixture.runner.run(SevenZipCommand.create(options)))
+        let mark = "0083;6ad350b0;Safari;"
+        #expect(setxattr(archive.path, "com.apple.quarantine", Array(mark.utf8), mark.utf8.count, 0, 0) == 0)
+        let output = fixture.useExtractFolder()
+
+        fixture.model.openArchive(archive)
+        await fixture.settle()
+        #expect(fixture.model.node("._config") != nil)
+        fixture.model.extract(items: [])
+        await fixture.settle()
+        #expect(fixture.model.alert == nil)
+        let extracted = output.appendingPathComponent("Ayarlar")
+        #expect(try String(contentsOf: extracted.appendingPathComponent("._config"), encoding: .utf8) == "kok")
+        #expect(try String(contentsOf: extracted.appendingPathComponent("Proje/._notlar"), encoding: .utf8) == "ic")
+        #expect(Quarantine.value(of: extracted.appendingPathComponent("._config")) == mark)
+    }
 }
