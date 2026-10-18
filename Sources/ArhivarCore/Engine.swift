@@ -149,8 +149,13 @@ public enum ArchiveNaming {
     static func isArchiveExtension(_ ext: String) -> Bool {
         let ext = ext.lowercased()
         if archiveExtensions.contains(ext) { return true }
-        // Bölünmüş arşiv parçaları: .001, .002, …
-        return ext.count == 3 && ext.allSatisfy(\.isNumber)
+        // Bölünmüş arşiv parçaları: .001, .002, … ve eski RAR bölümleri: .r00, .r01, …
+        return (ext.count == 3 && ext.allSatisfy(\.isNumber)) || isOldRarVolume(ext)
+    }
+
+    /// Eski adlandırmalı çok bölümlü RAR'ın ".r00" … ".r99" bölümü (ilk bölüm ".rar" dosyasıdır).
+    static func isOldRarVolume(_ ext: String) -> Bool {
+        ext.count == 3 && ext.first?.lowercased() == "r" && ext.dropFirst().allSatisfy { $0.isASCII && $0.isNumber }
     }
 
     public static func isArchive(_ url: URL) -> Bool {
@@ -165,7 +170,8 @@ public enum ArchiveNaming {
     }
 
     /// Bölünmüş arşivin bir parçası verilirse ilk parçası: 7zz yalnızca ilk parçadan açar.
-    /// "veri.7z.002" → "veri.7z.001", "film.part3.rar" → "film.part1.rar" (ya da "part01"). İlk parça yoksa olduğu gibi döner.
+    /// "veri.7z.002" → "veri.7z.001", "film.part3.rar" → "film.part1.rar" (ya da "part01"), "film.r04" → "film.rar".
+    /// İlk parça yoksa olduğu gibi döner.
     public static func firstVolume(of url: URL, fileManager: FileManager = .default) -> URL {
         let directory = url.deletingLastPathComponent()
         let name = url.lastPathComponent
@@ -173,6 +179,8 @@ public enum ArchiveNaming {
         let ext = url.pathExtension
         if ext.count == 3, ext.allSatisfy(\.isASCII), ext.allSatisfy(\.isNumber), ext != "001" {
             candidate = url.deletingPathExtension().lastPathComponent + ".001"
+        } else if isOldRarVolume(ext) {
+            candidate = url.deletingPathExtension().lastPathComponent + ".rar"
         } else if ext.lowercased() == "rar" {
             let stem = url.deletingPathExtension().lastPathComponent as NSString
             let part = stem.pathExtension

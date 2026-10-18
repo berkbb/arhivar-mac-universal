@@ -39,3 +39,22 @@ private func temporaryFolder(_ name: String) throws -> URL {
     #expect(ArchiveCapabilities.isEditable(type: "7z", url: archive))
 }
 
+// MARK: - R5-3 Eski RAR parçaları
+
+/// Eski RAR bölümleri ".rar", ".r00", ".r01", … olarak adlanır; 7zz yalnızca ".rar" dosyasından açar.
+@Test func oldStyleRarVolumesOpenFromTheRarFile() throws {
+    let folder = try temporaryFolder("eski-rar")
+    defer { StagedExtraction.removeTree(at: folder) }
+    for name in ["film.rar", "film.r00", "film.r01", "yalniz.r00"] {
+        try Data("rar".utf8).write(to: folder.appendingPathComponent(name))
+    }
+    #expect(ArchiveNaming.isArchive(folder.appendingPathComponent("film.r00")))
+    #expect(ArchiveNaming.isArchive(folder.appendingPathComponent("film.R17")))
+    #expect(!ArchiveNaming.isArchive(folder.appendingPathComponent("notlar.rtf")))
+    #expect(!ArchiveNaming.isArchive(folder.appendingPathComponent("a.r1")))
+    #expect(ArchiveNaming.firstVolume(of: folder.appendingPathComponent("film.r01")) == folder.appendingPathComponent("film.rar"))
+    #expect(ArchiveNaming.firstVolume(of: folder.appendingPathComponent("film.r00")) == folder.appendingPathComponent("film.rar"))
+    // ".rar" yoksa olduğu gibi kalır.
+    #expect(ArchiveNaming.firstVolume(of: folder.appendingPathComponent("yalniz.r00")) == folder.appendingPathComponent("yalniz.r00"))
+}
+
