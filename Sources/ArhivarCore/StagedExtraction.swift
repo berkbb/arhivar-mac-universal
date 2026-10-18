@@ -25,7 +25,7 @@ public enum StagedExtraction {
     /// 7zz tarafından tam iç yollarıyla ("a/b/c/dosya.txt") yazılır; hedefe o klasörün yolu olmadan gitmeleri için
     /// içerik "a/b/c" altından alınır.
     public static func contentRoot(in staging: URL, stripping folder: String, fileManager: FileManager = .default) -> URL {
-        let components = folder.split(separator: "/").filter { $0 != "." }
+        let components = folder.split(separator: "/").filter { $0 != "." && $0 != ".." }
         guard !components.isEmpty else { return staging }
         let candidate = components.reduce(staging) { $0.appendingPathComponent(String($1), isDirectory: true) }
         return itemType(candidate, fileManager: fileManager) == .typeDirectory ? candidate : staging

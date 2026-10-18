@@ -114,4 +114,25 @@ struct HardeningIntegrationTests {
         #expect(!sums.contains { $0.value.contains("-") })
     }
 
+    /// P1-8: ".." bileşenli girdi, 7zz'nin yazdığı yerde ("a/x.txt") bulunur; aynı yollu girdiler bir kez sayılır.
+    @Test func dotDotEntriesAndAppendedDuplicates() async throws {
+        defer { cleanUp() }
+        var tar = TarBuilder()
+        tar.file("a/../x.txt", "x")
+        tar.file("tekrar.txt", "eski")
+        tar.file("tekrar.txt", "yeni-uzun")
+        let archive = workspace.appendingPathComponent("nokta.tar")
+        try tar.archive.write(to: archive)
+
+        let listing = try await list(archive)
+        #expect(listing.entries.map(\.path) == ["a/x.txt", "tekrar.txt", "tekrar.txt"])
+        let statistics = ArchiveStatistics(listing: listing)
+        #expect(statistics.fileCount == 2)
+        #expect(statistics.totalSize == 10)
+
+        let extractor = ItemExtractor(runner: runner, archive: archive, password: nil, root: workspace.appendingPathComponent("oturum"))
+        let url = try await extractor.extract("a/../x.txt")
+        #expect(url.path.hasSuffix("/a/x.txt"))
+        #expect(try String(contentsOf: url, encoding: .utf8) == "x")
+    }
 }

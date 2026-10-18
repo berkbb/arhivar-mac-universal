@@ -211,27 +211,33 @@ public enum ListingParser {
         }
     }
 
-    /// Arşiv içi yolu ağaç için normalleştirir: baştaki "./", "." bileşenleri, yinelenen ve sondaki "/" atılır.
-    /// `tar -czf a.tgz .` ile oluşturulan arşivler "./src/main.swift" gibi yollar saklar.
+    /// Arşiv içi yolu ağaç için normalleştirir: baştaki "./", "." ve ".." bileşenleri, yinelenen ve sondaki "/" atılır.
+    /// `tar -czf a.tgz .` ile oluşturulan arşivler "./src/main.swift" gibi yollar saklar. 7zz çıkarırken ".."
+    /// bileşenlerini birleştirmeden atar ("a/../x.txt" → "a/x.txt"); ağaç ve hedef yollar da aynı yeri göstersin.
     public static func normalizedPath<S: StringProtocol>(_ raw: S) -> String {
         // Hızlı yol: neredeyse tüm yollar zaten normaldir; tek bayt taramasıyla anlaşılır, kopya yapılmaz.
         guard needsNormalization(raw) else { return String(raw) }
         return raw.split(separator: "/", omittingEmptySubsequences: true)
-            .filter { $0 != "." }
+            .filter { $0 != "." && $0 != ".." }
             .joined(separator: "/")
     }
 
-    /// Yolda boş ("//", baştaki ya da sondaki "/") veya "." bileşeni var mı?
+    /// Yolda boş ("//", baştaki ya da sondaki "/"), "." ya da ".." bileşeni var mı?
     static func needsNormalization<S: StringProtocol>(_ raw: S) -> Bool {
-        // Başlangıç bir "/" sonrası gibi ele alınır: baştaki "/" ya da "./" da yakalanır.
-        var previous: UInt8 = 0x2F
-        var beforePrevious: UInt8 = 0
+        // Bileşenin uzunluğu ve içindeki nokta sayısı; boş, "." ya da ".." bileşen normalleştirme ister.
+        var length = 0
+        var dots = 0
         for byte in raw.utf8 {
-            if byte == 0x2F, previous == 0x2F || (previous == 0x2E && beforePrevious == 0x2F) { return true }
-            beforePrevious = previous
-            previous = byte
+            if byte == 0x2F {
+                if length == 0 || (dots == length && length <= 2) { return true }
+                length = 0
+                dots = 0
+            } else {
+                length += 1
+                if byte == 0x2E { dots += 1 }
+            }
         }
-        return previous == 0x2F || (previous == 0x2E && beforePrevious == 0x2F)
+        return length == 0 || (dots == length && length <= 2)
     }
 
     static func makeEntry(_ block: Block, timeZone: TimeZone) -> ArchiveEntry? {
@@ -294,13 +300,16 @@ public struct ArchiveStatistics: Sendable, Equatable {
         var encrypted = false
         // Açık klasör girdileri ile dosya yollarından çıkan ara klasörler: birçok zip/tar klasör girdisi saklamaz.
         var folders = Set<Substring>()
-        for entry in listing.entries {
+        // tar'a sonradan eklenen (tar -r) aynı yollu girdiler: ağaçtaki gibi yalnızca en son girdi sayılır.
+        var filePaths = Set<Substring>()
+        for entry in listing.entries.reversed() {
             packedSum = packedSum.saturatingAdding(entry.packedSize ?? 0)
             if entry.isEncrypted { encrypted = true }
             let path = entry.path[...]
             if entry.isDirectory {
                 guard folders.insert(path).inserted else { continue }
             } else {
+                guard filePaths.insert(path).inserted else { continue }
                 files += 1
                 total = total.saturatingAdding(entry.size ?? 0)
             }

@@ -80,7 +80,8 @@ public struct AddPlan: Sendable, Equatable {
     ) throws -> AddPlan {
         let duplicates = duplicateNames(in: sources)
         guard duplicates.isEmpty else { throw DuplicateNameError(names: duplicates) }
-        let folder = folder.split(separator: "/").joined(separator: "/")
+        // "./belgeler" gibi ham yazımlar: ilk bileşen "." olursa 7zz'ye ad olarak "." verilirdi.
+        let folder = ListingParser.normalizedPath(folder)
         if let parent = sources.first?.deletingLastPathComponent(), folder.isEmpty,
            sources.allSatisfy({ $0.deletingLastPathComponent() == parent }) {
             return AddPlan(workingDirectory: parent, names: sources.map(\.lastPathComponent), stagingDirectory: nil)
@@ -160,10 +161,12 @@ public struct ItemExtractor: Sendable {
         let fileManager = FileManager.default
         let directory = (root ?? self.root).appendingPathComponent(UUID().uuidString, isDirectory: true)
         let base = directory.standardizedFileURL.path + "/"
-        let targets = paths.map { directory.appendingPathComponent($0).standardizedFileURL }
+        // 7zz ".." bileşenlerini birleştirmeden atar ("a/../x.txt" → "a/x.txt"); hedef yollar da aynı kuralla bulunur.
+        let normalized = paths.map(ListingParser.normalizedPath)
+        let targets = normalized.map { directory.appendingPathComponent($0).standardizedFileURL }
         // Arşivdeki "../" gibi yollar geçici klasörün dışına çıkamasın.
         guard !paths.isEmpty else { throw SevenZipError.failed(code: 0, message: "") }
-        if let escaping = zip(paths, targets).first(where: { !$0.1.path.hasPrefix(base) }) {
+        if let escaping = zip(paths, targets).first(where: { $0.1.path == directory.standardizedFileURL.path || !$0.1.path.hasPrefix(base) }) {
             throw SevenZipError.failed(code: 0, message: escaping.0)
         }
         // Geçici klasör sistem diskindedir; büyük bir öğe diski doldurmasın.

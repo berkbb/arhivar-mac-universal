@@ -81,6 +81,30 @@ private func mode(of url: URL) -> UInt16? {
     #expect(SevenZipCommand.compressTarStage(tarGz, tarStage: stage)?.contains("-spd") == true)
 }
 
+// MARK: - P1-8 Yollar ve istatistik
+
+@Test func addPlanNormalizesDotPrefixedFolder() throws {
+    let root = try temporaryFolder("nokta")
+    defer { StagedExtraction.removeTree(at: root) }
+    let file = root.appendingPathComponent("yeni.txt")
+    try "y".write(to: file, atomically: true, encoding: .utf8)
+    let plan = try AddPlan.make(sources: [file], into: "./belgeler/", stagingRoot: root.appendingPathComponent("hazirlik"))
+    #expect(plan.names == ["belgeler"])
+    #expect(FileManager.default.fileExists(atPath: try #require(plan.stagingDirectory).appendingPathComponent("belgeler/yeni.txt").path))
+}
+
+@Test func statisticsCountAppendedDuplicatesOnce() {
+    let listing = ArchiveListing(info: ArchiveInfo(), entries: [
+        ArchiveEntry(path: "a.txt", size: 10), ArchiveEntry(path: "b/c.txt", size: 5), ArchiveEntry(path: "a.txt", size: 20),
+    ])
+    let statistics = ArchiveStatistics(listing: listing)
+    #expect(statistics.fileCount == 2)
+    #expect(statistics.totalSize == 25)
+    #expect(statistics.folderCount == 1)
+    // Ağaç da en son girdiyi gösterir.
+    #expect(ArchiveTree.build(from: listing.entries).first { $0.id == "a.txt" }?.size == 20)
+}
+
 // MARK: - P0-4 Salt okunur öğeler
 
 @Test func quarantineReachesReadOnlyItems() throws {

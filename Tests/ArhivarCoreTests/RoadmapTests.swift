@@ -180,7 +180,12 @@ private let archive = URL(fileURLWithPath: "/tmp/ornek.zip")
     #expect(ListingParser.normalizedPath("a/./b/.") == "a/b")
     #expect(ListingParser.normalizedPath(".") == "")
     #expect(ListingParser.normalizedPath(".gizli/a") == ".gizli/a")
-    #expect(ListingParser.normalizedPath("../kacak") == "../kacak")
+    // 7zz ".." bileşenlerini birleştirmeden atar; ağaç da aynı yolu göstersin ("..", "..." ise bir addır).
+    #expect(ListingParser.normalizedPath("../kacak") == "kacak")
+    #expect(ListingParser.normalizedPath("a/../b") == "a/b")
+    #expect(ListingParser.normalizedPath("a/..") == "a")
+    #expect(ListingParser.normalizedPath("...") == "...")
+    #expect(ListingParser.normalizedPath("..a/b..") == "..a/b..")
     #expect(ListingParser.normalizedPath("._.") == "._.")
 
     let output = """
