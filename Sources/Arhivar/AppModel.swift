@@ -1331,6 +1331,12 @@ final class AppModel {
             guard !SpecialFiles.containsOnlySpecialFiles(options.sources, followingSymlinks: followsLinks) else {
                 throw AddPlan.NothingToArchiveError()
             }
+            // Aynı adlı bir klasör arşivle değiştirilmez (bkz. `installArchive`); 7zz sıkıştırmayı boşuna yapmasın diye
+            // baştan reddedilir.
+            let first = options.firstOutput
+            if StagedExtraction.itemType(first) == .typeDirectory {
+                throw CocoaError(.fileWriteFileExists, userInfo: [NSFilePathErrorKey: first.path])
+            }
             let fileManager = FileManager.default
             let directory = options.destination.deletingLastPathComponent()
             let name = options.destination.lastPathComponent
@@ -1514,6 +1520,9 @@ final class AppModel {
         }
         if error is AddPlan.NothingToArchiveError {
             return t(.nothingToArchive)
+        }
+        if let cocoa = error as? CocoaError, cocoa.code == .fileWriteFileExists, let path = cocoa.userInfo[NSFilePathErrorKey] as? String {
+            return t(.renameExists, OpenSafety.visibleName((path as NSString).lastPathComponent))
         }
         if let link = error as? ItemExtractor.SymbolicLinkError {
             let name = link.paths.first.map { (ListingParser.normalizedPath($0) as NSString).lastPathComponent } ?? ""

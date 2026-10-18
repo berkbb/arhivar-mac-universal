@@ -337,7 +337,7 @@ public enum StagedExtraction {
     }
 
     /// Son yol bileşenini izlemeden (lstat) öğe türü; yoksa nil.
-    static func itemType(_ url: URL, fileManager: FileManager) -> FileAttributeType? {
+    public static func itemType(_ url: URL, fileManager: FileManager = .default) -> FileAttributeType? {
         (try? fileManager.attributesOfItem(atPath: url.path))?[.type] as? FileAttributeType
     }
 

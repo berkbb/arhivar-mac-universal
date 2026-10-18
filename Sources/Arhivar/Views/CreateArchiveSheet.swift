@@ -208,6 +208,7 @@ struct CreateArchiveSheet: View {
             // Onay boşken düğmenin neden kapalı olduğu da söylenir.
             return settings.t(confirmation.isEmpty ? .createPasswordConfirmHint : .createPasswordMismatch)
         }
+        if let folder = folderConflict { return settings.t(.renameExists, folder.lastPathComponent) }
         // Bölünmüş arşivde diskte oluşan ilk dosya "ad.7z.001"dir.
         if let destination, FileManager.default.fileExists(atPath: firstOutput(for: destination).path) {
             return settings.t(.createExistsWarning)
@@ -222,8 +223,17 @@ struct CreateArchiveSheet: View {
         ).firstOutput
     }
 
+    /// Hedefte arşivle aynı adlı bir klasör (ör. önceden çıkarılmış "Proje.7z/") varsa o klasör; klasör hiçbir zaman
+    /// arşivle değiştirilmez, "değiştirilecek" uyarısı yalnızca dosyalar içindir.
+    private var folderConflict: URL? {
+        guard let destination else { return nil }
+        let first = firstOutput(for: destination)
+        return StagedExtraction.itemType(first) == .typeDirectory ? first : nil
+    }
+
     private var isValid: Bool {
         !sources.isEmpty && destination != nil && !singleFileProblem && !passwordProblem && duplicateNames.isEmpty && !onlySpecialProblem
+            && folderConflict == nil
     }
 
     // MARK: - Eylemler

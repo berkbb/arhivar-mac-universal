@@ -1233,4 +1233,23 @@ struct AppModelTests {
         #expect(model.passwordRequest == nil)
         #expect(model.alert == nil)
     }
+
+    // MARK: - .agents/context/roadmap.md: beşinci tur
+
+    /// R5-1: hedefte arşivle aynı adlı bir klasör varsa 7zz çalıştırılmadan anlaşılır bir iletiyle reddedilir; klasöre dokunulmaz.
+    @Test func creatingOverAFolderIsRefusedUpFront() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let folder = fixture.workspace.appendingPathComponent("proje.zip", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try "icerik".write(to: folder.appendingPathComponent("not.txt"), atomically: true, encoding: .utf8)
+
+        fixture.model.createArchive(CreateOptions(sources: [fixture.workspace.appendingPathComponent("kaynak")], destination: folder, format: .zip, level: .fast))
+        await fixture.settle()
+        #expect(fixture.model.alert?.message == fixture.settings.t(.renameExists, "proje.zip"))
+        #expect(try String(contentsOf: folder.appendingPathComponent("not.txt"), encoding: .utf8) == "icerik")
+        #expect(fixture.model.recentArchives.isEmpty)
+    }
+
 }
