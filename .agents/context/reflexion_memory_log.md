@@ -88,3 +88,21 @@
 - **Root Cause:** Without `-spd`, `7zz` expands `*` and `?` in the archive/file path argument itself, operating on all matching sibling archives in the same directory.
 - **Lesson & Guardrail:** Pass `-spd` unconditionally in `list`, `test`, `extract`, `delete`, `rename`, and `hash`, and include the archive/output path and `excluding` paths in `wildcardSafety(for:)` for `create`, `compressTarStage`, and `add`.
 
+---
+
+## Episode 12: `..` Intermediate Folder Raw Prefix & Standalone Symbolic Link Safety
+- **Context:** Synthesized folder trees from entries with `..` components (e.g. `../a/b.txt`), and single-item actions on standalone archive symbolic links.
+- **Root Cause:**
+  1. `ArchiveTree.rawPrefix` skipped `.` but not `..`, assigning `..` as the raw `archivePath` for synthesized folder `a`, causing 7zz to extract all sibling items under `..`.
+  2. Standalone symbolic links extracted via `ItemExtractor` were removed to prevent escaping links or 0-byte placeholders, but threw `SevenZipError.failed(code: 0)`. In multi-select copy (`⌘A` + `⌘C`), a single symlink failed the entire copy with code 0.
+- **Lesson & Guardrail:** `ArchiveTree.rawPrefix` must skip both `.` and `..`. Standalone links throw typed `ItemExtractor.SymbolicLinkError`, multi-selection copy skips standalone links and copies the remaining files, and single-item actions show an informative explanation without spawning 7zz.
+
+---
+
+## Episode 13: Read-Only Directory Tree (`0o555` / `0o444`) Immunity & Unlocked Password Reuse
+- **Context:** Extracting and merging archives into existing directories that have mode `0o555` / `0o444` / `0o000`, and invoking "Extract Here" on an archive currently open and unlocked in the main window.
+- **Root Cause:**
+  1. In `.replace` mode, replacing an existing target directory with a file used `fileManager.removeItem(at: target)` instead of `removeTree`, failing with `EACCES` (Cocoa error 513) if the target contained read-only items. Similarly, merging into `0o444` directories lacked `S_IXUSR`, and scanning/rewriting symlinks inside `0o555` folders silently failed with `EACCES`.
+  2. `AppModel.extractHere` passed `password: nil` even when the target archive was already open and unlocked in the main window (`archive == archiveURL`), causing 7zz to abort and `handle` to clear the open archive's valid `password`.
+- **Lesson & Guardrail:** Use `removeTree` when replacing directories, grant `S_IWUSR | S_IXUSR` when merging directories, temporarily open `S_IRWXU` during `secureSymlinks` directory traversal (restoring original modes afterward), and reuse `archive == archiveURL ? password : nil` in `extractHere`.
+
