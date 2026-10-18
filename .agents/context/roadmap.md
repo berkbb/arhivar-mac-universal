@@ -20,6 +20,14 @@
 
 ## Done
 
+### Post-1.1.0 Fixes (2026-10-18)
+
+#### P1. ✅ [P2] Split ZIP Detection False Positives (`.z64`, `.z80`, …) in `ArchiveNaming.isArchive`
+- **Status:** ✅ Done — `isSplitZipVolume` (from `R6-2`) matched any `z` + digits extension by name alone, so a Nintendo 64 ROM (`.z64`) or a ZX Spectrum snapshot (`.z80`) was treated as an archive: dropping one started an open operation that failed instead of offering a new archive, and inside an archive it was offered for nested browsing. Split ZIP volumes are now excluded from the name-only `isArchiveExtension` (used by `isBrowsable` for items inside an archive) and accepted by `isArchive(_:fileManager:)` only when a sibling `.zip` with the same name exists; `baseName` and `supportsEditing` still recognize the suffix. Tests `zipLikeExtensionsWithoutAZipAreNotArchives`, `droppingAZipLikeRomOffersANewArchive`.
+- **Location:** `Sources/ArhivarCore/Engine.swift` (`ArchiveNaming.isArchiveExtension`, `isArchive(_:fileManager:)`, `baseName(of:)`)
+
+---
+
 ### Sixth Hardening Round — RAR Multi-Part Name Stripping, Split ZIP `.z01` Handling & Multi-Volume In-Place Edit Guard (2026-10-18)
 
 All three items address multi-volume and multi-part edge cases across extraction naming, archive detection, and in-place editing safety.

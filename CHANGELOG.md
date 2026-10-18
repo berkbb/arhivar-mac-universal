@@ -5,6 +5,10 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ## [Unreleased]
 
+### Fixed
+
+- Files whose extension looks like a split ZIP volume (for example Nintendo 64 `.z64` or ZX Spectrum `.z80` files) are no longer treated as archives when there is no `.zip` with the same name next to them: dropping one offers a new archive instead of failing to open it, and inside an archive it opens with its own app.
+
 ## [1.1.0] — 2026-10-18
 
 ### Added
