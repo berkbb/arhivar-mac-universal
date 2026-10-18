@@ -70,6 +70,10 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 - Choosing the outer archive in the sidebar while inside a nested archive returns to it without reloading it, keeping its password; the sidebar keeps it selected.
 - Dropping files while an operation runs no longer opens the New Archive sheet, Quick Look from the context menu switches to the chosen item, and the table is rebuilt once when an archive loads.
 - `release.sh` finds the CHANGELOG section of the exact version, `package.sh` lists outputs whose paths contain spaces, and `update-7zip.sh` signs 7-Zip installed into the fallback folder.
+- A folder that exists only in the paths of `..`-prefixed TAR entries is extracted by its own path; previously everything under `..` came along.
+- Symbolic links in the list: selecting all (⌘A) and copying (⌘C) copies everything except standalone links instead of failing with "code 0"; opening, previewing or checksumming a link explains why it can't be done, and links can't be dragged on their own.
+- Adding or creating from nothing but named pipes, sockets or device files is refused with a clear message (adding used to pick up the whole source folder or an empty folder). A folder reached through a symbolic link is checked for pipes too when links are not stored as links, and a failed add removes its read-only temporary copies.
+- New Archive (⌘N) and Open Archive (⌘O) are disabled while an operation runs (their result used to be dropped silently).
 
 ### Changed
 

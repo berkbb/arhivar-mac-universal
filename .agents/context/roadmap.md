@@ -9,9 +9,23 @@
 
 ## Open / In Progress
 
-### Priority 1 (P1) — Functional, Path & Edge-Case Hardening
+### Upstream-Dependent Items
 
-#### 1. ⬜ [P1] Skip `..` Components in `ArchiveTree.rawPrefix` When Deriving Intermediate Folder `archivePath`
+#### 1. 🟡 [Medium] Zstandard (`.zst` / `.tar.zst`) Archive Creation
+- **Status:** 🟡 Partially done — one-step `.tar.gz`, `.tar.xz`, and `.tar.bz2` creation is completed (tests `tarCompressionCommands`, `createsCompressedTar`, `createsTarGzInOneStep`).
+- ⬜ **Remaining:** Zstandard (`.zst` and `.tar.zst`) creation is currently **blocked upstream**: the official 7-Zip `7zz` (26.04) extracts `.zst` / `.tzst` (`K` flag in `7zz i`) but does not implement `zstd` archive creation (`7zz a -tzstd` fails with `E_NOTIMPL`).
+- **Next steps:** Offer `.zst` and `.tar.zst` in `ArchiveFormat` (`Sources/ArhivarCore/ArchiveOptions.swift`) once upstream `7zz` enables `C` (Create) support for `zstd`, or dynamically when the active engine reports `zstd` creation capability. `.tar.zst` will directly reuse `SevenZipCommand.tarStage` and `compressTarStage`.
+
+---
+
+## Done
+
+### Third Hardening Round — `..` Prefixes, Symlink Rows, Special-File Sources & Busy-State Guards (2026-10-18)
+
+All four items were reproduced or confirmed against the bundled `7zz` 26.04 before the fix; the suite grew from 179 to 189 tests.
+
+#### R3-1. ✅ [P1] Skip `..` Components in `ArchiveTree.rawPrefix` When Deriving Intermediate Folder `archivePath`
+- **Status:** ✅ Done — `ArchiveTree.rawPrefix` skips `..` like `ListingParser.normalizedPath`, so the synthesized folder `a` of `../a/b.txt` is passed to 7zz as `../a` (with `..`, 7zz extracted everything under `..`, e.g. `../z` too). Note: 7zz cannot delete `..` entries from a TAR in any spelling (`7zz d` exits 0 and changes nothing) — an engine limitation. Tests `rawPrefixSkipsParentComponents`, `parentPrefixedFolderExtractsOnlyItself`.
 - **Locations:**
   - `Sources/ArhivarCore/ArchiveTree.swift` (`ArchiveTree.rawPrefix`, lines 98–112)
 - **Problem:** In `R2-8`, `ListingParser.normalizedPath` was updated to drop both `"."` and `".."` path components (`"../a/b.txt"` → `"a/b.txt"`, `"a/../b/c.txt"` → `"a/b/c.txt"`). However, `ArchiveTree.rawPrefix(_:components:)` — which derives the raw `archivePath` for synthesized intermediate folders in `ArchiveTree.build` — only checks `if !component.isEmpty && component != "."` and does not skip `".."`:
@@ -20,7 +34,8 @@
   - Selecting that folder for extraction or deletion then passes `".."` or `"a/.."` to `7zz`.
 - **Fix:** Update `ArchiveTree.rawPrefix` to check `if !component.isEmpty && component != "." && component != ".."`.
 
-#### 2. ⬜ [P1] Graceful Symbolic Link Handling in `copyItems` (`⌘A` + `⌘C`), `dragItem`, and Single-Item Actions (`openItem`, `toggleQuickLook`, `showChecksums`)
+#### R3-2. ✅ [P1] Graceful Symbolic Link Handling in `copyItems` (`⌘A` + `⌘C`), `dragItem`, and Single-Item Actions (`openItem`, `toggleQuickLook`, `showChecksums`)
+- **Status:** ✅ Done — `ItemExtractor` throws `ItemExtractor.SymbolicLinkError` for a standalone link (before running 7zz when the link is known from the listing) instead of `failed(code: 0)`; `AppModel` skips standalone links in `copyItems` (copies the rest, explains when only links were chosen), returns `nil` from `dragItem(for:)`, and `openItem`, `toggleQuickLook`, `showChecksums` and `browseArchive` show the new `symbolicLinkItem` message without running 7zz. The context menu hides Quick Look / Open / Checksums / Browse for a link and disables Copy for link-only selections; the menu bar uses `selectionIsSymbolicLink`. Tests `standaloneLinkIsRefusedWithAClearError`, `itemExtractorContainsLinksAndPlaceholders`, `symbolicLinkRowsAreSkippedOrExplained`.
 - **Locations:**
   - `Sources/ArhivarCore/ArchiveEditing.swift` (`ItemExtractor.extract`, lines 245–263)
   - `Sources/Arhivar/AppModel.swift` (`openItem`, lines 839–855; `toggleQuickLook`, lines 865–874; `dragItem`, lines 935–942; `copyItems`, lines 948–970; `showChecksums`, lines 1019–1044)
@@ -31,7 +46,8 @@
   3. **Standalone symlink actions & drag:** Double-clicking (`openItem`), pressing Space (`toggleQuickLook`), or requesting Checksums (`showChecksums`) on a symbolic link row runs `7zz` and shows `"The operation failed (code 0)."` instead of skipping/disabling or showing a clear message; similarly, `dragItem(for:)` returns a non-`nil` `ArchiveItemTransfer` for symbolic link rows that then fails during transfer.
 - **Fix:** Return `nil` from `dragItem(for:)` when `symbolicLinks.contains(node.id)`; filter out standalone `symbolicLinks` in `copyItems` when copying multiple items (or skip standalone symlinks without failing the remaining targets); and disable/guard `openItem`, `toggleQuickLook`, `showChecksums`, and `copyItems` on standalone symbolic link entries so users never hit a bogus `(code 0)` error.
 
-#### 3. ⬜ [P1] All-Special-File Sources (`FIFOs` / Sockets) in `AddPlan.make` & `addFiles`, Symlinked Directories When `storeSymlinks == false` in `SpecialFiles.archivePaths`, and `removeTree` in `AddPlan.make`
+#### R3-3. ✅ [P1] All-Special-File Sources (`FIFOs` / Sockets) in `AddPlan.make` & `addFiles`, Symlinked Directories When `storeSymlinks == false` in `SpecialFiles.archivePaths`, and `removeTree` in `AddPlan.make`
+- **Status:** ✅ Done — `AddPlan.make` drops special sources first and throws `AddPlan.NothingToArchiveError` when nothing is left (no empty name list, no empty target folder); `createArchive` refuses special-only sources the same way (`nothingToArchive`). `AddPlan.make(followingSymlinks:)` (passed `!storeSymlinks`) also skips links to FIFOs, and its `catch` uses `StagedExtraction.removeTree`. `SpecialFiles.archivePaths(followingSymlinks: true)` walks into symlinked folders (also a symlinked source) with per-path cycle protection, reporting every path 7zz would read. Tests `addPlanRefusesOnlySpecialSources`, `addPlanCleansUpReadOnlyCopiesOnFailure`, `specialFilesBehindSymlinkedFolders`, `fifoBehindSymlinkedFolderDoesNotHang`, `onlySpecialFilesAreRefused`.
 - **Locations:**
   - `Sources/ArhivarCore/ArchiveEditing.swift` (`AddPlan.make`, lines 83–118; `SpecialFiles.archivePaths`, lines 140–160)
   - `Sources/Arhivar/AppModel.swift` (`addFiles`, lines 1089–1106)
@@ -44,11 +60,8 @@
   3. **Read-only cleanup on `AddPlan.make` error:** Line 115 in `AddPlan.make`'s `catch` block calls `try? fileManager.removeItem(at: staging)` instead of `StagedExtraction.removeTree(at: staging, fileManager: fileManager)`, which fails to clean up `staging` if an earlier source copied a read-only (`0o555`) directory before a subsequent source threw an error.
 - **Fix:** Ensure `AddPlan.make` (and `addFiles` / `createArchive`) does not return empty `names` or an empty `topLevel` directory when all sources are special files, traverse symlinked directories (with cycle protection) in `SpecialFiles.archivePaths` when `followingSymlinks == true`, pass `followingSymlinks: !storeSymlinks` to `AddPlan.make`, and use `StagedExtraction.removeTree` in `AddPlan.make`'s `catch` block.
 
----
-
-### Priority 2 (P2) — UI & Operation Concurrency Polish
-
-#### 4. ⬜ [P2] Guard `beginCreate` (`⌘N`) and `presentOpenPanel` (`⌘O`) During Active Operations
+#### R3-4. ✅ [P2] Guard `beginCreate` (`⌘N`) and `presentOpenPanel` (`⌘O`) During Active Operations
+- **Status:** ✅ Done — `beginCreate` and `presentOpenPanel` return while an operation runs; New Archive… and Open Archive… are disabled in the File menu, the toolbar and the welcome screen. Test `newArchiveWaitsForTheRunningOperation`.
 - **Locations:**
   - `Sources/Arhivar/AppModel.swift` (`presentOpenPanel`, lines 473–482; `beginCreate`, lines 1281–1283)
   - `Sources/Arhivar/ArhivarApp.swift` (`menuNewArchive`, `menuOpenArchive`, lines 85–94)
@@ -57,17 +70,6 @@
 - **Fix:** Guard `guard operation == nil else { return }` in `beginCreate` and `presentOpenPanel`, and add `.disabled(model.operation != nil)` to the **New Archive…** and **Open Archive…** buttons in `ArhivarApp.swift` and `ContentView.swift`.
 
 ---
-
-### Upstream-Dependent Items
-
-#### 5. 🟡 [Medium] Zstandard (`.zst` / `.tar.zst`) Archive Creation
-- **Status:** 🟡 Partially done — one-step `.tar.gz`, `.tar.xz`, and `.tar.bz2` creation is completed (tests `tarCompressionCommands`, `createsCompressedTar`, `createsTarGzInOneStep`).
-- ⬜ **Remaining:** Zstandard (`.zst` and `.tar.zst`) creation is currently **blocked upstream**: the official 7-Zip `7zz` (26.04) extracts `.zst` / `.tzst` (`K` flag in `7zz i`) but does not implement `zstd` archive creation (`7zz a -tzstd` fails with `E_NOTIMPL`).
-- **Next steps:** Offer `.zst` and `.tar.zst` in `ArchiveFormat` (`Sources/ArhivarCore/ArchiveOptions.swift`) once upstream `7zz` enables `C` (Create) support for `zstd`, or dynamically when the active engine reports `zstd` creation capability. `.tar.zst` will directly reuse `SevenZipCommand.tarStage` and `compressTarStage`.
-
----
-
-## Done
 
 ### Second Hardening Round — Parser, Symlinks, Atomic Create, Quarantine, Wildcards & Special Files (2026-10-18)
 

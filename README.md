@@ -64,7 +64,7 @@ The same tasks from the terminal:
 ./Scripts/set-version.sh 1.0.1        # change the version (single source: Support/Info.plist)
 ./Scripts/release.sh --dry-run        # rehearse a release without sending anything
 ./Scripts/release.sh                  # package, tag and upload to GitHub Releases
-swift test                            # 179 tests
+swift test                            # 189 tests
 ```
 
 Requires Xcode 26 or later. See [DEVELOPMENT.md](DEVELOPMENT.md) for details, [roadmap.md](.agents/context/roadmap.md) for planned features and [CHANGELOG.md](CHANGELOG.md) for release notes.
