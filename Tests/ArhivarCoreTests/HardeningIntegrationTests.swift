@@ -60,7 +60,7 @@ struct HardeningIntegrationTests {
         try "f\n".write(to: workspace.appendingPathComponent("kaynak/a/b/f.txt"), atomically: true, encoding: .utf8)
     }
 
-    private func cleanUp() { try? FileManager.default.removeItem(at: workspace) }
+    private func cleanUp() { StagedExtraction.removeTree(at: workspace) }
 
     private func create(_ options: CreateOptions) async throws {
         try SevenZipError.check(try await runner.run(SevenZipCommand.create(options), timeout: 30, input: options.input))

@@ -802,4 +802,43 @@ struct AppModelTests {
         #expect(message.lowercased().contains("sha256: " + expected))
         #expect(message.contains("CRC32: "))
     }
+
+    // MARK: - .agents/context/roadmap.md: 13 açık madde
+
+    /// P0-4: salt okunur ve yalnızca çalıştırılabilir dosyalar karantina işaretini taşır; "üzerine yaz" ile ikinci
+    /// çıkarma salt okunur dosyalarda takılmaz.
+    @Test func readOnlyFilesKeepQuarantineAndCanBeReplaced() async throws {
+        let fixture = try Fixture()
+        defer {
+            StagedExtraction.removeTree(at: fixture.workspace)
+            fixture.cleanUp()
+        }
+        await fixture.model.refreshEngine()
+        let script = fixture.workspace.appendingPathComponent("kaynak/calis.command")
+        try "#!/bin/sh\n".write(to: script, atomically: true, encoding: .utf8)
+        chmod(script.path, 0o555)
+        let readOnly = fixture.workspace.appendingPathComponent("kaynak/salt.txt")
+        try "salt".write(to: readOnly, atomically: true, encoding: .utf8)
+        chmod(readOnly.path, 0o444)
+        let archive = try await fixture.makeArchive("indirilen.7z", format: .sevenZip)
+        let value = "0083;6ad350b0;Safari;"
+        #expect(setxattr(archive.path, "com.apple.quarantine", Array(value.utf8), value.utf8.count, 0, 0) == 0)
+        fixture.settings.subfolderMode = .never
+        fixture.settings.overwriteMode = .replace
+        let output = fixture.useExtractFolder()
+        let model = fixture.model
+        model.openArchive(archive)
+        await fixture.settle()
+
+        for _ in 0..<2 {
+            model.extract(items: [])
+            await fixture.settle()
+            #expect(model.alert == nil)
+        }
+        let extracted = output.appendingPathComponent("kaynak/calis.command")
+        let permissions = (try FileManager.default.attributesOfItem(atPath: extracted.path)[.posixPermissions] as? NSNumber)?.uint16Value
+        #expect(permissions == 0o555)
+        #expect(Quarantine.value(of: extracted) == value)
+        #expect(Quarantine.value(of: output.appendingPathComponent("kaynak/salt.txt")) == value)
+    }
 }

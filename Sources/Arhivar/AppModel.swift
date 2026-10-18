@@ -627,7 +627,7 @@ final class AppModel {
     private func discardAllSessions() {
         discardSessionDirectory()
         for context in archiveStack {
-            if let root = context.sessionRoot { try? FileManager.default.removeItem(at: root) }
+            if let root = context.sessionRoot { StagedExtraction.removeTree(at: root) }
         }
         archiveStack = []
     }
@@ -739,8 +739,6 @@ final class AppModel {
         let rawItems = isOpenArchive ? items.map(archivePath(for:)) : items
         let retry = PendingAction.extract(items: items, destination: base, stripping: stripping)
         perform(.progressExtracting, archive: archive, retry: retry, usedPassword: password != nil) { runner, progress in
-            let fileManager = FileManager.default
-
             // 1. Boş alan. Açık arşivin listesi yoksa (ör. Buraya Çıkar) önce listelenir; parola gerekirse burada sorulur.
             var entries = knownEntries
             if entries == nil {
@@ -752,7 +750,7 @@ final class AppModel {
 
             // 2. Hedefle aynı birimdeki hazırlık klasörüne çıkar; iptal ya da hata hedefi değiştirmez.
             let staging = try StagedExtraction.makeStagingDirectory(for: base)
-            defer { try? fileManager.removeItem(at: staging) }
+            defer { StagedExtraction.removeTree(at: staging) }
             let options = ExtractOptions(archive: archive, destination: staging, items: rawItems, password: password, overwrite: .replace)
             let result = try await self.confined(runner, archive: archive, writable: [staging]).run(
                 SevenZipCommand.extract(options), workingDirectory: options.workingDirectory, input: options.input, onProgress: progress
@@ -873,7 +871,7 @@ final class AppModel {
     }
 
     private func discardSessionDirectory() {
-        if let sessionRoot { try? FileManager.default.removeItem(at: sessionRoot) }
+        if let sessionRoot { StagedExtraction.removeTree(at: sessionRoot) }
         sessionRoot = nil
         previewCache = [:]
         quickLookURL = nil
@@ -1038,7 +1036,7 @@ final class AppModel {
             try self.checkSpaceForWriting(archive: archive, sourceBytes: sourceBytes, compresses: compresses)
             let plan = try AddPlan.make(sources: sources, into: folderPath, stagingRoot: ItemExtractor.temporaryRoot)
             defer {
-                if let staging = plan.stagingDirectory { try? FileManager.default.removeItem(at: staging) }
+                if let staging = plan.stagingDirectory { StagedExtraction.removeTree(at: staging) }
             }
             let command = SevenZipCommand.add(
                 archive: archive, names: plan.names, password: currentPassword, encryptHeaders: encryptHeaders,

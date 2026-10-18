@@ -10,12 +10,19 @@ public enum Quarantine {
     /// "Kullanıcı açmayı onayladı" biti; arşivin onayı içindeki dosyalara geçmemeli.
     static let userApprovedFlag: UInt32 = 0x0040
 
-    /// Dosyanın karantina değeri (yoksa nil).
+    /// Öğenin karantina değeri (yoksa nil). Sembolik bağlantıda bağlantının kendisininki okunur.
     public static func value(of url: URL) -> String? {
-        let size = getxattr(url.path, attributeName, nil, 0, 0, 0)
+        if let value = read(url.path) { return value }
+        // Okuma izni olmayan (0111, 0000) dosyalarda getxattr EACCES verir; izin kısa süre açılır.
+        guard errno == EACCES || errno == EPERM else { return nil }
+        return OwnerAccess.granting(S_IRUSR, on: url.path) { read(url.path) }
+    }
+
+    private static func read(_ path: String) -> String? {
+        let size = getxattr(path, attributeName, nil, 0, 0, XATTR_NOFOLLOW)
         guard size > 0 else { return nil }
         var buffer = [UInt8](repeating: 0, count: size)
-        let read = getxattr(url.path, attributeName, &buffer, size, 0, 0)
+        let read = getxattr(path, attributeName, &buffer, size, 0, XATTR_NOFOLLOW)
         guard read > 0 else { return nil }
         return String(decoding: buffer.prefix(read), as: UTF8.self)
     }
@@ -28,9 +35,16 @@ public enum Quarantine {
         return fields.joined(separator: ";")
     }
 
-    static func set(_ value: String, on url: URL) {
+    /// Karantina değerini yazar. Sahibin yazma izni olmayan öğelerde (0555 .app ikilileri ve .command betikleri,
+    /// 0444, 0111, 0000) setxattr EACCES verir; işaret yazılmazsa öğe Gatekeeper denetimi olmadan açılırdı.
+    /// Bu yüzden izin kısa süre açılıp eski kip geri yüklenir.
+    @discardableResult
+    static func set(_ value: String, on url: URL) -> Bool {
         let bytes = Array(value.utf8)
-        _ = setxattr(url.path, attributeName, bytes, bytes.count, 0, XATTR_NOFOLLOW)
+        func write() -> Bool { setxattr(url.path, attributeName, bytes, bytes.count, 0, XATTR_NOFOLLOW) == 0 }
+        if write() { return true }
+        guard errno == EACCES || errno == EPERM else { return false }
+        return OwnerAccess.granting(S_IWUSR, on: url.path, write)
     }
 
     /// Öğe beklenen karantina değerini taşımıyorsa yeniden yazar (ör. dosya değiştirme eski üst veriyi geri getirdiyse).
@@ -69,23 +83,24 @@ public enum Quarantine {
         }
 
         var count = 0
-        for name in topLevel.sorted() {
-            let root = destination.appendingPathComponent(name)
-            guard (try? root.checkResourceIsReachable()) == true || isSymlink(root) else { continue }
-            if isFresh(root) {
-                set(mark, on: root)
-                count += 1
-            }
-            guard let enumerator = fileManager.enumerator(at: root, includingPropertiesForKeys: keys, options: []) else { continue }
-            for case let item as URL in enumerator where isFresh(item) {
-                set(mark, on: item)
-                count += 1
+        // Okuma ya da geçiş izni olmayan (0000, 0311) klasörlerin içi de işaretlenir: alt ağaç işlenirken klasöre
+        // izin verilir, sonra eski kip geri yüklenir. Sembolik bağlantıların gösterdiği klasörlere inilmez.
+        func visit(_ url: URL) {
+            if isFresh(url), set(mark, on: url) { count += 1 }
+            var info = stat()
+            guard lstat(url.path, &info) == 0, info.st_mode & S_IFMT == S_IFDIR else { return }
+            OwnerAccess.granting(S_IRUSR | S_IXUSR, on: url.path) {
+                for child in (try? fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: keys)) ?? [] {
+                    visit(child)
+                }
             }
         }
+        for name in topLevel.sorted() {
+            var info = stat()
+            let root = destination.appendingPathComponent(name)
+            guard lstat(root.path, &info) == 0 else { continue }
+            visit(root)
+        }
         return count
-    }
-
-    private static func isSymlink(_ url: URL) -> Bool {
-        (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == true
     }
 }

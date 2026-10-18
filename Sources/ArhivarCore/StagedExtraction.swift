@@ -70,13 +70,16 @@ public enum StagedExtraction {
             return target
         }
         if itemType(source, fileManager: fileManager) == .typeDirectory, targetType == .typeDirectory {
-            var touched = false
-            for child in try fileManager.contentsOfDirectory(at: source, includingPropertiesForKeys: nil) {
-                if try mergeItem(child, into: target.appendingPathComponent(child.lastPathComponent), policy: policy, fileManager: fileManager) != nil {
-                    touched = true
+            // Önceki bir çıkarmadan kalan salt okunur (0555) klasöre yazılabilmesi için yazma izni geçici olarak açılır.
+            return try OwnerAccess.granting(S_IWUSR, on: target.path) {
+                var touched = false
+                for child in try fileManager.contentsOfDirectory(at: source, includingPropertiesForKeys: nil) {
+                    if try mergeItem(child, into: target.appendingPathComponent(child.lastPathComponent), policy: policy, fileManager: fileManager) != nil {
+                        touched = true
+                    }
                 }
+                return touched ? target : nil
             }
-            return touched ? target : nil
         }
         switch policy {
         case .skip:
@@ -85,8 +88,11 @@ public enum StagedExtraction {
             if targetType == .typeRegular, itemType(source, fileManager: fileManager) == .typeRegular {
                 // Dosyadan dosyaya: yerinde, tek adımda değiştir. Eski dosyanın üst verisi (karantina dahil)
                 // yeni içeriğe taşınmasın; yeni dosyanın karantina işareti ayrıca yeniden denetlenir.
+                // Salt okunur (0444, 0555) bir dosya yazma izni olmadan değiştirilemez (Cocoa 513).
                 let mark = Quarantine.value(of: source)
-                let result = try fileManager.replaceItemAt(target, withItemAt: source, options: .usingNewMetadataOnly) ?? target
+                let result = try OwnerAccess.granting(S_IWUSR, on: target.path, restoring: false) {
+                    try fileManager.replaceItemAt(target, withItemAt: source, options: .usingNewMetadataOnly) ?? target
+                }
                 Quarantine.ensure(mark, on: result)
                 return result
             }
@@ -156,6 +162,24 @@ public enum StagedExtraction {
         return removals.sorted()
     }
 
+    /// Klasörü içindekilerle siler. Arşivden çıkan salt okunur (0555) klasörlerin içi `removeItem` ile silinemez;
+    /// hazırlık ve geçici klasörler diskte kalmasın diye önce sahibine yazma izni verilir.
+    public static func removeTree(at url: URL, fileManager: FileManager = .default) {
+        if (try? fileManager.removeItem(at: url)) != nil || itemType(url, fileManager: fileManager) == nil { return }
+        grantOwnerAccess(below: url.path, fileManager: fileManager)
+        try? fileManager.removeItem(at: url)
+    }
+
+    /// Klasöre sahibi için okuma, yazma ve geçiş izni verir; içerik ancak bundan sonra listelenebilir (0000 klasör).
+    private static func grantOwnerAccess(below path: String, fileManager: FileManager) {
+        var info = stat()
+        guard lstat(path, &info) == 0, info.st_mode & S_IFMT == S_IFDIR else { return }
+        _ = OwnerAccess.add(S_IRWXU, on: path)
+        for child in (try? fileManager.contentsOfDirectory(atPath: path)) ?? [] {
+            grantOwnerAccess(below: (path as NSString).appendingPathComponent(child), fileManager: fileManager)
+        }
+    }
+
     /// `link` (köke göre göreli bağlantı yolu) konumundan, köke göre `target` bileşenlerine giden göreli yol.
     static func relativePath(from link: String, to target: [String]) -> String {
         let directory = link.split(separator: "/").dropLast().map(String.init)
@@ -222,6 +246,35 @@ public enum StagedExtraction {
             current = current.deletingLastPathComponent()
         }
         return current
+    }
+}
+
+/// Sahibin izin bitleri eksik olan öğelerde (0555 klasör, 0444/0111/0000 dosya) geçici izin.
+///
+/// Arşivden çıkan öğeler salt okunur ya da yalnızca çalıştırılabilir olabilir. macOS bu öğelere karantina
+/// işareti yazmayı (setxattr) ve değiştirmeyi reddeder; öğeler sahibine aittir, izin kısa süre açılıp geri alınır.
+/// Sembolik bağlantılara dokunulmaz (chmod bağlantının gösterdiğini değiştirirdi).
+enum OwnerAccess {
+    /// Eksikse `bits` izinlerini ekler. - Returns: Değiştirildiyse eski kip; değişmediyse nil.
+    static func add(_ bits: mode_t, on path: String) -> mode_t? {
+        var info = stat()
+        guard lstat(path, &info) == 0, info.st_mode & S_IFMT != S_IFLNK, info.st_mode & bits != bits else { return nil }
+        let original = info.st_mode & 0o7777
+        return chmod(path, original | bits) == 0 ? original : nil
+    }
+
+    /// `body` süresince sahibine `bits` izinlerini verir, sonra eski kipi geri yükler.
+    /// - Parameter restoring: false ise eski kip yalnızca `body` hata verirse geri yüklenir (öğe değiştiriliyorsa).
+    static func granting<T>(_ bits: mode_t, on path: String, restoring: Bool = true, _ body: () throws -> T) rethrows -> T {
+        guard let original = add(bits, on: path) else { return try body() }
+        do {
+            let result = try body()
+            if restoring { chmod(path, original) }
+            return result
+        } catch {
+            chmod(path, original)
+            throw error
+        }
     }
 }
 

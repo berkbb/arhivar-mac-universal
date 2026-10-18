@@ -81,3 +81,73 @@ private func mode(of url: URL) -> UInt16? {
     #expect(SevenZipCommand.compressTarStage(tarGz, tarStage: stage)?.contains("-spd") == true)
 }
 
+// MARK: - P0-4 Salt okunur öğeler
+
+@Test func quarantineReachesReadOnlyItems() throws {
+    let root = try temporaryFolder("karantina")
+    defer { StagedExtraction.removeTree(at: root) }
+    let mark = "0081;6ad350b0;Safari;"
+    var files: [(URL, UInt16)] = []
+    for (name, permissions) in [("rx", 0o555), ("r", 0o444), ("x", 0o111), ("hic", 0o000)] as [(String, UInt16)] {
+        let url = root.appendingPathComponent(name)
+        try Data("#!/bin/sh\n".utf8).write(to: url)
+        chmod(url.path, mode_t(permissions))
+        files.append((url, permissions))
+    }
+    for (url, permissions) in files {
+        #expect(Quarantine.set(mark, on: url), "\(url.lastPathComponent)")
+        #expect(Quarantine.value(of: url) == mark, "\(url.lastPathComponent)")
+        #expect(mode(of: url) == permissions, "\(url.lastPathComponent)")
+    }
+
+    // Erişilemeyen (0000) ve salt okunur (0555) klasörlerin içi de işaretlenir; kipler korunur.
+    let archive = root.appendingPathComponent("arsiv.zip")
+    try Data("zip".utf8).write(to: archive)
+    #expect(Quarantine.set(mark, on: archive))
+    let destination = root.appendingPathComponent("hedef", isDirectory: true)
+    let closed = destination.appendingPathComponent("App.app/Contents/MacOS", isDirectory: true)
+    try FileManager.default.createDirectory(at: closed, withIntermediateDirectories: true)
+    let binary = closed.appendingPathComponent("App")
+    try Data("bin".utf8).write(to: binary)
+    chmod(binary.path, 0o555)
+    chmod(closed.path, 0o000)
+    chmod(destination.appendingPathComponent("App.app").path, 0o555)
+    Quarantine.propagate(from: archive, to: destination, since: .distantPast)
+    chmod(closed.path, 0o755)
+    #expect(Quarantine.value(of: binary) == Quarantine.derivedValue(from: mark))
+    #expect(mode(of: binary) == 0o555)
+    #expect(mode(of: destination.appendingPathComponent("App.app")) == 0o555)
+}
+
+@Test func replaceWorksOnReadOnlyTargets() throws {
+    let root = try temporaryFolder("salt")
+    defer { StagedExtraction.removeTree(at: root) }
+    let staging = root.appendingPathComponent("hazirlik/klasor", isDirectory: true)
+    let destination = root.appendingPathComponent("hedef", isDirectory: true)
+    try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: destination.appendingPathComponent("klasor"), withIntermediateDirectories: true)
+    try "yeni".write(to: staging.appendingPathComponent("dosya"), atomically: true, encoding: .utf8)
+    try "yeni2".write(to: staging.appendingPathComponent("ek"), atomically: true, encoding: .utf8)
+    let old = destination.appendingPathComponent("klasor/dosya")
+    try "eski".write(to: old, atomically: true, encoding: .utf8)
+    chmod(old.path, 0o444)
+    // Önceki bir çıkarmadan kalan salt okunur klasör.
+    chmod(destination.appendingPathComponent("klasor").path, 0o555)
+
+    try StagedExtraction.merge(from: root.appendingPathComponent("hazirlik"), into: destination, policy: .replace)
+    #expect(try String(contentsOf: old, encoding: .utf8) == "yeni")
+    #expect(try String(contentsOf: destination.appendingPathComponent("klasor/ek"), encoding: .utf8) == "yeni2")
+    #expect(mode(of: destination.appendingPathComponent("klasor")) == 0o555)
+}
+
+@Test func removeTreeDeletesReadOnlyFolders() throws {
+    let root = try temporaryFolder("sil")
+    let inner = root.appendingPathComponent("a/b", isDirectory: true)
+    try FileManager.default.createDirectory(at: inner, withIntermediateDirectories: true)
+    try "x".write(to: inner.appendingPathComponent("f"), atomically: true, encoding: .utf8)
+    chmod(inner.path, 0o555)
+    chmod(root.appendingPathComponent("a").path, 0o000)
+    StagedExtraction.removeTree(at: root)
+    #expect(StagedExtraction.itemType(root, fileManager: .default) == nil)
+}
+

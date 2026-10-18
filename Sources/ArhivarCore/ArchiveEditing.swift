@@ -136,9 +136,9 @@ public struct ItemExtractor: Sendable {
         var removed = 0
         for entry in entries {
             let modified = (try? entry.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-            if now.timeIntervalSince(modified) > age, (try? fileManager.removeItem(at: entry)) != nil {
-                removed += 1
-            }
+            guard now.timeIntervalSince(modified) > age else { continue }
+            StagedExtraction.removeTree(at: entry, fileManager: fileManager)
+            if StagedExtraction.itemType(entry, fileManager: fileManager) == nil { removed += 1 }
         }
         return removed
     }
@@ -171,7 +171,6 @@ public struct ItemExtractor: Sendable {
         // Çözülmüş (belki şifreli arşivden gelen) içerik yalnızca kullanıcıya açık olsun.
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         do {
-            let start = Date()
             let options = ExtractOptions(archive: archive, destination: directory, items: paths, password: password, overwrite: .replace)
             let result = try await runner.run(SevenZipCommand.extract(options), workingDirectory: options.workingDirectory, input: options.input, onProgress: onProgress)
             try SevenZipError.check(result)
@@ -180,10 +179,11 @@ public struct ItemExtractor: Sendable {
             if let missing = zip(paths, targets).first(where: { StagedExtraction.itemType($0.1, fileManager: fileManager) == nil }) {
                 throw SevenZipError.failed(code: result.exitCode, message: missing.0)
             }
-            Quarantine.propagate(from: archive, to: directory, since: start)
+            // Klasör bu çıkarma için yeni oluşturuldu; içindeki her şey 7zz'nin yazdığıdır.
+            Quarantine.propagate(from: archive, to: directory, since: .distantPast)
             return targets
         } catch {
-            try? fileManager.removeItem(at: directory)
+            StagedExtraction.removeTree(at: directory, fileManager: fileManager)
             throw error
         }
     }
