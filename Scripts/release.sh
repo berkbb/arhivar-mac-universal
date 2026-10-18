@@ -49,11 +49,12 @@ if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null || git ls-remote --exit
   fail "$TAG etiketi zaten var. Önce Scripts/set-version.sh ile sürümü artırın."
 fi
 
-# Sürüm notları: CHANGELOG.md'deki '## [sürüm]' bölümü.
+# Sürüm notları: CHANGELOG.md'deki '## [sürüm]' bölümü. Başlık düz metin olarak karşılaştırılır: sürümdeki "."
+# bir düzenli ifadede her karakterle eşleşir ("1.2.0" araması "1x2y0" başlığını da bulurdu).
 NOTES="$(mktemp "${TMPDIR:-/tmp}/arhivar-notes.XXXXXX")"
 trap 'rm -f "$NOTES"' EXIT
-awk -v version="$VERSION" '
-  $0 ~ "^## \\[" version "\\]" { found = 1; next }
+awk -v heading="## [$VERSION]" '
+  index($0, heading) == 1 { found = 1; next }
   found && /^## \[/ { exit }
   found { print }
 ' CHANGELOG.md > "$NOTES"

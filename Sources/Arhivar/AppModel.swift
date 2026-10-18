@@ -187,6 +187,10 @@ final class AppModel {
     @ObservationIgnored private var consentPending = false
     /// Açık arşivdeki sembolik bağlantı girdilerinin yolları (bkz. `ItemExtractor.symbolicLinks`).
     @ObservationIgnored private var symbolicLinks: Set<String> = []
+    /// Birden çok görünüm durumu birlikte değişirken tablo verisi her adımda değil, sonunda bir kez hesaplanır.
+    @ObservationIgnored private var displayUpdatesPaused = false
+    /// Tablo verisinin kaç kez yeniden hesaplandığı (testler için).
+    @ObservationIgnored private(set) var displayRebuildCount = 0
 
     private static let recentsKey = "recentArchives"
     private static let maxRecents = 12
@@ -545,9 +549,11 @@ final class AppModel {
         symbolicLinks = Self.symbolicLinks(in: loaded.listing)
         previewCache = [:]
         selection = []
-        if !keepFolder { searchText = "" }
-        tree = ArchiveTree.build(from: loaded.listing.entries)
-        currentFolder = keepFolder && node(folder)?.isDirectory == true ? folder : ""
+        updatingDisplayOnce {
+            if !keepFolder { searchText = "" }
+            tree = ArchiveTree.build(from: loaded.listing.entries)
+            currentFolder = keepFolder && node(folder)?.isDirectory == true ? folder : ""
+        }
     }
 
     private static func symbolicLinks(in listing: ArchiveListing) -> Set<String> {
@@ -563,10 +569,12 @@ final class AppModel {
         listing = nil
         statistics = nil
         symbolicLinks = []
-        tree = []
+        updatingDisplayOnce {
+            tree = []
+            searchText = ""
+            currentFolder = ""
+        }
         selection = []
-        searchText = ""
-        currentFolder = ""
         password = nil
         headersEncrypted = false
         isEditable = false
@@ -632,9 +640,11 @@ final class AppModel {
             sessionRoot = context.sessionRoot
             if archiveStack.count == level {
                 symbolicLinks = Self.symbolicLinks(in: context.listing)
-                searchText = ""
-                tree = ArchiveTree.build(from: context.listing.entries)
-                currentFolder = node(context.currentFolder)?.isDirectory == true ? context.currentFolder : ""
+                updatingDisplayOnce {
+                    searchText = ""
+                    tree = ArchiveTree.build(from: context.listing.entries)
+                    currentFolder = node(context.currentFolder)?.isDirectory == true ? context.currentFolder : ""
+                }
                 selection = context.selection
                 previewCache = context.previewCache
             }
@@ -669,8 +679,9 @@ final class AppModel {
     /// Bırakılan öğeler: düzenlenebilir bir arşiv açıksa eklemeyi önerir; yoksa tek arşiv → aç, diğerleri → yeni arşiv.
     func handleDrop(_ urls: [URL]) {
         let files = urls.filter(\.isFileURL)
-        guard !files.isEmpty else { return }
-        if listing != nil, isEditable, operation == nil {
+        // İşlem sürerken bırakılanlar yok sayılır (yeni arşiv sayfası işlemin üstünde açılmasın).
+        guard !files.isEmpty, operation == nil else { return }
+        if listing != nil, isEditable {
             addRequest = AddRequest(sources: files)
         } else if files.count == 1, let url = files.first, isOpenableArchive(url) {
             openArchive(url)
@@ -850,10 +861,13 @@ final class AppModel {
     }
 
     /// Boşluk tuşu: seçili dosyayı Hızlı Bakış ile önizler; açıksa kapatır.
+    /// Bağlam menüsünden başka bir öğe için çağrılırsa önizleme o öğeye geçer.
     func toggleQuickLook(_ path: String? = nil) {
-        if quickLookURL != nil {
-            quickLookURL = nil
-            return
+        if let current = quickLookURL {
+            guard let path, previewCache[path] != current else {
+                quickLookURL = nil
+                return
+            }
         }
         guard let path = path ?? selection.sorted().first, node(path)?.isDirectory == false else { return }
         withExtractedItem(path, retry: .quickLook(path: path)) { self.quickLookURL = $0 }
@@ -1491,7 +1505,18 @@ final class AppModel {
 
     // MARK: - Görünüm verisi
 
+    /// `changes` içindeki durum değişiklikleri (ağaç, klasör, arama) tablo verisini bir kez yeniden hesaplatır.
+    /// Ağaç önce değişince tablo eski klasörle bir kez boşuna hesaplanıyordu.
+    private func updatingDisplayOnce(_ changes: () -> Void) {
+        displayUpdatesPaused = true
+        changes()
+        displayUpdatesPaused = false
+        rebuildDisplay()
+    }
+
     private func rebuildDisplay() {
+        guard !displayUpdatesPaused else { return }
+        displayRebuildCount += 1
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         let source: [ArchiveNode]
         if !query.isEmpty {

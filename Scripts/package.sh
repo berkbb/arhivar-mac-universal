@@ -61,4 +61,7 @@ hdiutil create -quiet -volname "Arhivar $VERSION" -srcfolder "$STAGING" -fs HFS+
 (cd "$DIST" && shasum -a 256 "$NAME.zip" "$NAME.dmg" > "$NAME.sha256")
 
 echo "✓ Paketler hazır:"
-ls -lh "$DIST/$NAME.zip" "$DIST/$NAME.dmg" "$DIST/$NAME.sha256" | awk '{ print "   " $5 "\t" $9 }'
+# ls | awk '{ print $9 }' boşluk içeren yolları keserdi; boyut ve yol ayrı ayrı yazılır.
+for file in "$DIST/$NAME.zip" "$DIST/$NAME.dmg" "$DIST/$NAME.sha256"; do
+  printf '   %s\t%s\n' "$(du -h "$file" | cut -f1)" "$file"
+done

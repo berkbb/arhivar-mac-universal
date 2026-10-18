@@ -220,6 +220,10 @@ install_to_dir() {
   local dest="$1"
   mkdir -p "$dest"
   replace_file "$PAYLOAD/7zz" "$dest/7zz"
+  # Uygulama paketine kurulumdaki gibi ad-hoc imzala: Apple Silicon imzasız ikiliyi çalıştırmaz.
+  if command -v codesign >/dev/null; then
+    codesign --force --sign - "$dest/7zz" >/dev/null 2>&1 || log "Uyarı: $dest/7zz imzalanamadı."
+  fi
   for doc in License.txt History.txt readme.txt; do
     if [ -f "$PAYLOAD/$doc" ]; then cp "$PAYLOAD/$doc" "$dest/$doc"; fi
   done

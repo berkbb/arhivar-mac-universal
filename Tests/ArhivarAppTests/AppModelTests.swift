@@ -805,7 +805,7 @@ struct AppModelTests {
 
     // MARK: - .agents/context/roadmap.md: 13 açık madde
 
-    /// P1-10: işlem sürerken ⇧⌘W arşivi kapatmaz (işlem bitince geri gelirdi).
+    /// P1-10 / P2-13: işlem sürerken ⇧⌘W arşivi kapatmaz (işlem bitince geri gelirdi); bırakılan dosyalar yok sayılır.
     @Test func closeAndDropWaitForTheRunningOperation() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanUp() }
@@ -818,6 +818,9 @@ struct AppModelTests {
         model.testArchive()
         #expect(model.operation != nil)
         model.closeArchive()
+        model.handleDrop([fixture.workspace.appendingPathComponent("kaynak/not.txt")])
+        #expect(model.addRequest == nil)
+        #expect(model.createRequest == nil)
         await fixture.settle()
         #expect(model.archiveURL == archive)
         #expect(model.listing != nil)
@@ -903,6 +906,32 @@ struct AppModelTests {
         await fixture.settle()
         #expect(model.passwordRequest == nil)
         #expect(model.quickLookURL?.lastPathComponent == "not.txt")
+    }
+
+    /// P2-13: bağlam menüsünden başka bir öğe için Hızlı Bakış önizlemeyi o öğeye geçirir; aynı öğe kapatır.
+    /// Liste yeniden okunurken tablo verisi bir kez hesaplanır.
+    @Test func quickLookSwitchesItemsAndDisplayIsRebuiltOnce() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let archive = try await fixture.makeArchive("bakis.7z", format: .sevenZip)
+        let model = fixture.model
+        model.openArchive(archive)
+        await fixture.settle()
+
+        model.toggleQuickLook("kaynak/not.txt")
+        await fixture.settle()
+        #expect(model.quickLookURL?.lastPathComponent == "not.txt")
+        model.toggleQuickLook("kaynak/alt/b.txt")
+        await fixture.settle()
+        #expect(model.quickLookURL?.lastPathComponent == "b.txt")
+        model.toggleQuickLook("kaynak/alt/b.txt")
+        #expect(model.quickLookURL == nil)
+
+        let before = model.displayRebuildCount
+        model.openArchive(archive)
+        await fixture.settle()
+        #expect(model.displayRebuildCount - before == 1)
     }
 
     /// P1-7: aynı klasördeki bir öğenin adına (büyük/küçük harf duyarsız) yeniden adlandırılmaz.
