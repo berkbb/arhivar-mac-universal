@@ -9,6 +9,74 @@
 
 ## Open / In Progress
 
+### Fifth Hardening Round — Existing Directory Conflicts, Read-Only Archive In-Place Guard, Old RAR Multi-Volume & Saturating Negative Size (2026-10-18)
+
+#### R5-1. ⬜ [P1] Existing Target Directory Collision & Pre-Flight Validation in `CreateArchiveSheet` & `AppModel.createArchive`
+- **Status:** ⬜ Open
+- **Locations:**
+  - `Sources/Arhivar/Views/CreateArchiveSheet.swift` (`validationMessage`, lines 212–215; `isValid`, lines 225–227)
+  - `Sources/Arhivar/AppModel.swift` (`createArchive`, lines 1323–1355)
+- **Problem:**
+  1. When creating a new archive, if a directory with the intended destination name (`firstOutput`) already exists on disk (e.g., a previously extracted `Project.7z/` folder):
+     - `CreateArchiveSheet.validationMessage` checks `FileManager.default.fileExists(atPath: firstOutput(for: destination).path)`, which returns `true` for directories.
+     - The sheet surfaces `settings.t(.createExistsWarning)` (*"An archive with this name already exists and will be replaced"*), which is misleading since the target is a directory, not an archive, and Arhivar strictly avoids overwriting existing folders (`StagedExtraction.installArchive` explicitly throws `CocoaError(.fileWriteFileExists)`).
+     - `isValid` remains `true`, leaving the Create button enabled.
+     - Clicking Create causes `AppModel.createArchive` to invoke `7zz a` inside `staging`, performing full archive compression only to abort during `installArchive` with an error alert, wasting CPU and disk I/O.
+  2. `AppModel.createArchive` lacks a pre-flight check for existing directory targets before spawning `7zz a` and preparing staging.
+- **Fix:**
+  - In `CreateArchiveSheet.swift`, detect if `firstOutput(for: destination)` exists and is a directory (`StagedExtraction.itemType == .typeDirectory`). Surface `settings.t(.renameExists, target.lastPathComponent)` and disable the Create button (`!isFolderConflict` in `isValid`). Reserve `createExistsWarning` exclusively for existing regular files/archives.
+  - In `AppModel.createArchive`, add an upfront pre-flight check before staging:
+    ```swift
+    let first = options.firstOutput
+    if StagedExtraction.itemType(first, fileManager: fileManager) == .typeDirectory {
+        throw CocoaError(.fileWriteFileExists, userInfo: [NSFilePathErrorKey: first.path])
+    }
+    ```
+
+#### R5-2. ⬜ [P1] Read-Only Archive & Directory Immunity for In-Place Editing (`ArchiveCapabilities.isEditable`)
+- **Status:** ⬜ Open
+- **Locations:**
+  - `Sources/ArhivarCore/ArchiveEditing.swift` (`ArchiveCapabilities.isEditable`, lines 11–16)
+  - `Sources/Arhivar/AppModel.swift` (`apply`, line 550)
+- **Problem:**
+  - If a `.7z`, `.zip`, or `.tar` archive file is marked read-only on disk (`chmod 0444` / locked file), or is located on a read-only volume (e.g. mounted DMG, optical media, or read-only network volume):
+    - `ArchiveCapabilities.isEditable` only checks the archive format and split volume status, returning `true`.
+    - `AppModel.isEditable` is enabled, surfacing Add, Delete, and Rename actions in the toolbar and context menus.
+    - Attempting any in-place edit causes `7zz a` / `7zz d` / `7zz rn` to fail with `System ERROR: errno=13 : Permission denied` (exit code 2) because 7zz cannot update read-only archives or write temporary staging files next to them.
+- **Fix:**
+  - In `ArchiveCapabilities.isEditable(type:url:fileManager:)`:
+    - When `fileManager.fileExists(atPath: url.path)`, verify that both the archive file and its containing directory are writable:
+      ```swift
+      guard fileManager.isWritableFile(atPath: url.path),
+            fileManager.isWritableFile(atPath: url.deletingLastPathComponent().path) else {
+          return false
+      }
+      ```
+    - When read-only, `isEditable` evaluates to `false`, editing controls are disabled with the tooltip `settings.t(.readOnlyArchive)` (*"This archive type can't be edited"*), and file drops onto the window trigger the New Archive flow instead of impossible additions.
+
+#### R5-3. ⬜ [P2] Old-Style Multi-Volume RAR Archive Recognition & First-Volume Resolution (`.r00`..`.r99`)
+- **Status:** ⬜ Open
+- **Locations:**
+  - `Sources/ArhivarCore/Engine.swift` (`ArchiveNaming.archiveExtensions`, lines 143–154; `ArchiveNaming.firstVolume`, lines 169–190)
+- **Problem:**
+  - In old-style multi-part RAR archives, secondary volumes use extensions `.r00`, `.r01`, ... while the primary master header resides in `archive.rar`.
+  - `ArchiveNaming.archiveExtensions` only matches `.rar` and strictly 3-digit numeric extensions (`.001`), excluding `.r00`..`.r99`.
+  - Double-clicking or invoking "Extract Here" on `archive.r00` fails to recognize it as an archive (`isArchive == false`), and `firstVolume` does not redirect to `archive.rar`.
+  - Passing `archive.r00` directly to `7zz` fails with `Cannot open the file as archive` because 7-Zip requires old-style RAR volumes to be opened from the `.rar` file.
+- **Fix:**
+  - In `ArchiveNaming.isArchiveExtension`, match `r\d\d` extensions (`ext.count == 3 && ext.lowercased().hasPrefix("r") && ext.dropFirst().allSatisfy(\.isNumber)`).
+  - In `ArchiveNaming.firstVolume`, if the extension matches `r\d\d`, check if `archive.rar` exists in the same directory and return it as the first volume.
+
+#### R5-4. ⬜ [P2] Non-Negative Size Accumulation Guard in `DiskSpace.requiredBytes`
+- **Status:** ⬜ Open
+- **Location:**
+  - `Sources/ArhivarCore/StagedExtraction.swift` (`DiskSpace.requiredBytes`, lines 419–425)
+- **Problem:**
+  - In `DiskSpace.requiredBytes`, entry sizes are summed with `total.saturatingAdding(entry.size ?? 0)`.
+  - If a corrupted or maliciously crafted archive entry specifies a negative size (e.g. `Size = -1`), `saturatingAdding(-1)` reduces the accumulated total bytes, potentially tricking the pre-flight disk space safety check.
+- **Fix:**
+  - Wrap entry size with `max(0, entry.size ?? 0)` to guarantee strictly non-negative accumulation.
+
 ### Upstream-Dependent Items
 
 #### 1. 🟡 [Medium] Zstandard (`.zst` / `.tar.zst`) Archive Creation
