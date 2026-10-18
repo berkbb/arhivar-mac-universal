@@ -55,3 +55,36 @@
 - **Context:** Browsing a nested archive (`archiveStack` non-empty) and quitting the app (`applicationWillTerminate` → `discardTemporaryFiles()`).
 - **Root Cause:** Calling only `discardSessionDirectory()` on termination deleted only the innermost archive's `sessionRoot`, leaving parent session directories in `archiveStack` (containing extracted inner archives and outer previews) on disk until the 6-hour stale sweep.
 - **Lesson & Guardrail:** `discardTemporaryFiles()` must call `discardAllSessions()` so every `sessionRoot` in `archiveStack` is removed immediately on quit.
+
+---
+
+## Episode 8: `7zz l -slt` Multi-Line Archive Comments (`{ ... }`) & Fake `----------` Marker Injection
+- **Context:** Parsing `7zz l -slt` output when an archive header contains a multi-line `Comment = \n{\n...\n}` block.
+- **Root Cause:** `7zz` outputs multi-line archive comments verbatim inside `{ ... }` before the entry list, whereas newlines inside actual entry fields are sanitized to `_`. Treating the *first* `----------` line as the entry boundary or parsing `key = value` lines inside `{ ... }` allowed crafted archive comments to overwrite header fields (`Type`, `Solid`) and inject fake `ArchiveEntry` rows.
+- **Lesson & Guardrail:** Always split header vs. entries on the **last** `----------` marker line (`ListingParser.parse`) and consume brace-delimited multi-line header values up to the last `}` in `ListingParser.parseInfo`.
+
+---
+
+## Episode 9: Content-Rooted Symlink Validation & `7zz` 0-Byte Dangerous-Link Placeholders
+- **Context:** Extracting selected items from a subfolder (`stripping = "a/b"`) or via `ItemExtractor`, and handling `7zz` `Dangerous link path was ignored` warnings.
+- **Root Cause:**
+  1. `7zz` rewrites absolute symlinks (`/etc/hosts`) to point inside the extraction root (`<staging>/etc/hosts`). Validating symlinks against `staging` before stripping `a/b` rewrote `a/b/link` to `../../etc/hosts`, which escaped two levels above `destination` once `<staging>/a/b` was moved.
+  2. When `7zz` rejects a traversal symlink (`../outside`), it leaves a 0-byte regular file at the symlink path, which could clobber an existing file in `.replace` mode or serve a fake 0-byte file to Quick Look / Checksums.
+- **Lesson & Guardrail:** Always run `StagedExtraction.secureSymlinks(in: content, extractionRoot: staging)` against the actual moved content root, and call `StagedExtraction.removeLinkPlaceholders` using `ArchiveEntry.isSymbolicLink` before merging or previewing.
+
+---
+
+## Episode 10: `setxattr` `EACCES` on Read-Only (`0o555`) Executables & `7zz` Kernel Hang on FIFOs
+- **Context:** Propagating `com.apple.quarantine` to extracted `.app` binaries / `.command` scripts with mode `0o555`/`0o444`/`0o111`/`0o000`, and archiving folders containing named pipes (`mkfifo`).
+- **Root Cause:**
+  1. On macOS, `setxattr` and `FileManager.replaceItemAt` fail with `EACCES` if a file lacks owner write (`S_IWUSR`), and `getxattr` fails if a file lacks owner read (`S_IRUSR`).
+  2. `7zz a` opens FIFO named pipes with `open(..., O_RDONLY)` without `O_NONBLOCK`, hanging in the kernel indefinitely.
+- **Lesson & Guardrail:** Wrap xattr reads/writes, directory merges, and tree removals with `OwnerAccess` (restoring the original mode afterward), and exclude FIFOs, sockets, and device nodes via `SpecialFiles` (`-x!` and `SkippingCopier`).
+
+---
+
+## Episode 11: `7zz` Treats the Archive Path Argument Itself as a Wildcard Glob
+- **Context:** Listing, testing, extracting, or hashing an archive whose filename contains `*` or `?` (e.g., `yedek*1.7z`).
+- **Root Cause:** Without `-spd`, `7zz` expands `*` and `?` in the archive/file path argument itself, operating on all matching sibling archives in the same directory.
+- **Lesson & Guardrail:** Pass `-spd` unconditionally in `list`, `test`, `extract`, `delete`, `rename`, and `hash`, and include the archive/output path and `excluding` paths in `wildcardSafety(for:)` for `create`, `compressTarStage`, and `add`.
+

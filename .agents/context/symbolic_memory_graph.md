@@ -16,7 +16,7 @@
 | `N_CMD` | `SevenZipCommand` | `Sources/ArhivarCore/ArchiveOptions.swift` | Pure CLI argument builder (`l`, `t`, `x`, `a`, `d`, `rn`, `h`) |
 | `N_PARSER` | `ListingParser` | `Sources/ArhivarCore/ArchiveListing.swift` | Byte-level `7zz l -slt` parser and path normalizer |
 | `N_TREE` | `ArchiveTree` | `Sources/ArhivarCore/ArchiveTree.swift` | Hierarchical folder synthesizer, `.localizedStandard` sorter, search |
-| `N_STAGED` | `StagedExtraction` | `Sources/ArhivarCore/StagedExtraction.swift` | Atomic staging directory, `secureSymlinks`, smart subfolder, merge |
+| `N_STAGED` | `StagedExtraction` | `Sources/ArhivarCore/StagedExtraction.swift` | Atomic staging directory, `secureSymlinks`, `removeLinkPlaceholders`, `installArchive`, `removeTree`, `OwnerAccess`, smart subfolder, merge |
 | `N_QUARANTINE` | `Quarantine` | `Sources/ArhivarCore/Quarantine.swift` | `com.apple.quarantine` sanitizer and recursive propagator |
 | `N_SAFETY` | `OpenSafety` | `Sources/ArhivarCore/OpenSafety.swift` | Risky UTI / execute-bit detector and Unicode spoof sanitizer |
 | `N_STACK` | `AppModel.archiveStack` | `Sources/Arhivar/AppModel.swift` | LIFO stack of `ArchiveContext` frames for nested archive browsing |
@@ -32,11 +32,11 @@ flowchart TD
     C --> D["Create Same-Volume Staging Dir (StagedExtraction.makeStagingDirectory)"]
     D --> E["Run 7zz x Inside sandbox-exec (N_RUNNER + N_SANDBOX)"]
     E --> F{"7zz Exit Code Check (SevenZipError.check)"}
-    F -- "Cancelled / Fatal Error" --> G["Defer Removes Staging Dir (Destination Untouched)"]
+    F -- "Cancelled / Fatal Error" --> G["Defer Removes Staging Dir via removeTree (Destination Untouched)"]
     F -- "Wrong Password" --> H["Present PasswordSheet With PendingAction.extract"]
-    F -- "Success or Dangerous-Link Warning" --> I["Validate & Rewrite Symlinks (StagedExtraction.secureSymlinks)"]
-    I --> J["Propagate Gatekeeper Quarantine (Quarantine.propagate)"]
-    J --> K["Strip Subfolder Prefix if Applicable (StagedExtraction.contentRoot)"]
+    F -- "Success or Dangerous-Link Warning" --> I["Resolve Moved Content Root (StagedExtraction.contentRoot)"]
+    I --> J["Remove 0-Byte Link Placeholders & Validate Symlinks Against Content Root"]
+    J --> K["Propagate Gatekeeper Quarantine (Quarantine.propagate + OwnerAccess)"]
     K --> L["Resolve Target Dir via SubfolderMode (.smart / .always / .never)"]
     L --> M["Merge Into Destination (.replace / .skip / .rename)"]
     M --> N["Show Toast / Warning Alert & Reveal in Finder"]
