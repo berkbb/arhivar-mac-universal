@@ -8,6 +8,7 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 ### Fixed
 
 - Smart subfolder extraction ("When there is more than one item") now ignores macOS metadata (`.DS_Store`, `__MACOSX`, and `._*` AppleDouble files) when deciding whether to create a wrapper folder. Archives created on macOS containing a single root folder alongside macOS metadata now extract directly without creating an unwanted double folder (`Name/Name/…`).
+- When Smart mode extracts such an archive directly into the destination, the macOS metadata beside the single item (`__MACOSX`, `.DS_Store`) is left out instead of being moved there, so the destination gets no `__MACOSX` folder and keeps its own `.DS_Store` (Finder view settings). Archives that contain only metadata, selected items, and the *Always* / *Never* options extract everything as before.
 
 ## [1.1.1] — 2026-10-18
 

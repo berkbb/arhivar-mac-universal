@@ -30,6 +30,10 @@
 - **Status:** ✅ Done — In `.smart` subfolder mode, `StagedExtraction.destination(for:base:archiveName:mode:)` previously counted all directory entries in the staging root using `FileManager.contentsOfDirectory(atPath:)`. For ZIP archives created on macOS (e.g. via Finder "Compress" or archive tools), AppleDouble metadata (`__MACOSX/`, `.DS_Store`, and `._*` files) caused `roots.count > 1` even when there was only a single payload folder, triggering unnecessary wrapper folder creation and resulting in `Name/Name/…` double nesting. Meaningful entries now filter out `.DS_Store`, `__MACOSX`, and `._*` prefixes. Test `smartDestinationIgnoresMacMetadata`.
 - **Location:** `Sources/ArhivarCore/StagedExtraction.swift` (`StagedExtraction.destination(for:base:archiveName:mode:)`)
 
+#### P3. ✅ [P2] macOS Metadata Moved Into the Destination by Smart Mode (follow-up to `P2`)
+- **Status:** ✅ Done — `P2` only changed the *decision*: `merge(from: content, …)` still moved every root item, so extracting a Finder-made zip (`Proje/` + `__MACOSX/` + `.DS_Store`) in Smart mode put `__MACOSX/` directly into the destination (e.g. Downloads) and, with "Replace it", overwrote the destination's own `.DS_Store`. `StagedExtraction.leaveOutRootMetadata(in:destination:base:mode:)` now leaves root-level macOS metadata (`StagedExtraction.isMacMetadata`) in staging when Smart mode extracts into the base and at least one real item remains; `AppModel.runExtract` calls it only when the whole archive is extracted, so explicitly selected items, metadata-only archives and the *Always* / *Never* modes are unchanged. Note: `FileManager` listings hide regular `._*` files, so they were never counted or moved (symlinks named `._*` are listed and still validated). Tests `smartExtractionLeavesFinderMetadataOut`, `smartLeavesRootMetadataOutOnlyWhenExtractingIntoTheBase`.
+- **Location:** `Sources/ArhivarCore/StagedExtraction.swift` (`isMacMetadata`, `leaveOutRootMetadata`), `Sources/Arhivar/AppModel.swift` (`runExtract`)
+
 ---
 
 ### Sixth Hardening Round — RAR Multi-Part Name Stripping, Split ZIP `.z01` Handling & Multi-Volume In-Place Edit Guard (2026-10-18)
