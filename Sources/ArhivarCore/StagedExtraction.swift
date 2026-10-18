@@ -28,7 +28,10 @@ public enum StagedExtraction {
         let components = folder.split(separator: "/").filter { $0 != "." && $0 != ".." }
         guard !components.isEmpty else { return staging }
         let candidate = components.reduce(staging) { $0.appendingPathComponent(String($1), isDirectory: true) }
-        return itemType(candidate, fileManager: fileManager) == .typeDirectory ? candidate : staging
+        guard itemType(candidate, fileManager: fileManager) == .typeDirectory else { return staging }
+        // Yoldaki bir üst klasör sembolik bağlantıysa içerik hazırlık klasörünün dışından alınırdı.
+        let expected = ([resolvedPath(staging.path)] + components.map(String.init)).joined(separator: "/")
+        return resolvedPath(candidate.path) == expected ? candidate : staging
     }
 
     /// İçeriğin taşınacağı klasör: alt klasör kuralına göre hedefin kendisi ya da arşiv adıyla bir alt klasörü.
@@ -114,9 +117,14 @@ public enum StagedExtraction {
     /// 7zz mutlak bir bağlantıyı (ör. "/etc/hosts") çıkarma klasörünün içine yönlendirir ("<hazırlık>/etc/hosts");
     /// hazırlık klasörü taşınıp silinince bu bağlantı ağacın dışını gösterirdi. Göreli yapılınca hedefte de
     /// aynı yeri (hedef/etc/hosts) gösterir.
-    /// - Returns: Silinen bağlantıların klasöre göre yolları.
+    /// - Parameters:
+    ///   - root: Hedefe taşınacak içeriğin kökü; hiçbir bağlantı bunun dışını göstermemeli.
+    ///   - extractionRoot: 7zz'nin çıkardığı klasör (mutlak bağlantıları buna göre yazar); yoksa `root`.
+    ///     Alt klasörden çıkarmada içerik ("<hazırlık>/a/b") 7zz'nin klasöründen ("<hazırlık>") daha derindedir:
+    ///     "<hazırlık>/etc/hosts" hazırlık klasörünün içinde ama taşınan içeriğin dışındadır.
+    /// - Returns: Silinen bağlantıların `root`'a göre yolları.
     @discardableResult
-    public static func secureSymlinks(in root: URL, fileManager: FileManager = .default) -> [String] {
+    public static func secureSymlinks(in root: URL, extractionRoot: URL? = nil, fileManager: FileManager = .default) -> [String] {
         guard let enumerator = fileManager.enumerator(atPath: root.path) else { return [] }
         var links: [String] = []
         while let relative = enumerator.nextObject() as? String {
@@ -126,10 +134,17 @@ public enum StagedExtraction {
 
         let rootPath = root.standardizedFileURL.path
         let realRoot = resolvedPath(rootPath)
+        let extractionPath = (extractionRoot ?? root).standardizedFileURL.path
+        let realExtraction = resolvedPath(extractionPath)
         // 7zz hedefi bizim verdiğimiz yazımla ("/var/…") ya da gerçek yolla ("/private/var/…") yazabilir.
-        let bases = Array(Set([rootPath, realRoot, (rootPath as NSString).standardizingPath, (realRoot as NSString).standardizingPath]))
-            .sorted { $0.count > $1.count }
+        let bases = Array(Set([
+            extractionPath, realExtraction, (extractionPath as NSString).standardizingPath, (realExtraction as NSString).standardizingPath,
+        ])).sorted { $0.count > $1.count }
         func inside(_ path: String, of base: String) -> Bool { path == base || path.hasPrefix(base + "/") }
+        // İçerik kökünün 7zz klasörüne göre yolu ("a/b"); mutlak bağlantının hedefi bunun altında kalmalı.
+        let rootComponents = inside(realRoot, of: realExtraction)
+            ? String(realRoot.dropFirst(realExtraction.count)).split(separator: "/").map(String.init)
+            : []
 
         // Önce tüm kararlar özgün ağaç üzerinde verilir, sonra uygulanır: bir bağlantının kararı,
         // daha önce silinen başka bir bağlantıya bağlı olmasın.
@@ -141,11 +156,13 @@ public enum StagedExtraction {
             if target.hasPrefix("/") {
                 let normalized = lexicallyNormalized(target)
                 if let base = bases.first(where: { inside(normalized, of: $0) }) {
-                    let targetRelative = String(normalized.dropFirst(base.count)).split(separator: "/").map(String.init)
-                    rewrites.append((relative, relativePath(from: relative, to: targetRelative)))
-                } else {
-                    removals.append(relative)
+                    let fromExtraction = String(normalized.dropFirst(base.count)).split(separator: "/").map(String.init)
+                    if fromExtraction.starts(with: rootComponents) {
+                        rewrites.append((relative, relativePath(from: relative, to: Array(fromExtraction.dropFirst(rootComponents.count)))))
+                        continue
+                    }
                 }
+                removals.append(relative)
                 continue
             }
             let resolved = resolvedPath(((link as NSString).deletingLastPathComponent as NSString).appendingPathComponent(target))
@@ -160,6 +177,25 @@ public enum StagedExtraction {
             try? fileManager.createSymbolicLink(atPath: link, withDestinationPath: target)
         }
         return removals.sorted()
+    }
+
+    /// 7zz hedef dışını gösteren bir bağlantıyı ("Dangerous link path was ignored") yazmaz ama yerine 0 baytlık
+    /// sıradan bir dosya bırakır. Bu dosya "üzerine yaz" ile hedefteki gerçek dosyayı ezer, önizlemede ve sağlama
+    /// değerinde sahte içerik olarak görünür. Arşivde bağlantı olan yollardaki 0 baytlık dosyalar silinir.
+    /// - Parameter links: Bağlantı girdilerinin `root`'a göre (normalleştirilmiş) yolları.
+    /// - Returns: Silinen yer tutucuların yolları.
+    @discardableResult
+    public static func removeLinkPlaceholders(in root: URL, links: [String], fileManager: FileManager = .default) -> [String] {
+        var removed: [String] = []
+        for link in links where !link.isEmpty {
+            let url = root.appendingPathComponent(link)
+            guard let attributes = try? fileManager.attributesOfItem(atPath: url.path),
+                  attributes[.type] as? FileAttributeType == .typeRegular,
+                  (attributes[.size] as? NSNumber)?.int64Value == 0,
+                  (try? fileManager.removeItem(at: url)) != nil else { continue }
+            removed.append(link)
+        }
+        return removed.sorted()
     }
 
     /// Klasörü içindekilerle siler. Arşivden çıkan salt okunur (0555) klasörlerin içi `removeItem` ile silinemez;

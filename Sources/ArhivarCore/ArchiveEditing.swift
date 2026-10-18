@@ -115,12 +115,18 @@ public struct ItemExtractor: Sendable {
     public let password: String?
     /// Çıkarılan öğelerin konacağı klasör (arşiv oturumunun geçici klasörü).
     public let root: URL
+    /// Arşivdeki sembolik bağlantı girdilerinin normalleştirilmiş yolları (bkz. `ArchiveEntry.isSymbolicLink`).
+    public let symbolicLinks: Set<String>
 
-    public init(runner: CommandRunner, archive: URL, password: String?, root: URL = ItemExtractor.temporaryRoot) {
+    public init(
+        runner: CommandRunner, archive: URL, password: String?, root: URL = ItemExtractor.temporaryRoot,
+        symbolicLinks: Set<String> = []
+    ) {
         self.runner = runner
         self.archive = archive
         self.password = password
         self.root = root
+        self.symbolicLinks = symbolicLinks
     }
 
     public static var temporaryRoot: URL {
@@ -177,8 +183,22 @@ public struct ItemExtractor: Sendable {
             let options = ExtractOptions(archive: archive, destination: directory, items: paths, password: password, overwrite: .replace)
             let result = try await runner.run(SevenZipCommand.extract(options), workingDirectory: options.workingDirectory, input: options.input, onProgress: onProgress)
             try SevenZipError.check(result)
-            // Hedef ağacın dışını gösteren bağlantılar sürüklenen ya da açılan öğeyle dışarı taşınmasın.
-            StagedExtraction.secureSymlinks(in: directory)
+            for (path, target) in zip(normalized, targets) {
+                let type = StagedExtraction.itemType(target, fileManager: fileManager)
+                if symbolicLinks.contains(path) || type == .typeSymbolicLink {
+                    // Tek başına bir bağlantı, taşındığı yerde (Finder, pano) hedef ağacın dışını gösterir ya da
+                    // boşa düşer; 7zz reddettiyse yerinde 0 baytlık sahte bir dosya vardır. Verilmez.
+                    try? fileManager.removeItem(at: target)
+                    continue
+                }
+                guard type == .typeDirectory else { continue }
+                // 7zz'nin reddettiği bağlantıların yer tutucuları önizlemede ya da sağlama değerinde içerik sanılmasın.
+                let links = symbolicLinks.filter { $0.hasPrefix(path + "/") }.map { String($0.dropFirst(path.count + 1)) }
+                StagedExtraction.removeLinkPlaceholders(in: target, links: links, fileManager: fileManager)
+                // Bağlantılar yalnızca öğenin kendi içini gösterebilir: sürüklenen ya da kopyalanan öğe tek başına
+                // taşınır, kardeş klasörleri ("../dış") ve mutlak hedefler yanında gitmez.
+                StagedExtraction.secureSymlinks(in: target, extractionRoot: directory, fileManager: fileManager)
+            }
             if let missing = zip(paths, targets).first(where: { StagedExtraction.itemType($0.1, fileManager: fileManager) == nil }) {
                 throw SevenZipError.failed(code: result.exitCode, message: missing.0)
             }

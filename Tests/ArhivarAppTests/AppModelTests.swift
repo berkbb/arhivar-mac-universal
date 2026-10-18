@@ -805,6 +805,42 @@ struct AppModelTests {
 
     // MARK: - .agents/context/roadmap.md: 13 açık madde
 
+    /// P0-2: 7zz'nin reddettiği bağlantının 0 baytlık yer tutucusu hedefteki dosyayı ezmez; alt klasörden
+    /// çıkarılan öğelerle mutlak bağlantılar hedefin dışını göstermez.
+    @Test func extractionDropsLinkPlaceholdersAndEscapingLinks() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let source = fixture.workspace.appendingPathComponent("kaynak")
+        try FileManager.default.createSymbolicLink(atPath: source.appendingPathComponent("kotu").path, withDestinationPath: "../disari")
+        try FileManager.default.createSymbolicLink(atPath: source.appendingPathComponent("alt/mutlak").path, withDestinationPath: "/etc/hosts")
+        let archive = try await fixture.makeArchive("bag.zip", format: .zip)
+        let model = fixture.model
+        fixture.settings.subfolderMode = .never
+        fixture.settings.overwriteMode = .replace
+        let output = fixture.useExtractFolder()
+        try FileManager.default.createDirectory(at: output.appendingPathComponent("kaynak"), withIntermediateDirectories: true)
+        try "koru".write(to: output.appendingPathComponent("kaynak/kotu"), atomically: true, encoding: .utf8)
+        model.openArchive(archive)
+        await fixture.settle()
+
+        model.extract(items: [])
+        await fixture.settle()
+        #expect(try String(contentsOf: output.appendingPathComponent("kaynak/kotu"), encoding: .utf8) == "koru")
+        #expect(model.alert?.title == fixture.settings.t(.warningTitle))
+        model.alert = nil
+
+        let second = fixture.useExtractFolder("cikti2")
+        model.browserMode = .folders
+        model.enterFolder("kaynak/alt")
+        model.extract(items: ["kaynak/alt/b.txt", "kaynak/alt/mutlak"])
+        await fixture.settle()
+        #expect(FileManager.default.fileExists(atPath: second.appendingPathComponent("b.txt").path))
+        #expect(StagedExtraction.itemType(second.appendingPathComponent("mutlak"), fileManager: .default) == nil)
+        // Ayıklanan bağlantı uyarıyla bildirilir (testte metinler yerelleştirilmez; yalnızca uyarının varlığı denetlenir).
+        #expect(model.alert?.title == fixture.settings.t(.warningTitle))
+    }
+
     /// P0-4: salt okunur ve yalnızca çalıştırılabilir dosyalar karantina işaretini taşır; "üzerine yaz" ile ikinci
     /// çıkarma salt okunur dosyalarda takılmaz.
     @Test func readOnlyFilesKeepQuarantineAndCanBeReplaced() async throws {

@@ -185,6 +185,8 @@ final class AppModel {
     @ObservationIgnored private var previewCache: [String: URL] = [:]
     /// Güncelleme izni, açılışta başka bir işlem ya da uyarı varken sorulamadıysa sonra sorulur.
     @ObservationIgnored private var consentPending = false
+    /// Açık arşivdeki sembolik bağlantı girdilerinin yolları (bkz. `ItemExtractor.symbolicLinks`).
+    @ObservationIgnored private var symbolicLinks: Set<String> = []
 
     private static let recentsKey = "recentArchives"
     private static let maxRecents = 12
@@ -534,6 +536,7 @@ final class AppModel {
         headersEncrypted = loaded.headersEncrypted
         // İç içe açılan arşiv geçici bir kopyadır; değişiklikler kaybolacağı için düzenlenemez.
         isEditable = archiveStack.isEmpty && ArchiveCapabilities.isEditable(type: loaded.listing.info.type, url: loaded.url)
+        symbolicLinks = Self.symbolicLinks(in: loaded.listing)
         previewCache = [:]
         selection = []
         if !keepFolder { searchText = "" }
@@ -541,11 +544,16 @@ final class AppModel {
         currentFolder = keepFolder && node(folder)?.isDirectory == true ? folder : ""
     }
 
+    private static func symbolicLinks(in listing: ArchiveListing) -> Set<String> {
+        Set(listing.entries.lazy.filter(\.isSymbolicLink).map(\.path))
+    }
+
     func closeArchive() {
         discardAllSessions()
         archiveURL = nil
         listing = nil
         statistics = nil
+        symbolicLinks = []
         tree = []
         selection = []
         searchText = ""
@@ -614,6 +622,7 @@ final class AppModel {
             isEditable = context.isEditable
             sessionRoot = context.sessionRoot
             if archiveStack.count == level {
+                symbolicLinks = Self.symbolicLinks(in: context.listing)
                 searchText = ""
                 tree = ArchiveTree.build(from: context.listing.entries)
                 currentFolder = node(context.currentFolder)?.isDirectory == true ? context.currentFolder : ""
@@ -757,15 +766,22 @@ final class AppModel {
             )
             var warnings = [try SevenZipError.check(result)].compactMap { $0 }
 
-            // 3. Hedef ağacın dışını gösteren bağlantıları ayıkla, karantina işaretini aktar.
-            let removedLinks = StagedExtraction.secureSymlinks(in: staging)
+            // 3. Taşınacak içerik: alt klasördeyken seçilenler o klasörün yolu olmadan hedefe gider.
+            let content = StagedExtraction.contentRoot(in: staging, stripping: stripping)
+
+            // 4. 7zz'nin reddettiği bağlantıların 0 baytlık yer tutucularını sil (hedefteki dosyaları ezmesinler);
+            // taşınan içeriğin dışını gösteren bağlantıları ayıkla, karantina işaretini aktar.
+            let links = (entries ?? []).filter(\.isSymbolicLink).map(\.path)
+            let placeholders = StagedExtraction.removeLinkPlaceholders(in: staging, links: links)
+            let prefix = content == staging ? "" : stripping + "/"
+            let escaping = StagedExtraction.secureSymlinks(in: content, extractionRoot: staging).map { prefix + $0 }
+            let removedLinks = Array(Set(placeholders + escaping)).sorted()
             if !removedLinks.isEmpty {
                 warnings.append(self.t(.warningRemovedLinks, removedLinks.prefix(10).joined(separator: ", ")))
             }
             Quarantine.propagate(from: archive, to: staging, since: .distantPast)
 
-            // 4. Alt klasör kuralına göre hedefi belirle ve seçilen üzerine yazma kuralıyla taşı.
-            let content = StagedExtraction.contentRoot(in: staging, stripping: stripping)
+            // 5. Alt klasör kuralına göre hedefi belirle ve seçilen üzerine yazma kuralıyla taşı.
             let destination = StagedExtraction.destination(for: content, base: base, archiveName: archiveName, mode: subfolderMode)
             let changed = try StagedExtraction.merge(from: content, into: destination, policy: policy)
             // Doğrudan hedefe tek öğe çıktıysa Finder o öğeyi seçsin.
@@ -852,7 +868,10 @@ final class AppModel {
         if let cached = previewCache[path], FileManager.default.fileExists(atPath: cached.path) { return cached }
         guard let archive = archiveURL else { throw SevenZipError.cancelled }
         let session = sessionDirectory()
-        let extractor = ItemExtractor(runner: confined(runner, archive: archive, writable: [session]), archive: archive, password: currentPassword, root: session)
+        let extractor = ItemExtractor(
+            runner: confined(runner, archive: archive, writable: [session]), archive: archive, password: currentPassword, root: session,
+            symbolicLinks: symbolicLinks
+        )
         let url = try await extractor.extract(archivePath(for: path), expectedSize: node(path)?.size, onProgress: progress)
         previewCache[path] = url
         return url
@@ -888,7 +907,7 @@ final class AppModel {
         guard let archive = archiveURL, let engineURL, !needsPassword(for: [node.id]) else { return nil }
         let session = sessionDirectory()
         let runner = confined(CommandRunner(executableURL: engineURL), archive: archive, writable: [session])
-        let extractor = ItemExtractor(runner: runner, archive: archive, password: password, root: session)
+        let extractor = ItemExtractor(runner: runner, archive: archive, password: password, root: session, symbolicLinks: symbolicLinks)
         let name = (node.id as NSString).lastPathComponent
         return ArchiveItemTransfer(extractor: extractor, path: node.archivePath, name: name, size: node.size)
     }
@@ -906,9 +925,13 @@ final class AppModel {
         }
         let currentPassword = password
         let entries = listing?.entries ?? []
+        let links = symbolicLinks
         perform(.progressCopying, archive: archive, retry: .copy(items: items)) { runner, progress in
             let session = self.sessionDirectory()
-            let extractor = ItemExtractor(runner: self.confined(runner, archive: archive, writable: [session]), archive: archive, password: currentPassword, root: session)
+            let extractor = ItemExtractor(
+                runner: self.confined(runner, archive: archive, writable: [session]), archive: archive, password: currentPassword, root: session,
+                symbolicLinks: links
+            )
             let urls = try await extractor.extract(
                 items.map(self.archivePath(for:)), expectedSize: DiskSpace.requiredBytes(for: items, in: entries), onProgress: progress
             )

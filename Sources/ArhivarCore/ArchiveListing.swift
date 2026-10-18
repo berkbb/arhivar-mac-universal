@@ -13,10 +13,13 @@ public struct ArchiveEntry: Sendable, Equatable, Identifiable {
     public var isEncrypted: Bool
     public var method: String?
     public var crc: String?
+    /// Sembolik bağlantı girdisi. 7zz hedef dışını gösteren bağlantıyı yazmaz, yerine 0 baytlık bir dosya bırakır.
+    public var isSymbolicLink: Bool
 
     public init(
         path: String, archivePath: String? = nil, size: Int64? = nil, packedSize: Int64? = nil, modified: Date? = nil,
-        isDirectory: Bool = false, isEncrypted: Bool = false, method: String? = nil, crc: String? = nil
+        isDirectory: Bool = false, isEncrypted: Bool = false, method: String? = nil, crc: String? = nil,
+        isSymbolicLink: Bool = false
     ) {
         self.path = path
         self.archivePath = archivePath ?? path
@@ -27,6 +30,7 @@ public struct ArchiveEntry: Sendable, Equatable, Identifiable {
         self.isEncrypted = isEncrypted
         self.method = method
         self.crc = crc
+        self.isSymbolicLink = isSymbolicLink
     }
 }
 
@@ -191,7 +195,7 @@ public enum ListingParser {
 
     /// Bir girdinin `-slt` alanları (yalnızca kullanılanlar).
     struct Block {
-        var path, size, packedSize, modified, attributes, folder, encrypted, method, crc: Substring?
+        var path, size, packedSize, modified, attributes, folder, encrypted, method, crc, mode, symbolicLink: Substring?
         var hasFields = false
 
         mutating func set(_ key: Substring, _ value: Substring) {
@@ -206,8 +210,22 @@ public enum ListingParser {
             case "Encrypted": encrypted = value
             case "Method": method = value
             case "CRC": crc = value
+            case "Mode": mode = value
+            case "Symbolic Link": symbolicLink = value
             default: break
             }
+        }
+
+        /// tar "Symbolic Link = hedef" ve "Mode = lrwxr-xr-x" yazar; zip ve 7z Unix kipini "Attributes" sonunda
+        /// ("A lrwxr-xr-x") verir.
+        var isSymbolicLink: Bool {
+            if let symbolicLink, !symbolicLink.isEmpty { return true }
+            if let mode, Block.isLinkMode(mode) { return true }
+            return attributes?.split(separator: " ").last.map(Block.isLinkMode) ?? false
+        }
+
+        static func isLinkMode(_ text: Substring) -> Bool {
+            text.utf8.count == 10 && text.utf8.first == UInt8(ascii: "l")
         }
     }
 
@@ -259,7 +277,8 @@ public enum ListingParser {
             isDirectory: isDirectory,
             isEncrypted: block.encrypted == "+",
             method: block.method.flatMap { $0.isEmpty ? nil : String($0) },
-            crc: block.crc.flatMap { $0.isEmpty ? nil : String($0) }
+            crc: block.crc.flatMap { $0.isEmpty ? nil : String($0) },
+            isSymbolicLink: !isDirectory && block.isSymbolicLink
         )
     }
 }

@@ -63,6 +63,34 @@ private func mode(of url: URL) -> UInt16? {
     #expect(ListingParser.parse(empty).info.comment == "----------\nPath = sahte\nSize = 5")
 }
 
+/// zip/7z Unix kipini "Attributes" sonunda, tar "Mode" ve "Symbolic Link" alanlarında verir.
+@Test func detectsSymbolicLinkEntries() {
+    let output = """
+    --
+    Type = tar
+
+    ----------
+    Path = zip-bag
+    Attributes =  lrwxr-xr-x
+
+    Path = 7z-bag
+    Attributes = A lrwxr-xr-x
+
+    Path = tar-bag
+    Mode = lrwxr-xr-x
+    Symbolic Link = ../dis
+
+    Path = dosya
+    Attributes = A -rw-r--r--
+
+    Path = klasor
+    Attributes = D drwxr-xr-x
+
+    """
+    let links = ListingParser.parse(output).entries.filter(\.isSymbolicLink).map(\.path)
+    #expect(links == ["zip-bag", "7z-bag", "tar-bag"])
+}
+
 // MARK: - P0-5 Joker karakterler
 
 @Test func archivePathsAreNeverWildcards() {
@@ -103,6 +131,55 @@ private func mode(of url: URL) -> UInt16? {
     #expect(statistics.folderCount == 1)
     // Ağaç da en son girdiyi gösterir.
     #expect(ArchiveTree.build(from: listing.entries).first { $0.id == "a.txt" }?.size == 20)
+}
+
+// MARK: - P0-2 Bağlantılar ve yer tutucular
+
+@Test func symlinksAreCheckedAgainstTheMovedContent() throws {
+    let staging = try temporaryFolder("baglanti")
+    defer { StagedExtraction.removeTree(at: staging) }
+    let content = staging.appendingPathComponent("a/b", isDirectory: true)
+    try FileManager.default.createDirectory(at: content, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: staging.appendingPathComponent("a/dis_b"), withIntermediateDirectories: true)
+    try "f".write(to: content.appendingPathComponent("f.txt"), atomically: true, encoding: .utf8)
+    let link = { (name: String, target: String) in
+        try FileManager.default.createSymbolicLink(atPath: content.appendingPathComponent(name).path, withDestinationPath: target)
+    }
+    // 7zz mutlak bağlantıları çıkarma klasörüne yönlendirir: "/etc/hosts" → "<hazırlık>/etc/hosts".
+    try link("mutlak", staging.path + "/etc/hosts")
+    try link("ic_mutlak", staging.path + "/a/b/f.txt")
+    try link("kardes", "../dis_b")
+    try link("iyi", "f.txt")
+
+    let removed = StagedExtraction.secureSymlinks(in: content, extractionRoot: staging)
+    #expect(removed == ["kardes", "mutlak"])
+    #expect(try FileManager.default.destinationOfSymbolicLink(atPath: content.appendingPathComponent("ic_mutlak").path) == "f.txt")
+    #expect(try FileManager.default.destinationOfSymbolicLink(atPath: content.appendingPathComponent("iyi").path) == "f.txt")
+}
+
+@Test func linkPlaceholdersAreRemoved() throws {
+    let root = try temporaryFolder("yer")
+    defer { StagedExtraction.removeTree(at: root) }
+    try FileManager.default.createDirectory(at: root.appendingPathComponent("a"), withIntermediateDirectories: true)
+    try Data().write(to: root.appendingPathComponent("a/kotu"))
+    try Data().write(to: root.appendingPathComponent("bos.txt"))
+    try Data("dolu".utf8).write(to: root.appendingPathComponent("dolu"))
+    let removed = StagedExtraction.removeLinkPlaceholders(in: root, links: ["a/kotu", "dolu", "yok"])
+    #expect(removed == ["a/kotu"])
+    #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("bos.txt").path))
+    #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("dolu").path))
+}
+
+@Test func contentRootRejectsSymlinkedFolders() throws {
+    let staging = try temporaryFolder("kok")
+    let elsewhere = try temporaryFolder("baska")
+    defer {
+        StagedExtraction.removeTree(at: staging)
+        StagedExtraction.removeTree(at: elsewhere)
+    }
+    try FileManager.default.createDirectory(at: elsewhere.appendingPathComponent("b"), withIntermediateDirectories: true)
+    try FileManager.default.createSymbolicLink(at: staging.appendingPathComponent("a"), withDestinationURL: elsewhere)
+    #expect(StagedExtraction.contentRoot(in: staging, stripping: "a/b") == staging)
 }
 
 // MARK: - P0-4 Salt okunur öğeler

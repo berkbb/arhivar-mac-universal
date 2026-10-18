@@ -114,6 +114,29 @@ struct HardeningIntegrationTests {
         #expect(!sums.contains { $0.value.contains("-") })
     }
 
+    /// P0-2: alt klasörden çekilen öğede mutlak ve kardeş klasöre giden bağlantılar dışarı taşınmaz; 7zz'nin
+    /// reddettiği bağlantıların 0 baytlık yer tutucuları içerik sanılmaz, tek başına bağlantı verilmez.
+    @Test func itemExtractorContainsLinksAndPlaceholders() async throws {
+        defer { cleanUp() }
+        let source = workspace.appendingPathComponent("kaynak")
+        try fileManager.createDirectory(at: source.appendingPathComponent("a/dis_b"), withIntermediateDirectories: true)
+        try fileManager.createSymbolicLink(atPath: source.appendingPathComponent("a/b/mutlak").path, withDestinationPath: "/etc/hosts")
+        try fileManager.createSymbolicLink(atPath: source.appendingPathComponent("a/b/kardes").path, withDestinationPath: "../dis_b")
+        try fileManager.createSymbolicLink(atPath: source.appendingPathComponent("kotu").path, withDestinationPath: "../disari")
+        let archive = workspace.appendingPathComponent("bag.zip")
+        try await create(CreateOptions(sources: [source], destination: archive, format: .zip, level: .fast))
+
+        let listing = try await list(archive)
+        let links = Set(listing.entries.filter(\.isSymbolicLink).map(\.path))
+        #expect(links == ["kaynak/a/b/mutlak", "kaynak/a/b/kardes", "kaynak/kotu"])
+        let extractor = ItemExtractor(
+            runner: runner, archive: archive, password: nil, root: workspace.appendingPathComponent("oturum"), symbolicLinks: links
+        )
+        let folder = try await extractor.extract("kaynak/a/b")
+        #expect(try fileManager.contentsOfDirectory(atPath: folder.path) == ["f.txt"])
+        await #expect(throws: SevenZipError.self) { try await extractor.extract("kaynak/kotu") }
+    }
+
     /// P1-8: ".." bileşenli girdi, 7zz'nin yazdığı yerde ("a/x.txt") bulunur; aynı yollu girdiler bir kez sayılır.
     @Test func dotDotEntriesAndAppendedDuplicates() async throws {
         defer { cleanUp() }
