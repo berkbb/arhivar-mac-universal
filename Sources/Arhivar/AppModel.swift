@@ -214,7 +214,7 @@ final class AppModel {
     /// Arşiv neden düzenlenemiyor: biçim (rar, gz, bölünmüş, iç içe) ya da konum (salt okunur, kilitli, salt okunur disk).
     var readOnlyReason: LKey {
         guard let archiveURL, archiveStack.isEmpty,
-              ArchiveCapabilities.supportsEditing(type: listing?.info.type, url: archiveURL),
+              ArchiveCapabilities.supportsEditing(type: listing?.info.type, url: archiveURL, volumes: listing?.info.volumes),
               !ArchiveCapabilities.isWritable(archiveURL) else { return .readOnlyArchive }
         return .readOnlyLocation
     }
@@ -555,8 +555,10 @@ final class AppModel {
         statistics = ArchiveStatistics(listing: loaded.listing)
         headersEncrypted = loaded.headersEncrypted
         // İç içe açılan arşiv geçici bir kopyadır; değişiklikler kaybolacağı için düzenlenemez.
-        // Salt okunur (kilitli) arşiv ya da salt okunur diskteki arşiv de düzenlenemez: 7zz "Permission denied" verirdi.
-        isEditable = archiveStack.isEmpty && ArchiveCapabilities.isEditable(type: loaded.listing.info.type, url: loaded.url)
+        // Çok parçalı (bölünmüş) arşivler, salt okunur (kilitli) arşiv ya da salt okunur diskteki arşiv de düzenlenemez: 7zz "Permission denied" ya da güncelleme hatası verirdi.
+        isEditable = archiveStack.isEmpty && ArchiveCapabilities.isEditable(
+            type: loaded.listing.info.type, url: loaded.url, volumes: loaded.listing.info.volumes
+        )
         symbolicLinks = Self.symbolicLinks(in: loaded.listing)
         previewCache = [:]
         selection = []

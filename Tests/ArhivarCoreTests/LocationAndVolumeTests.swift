@@ -84,3 +84,52 @@ private func temporaryFolder(_ name: String) throws -> URL {
     #expect(listing.entries.last?.size == nil)
     #expect(DiskSpace.requiredBytes(for: [], in: listing.entries) == Int64.max)
 }
+
+// MARK: - R6-1 Çok parçalı RAR adları
+
+/// Modern RAR parçalarında (.part01.rar) hem .rar hem .part01 atılır; çıkarılan klasör adı temiz kalır ("film").
+@Test func multiPartRarBaseNameStripsPartSuffix() {
+    #expect(ArchiveNaming.baseName(of: URL(fileURLWithPath: "/x/film.part01.rar")) == "film")
+    #expect(ArchiveNaming.baseName(of: URL(fileURLWithPath: "/x/film.part1.rar")) == "film")
+    #expect(ArchiveNaming.baseName(of: URL(fileURLWithPath: "/x/film.part002.rar")) == "film")
+    #expect(ArchiveNaming.baseName(of: URL(fileURLWithPath: "/x/belge.part2.7z")) == "belge")
+    #expect(ArchiveNaming.baseName(of: URL(fileURLWithPath: "/x/film.r01")) == "film")
+    #expect(ArchiveNaming.baseName(of: URL(fileURLWithPath: "/x/film.part01")) == "film")
+}
+
+// MARK: - R6-2 Bölünmüş ZIP parçaları
+
+/// Bölünmüş ZIP parçaları (.z01 … .z99) arşiv sayılır ve ilk parça olan ".zip" dosyasına yönlendirilir.
+@Test func splitZipVolumesOpenFromTheZipFile() throws {
+    let folder = try temporaryFolder("bolunmus-zip")
+    defer { StagedExtraction.removeTree(at: folder) }
+    for name in ["yedek.zip", "yedek.z01", "yedek.z02", "tek.z01"] {
+        try Data("zip".utf8).write(to: folder.appendingPathComponent(name))
+    }
+    #expect(ArchiveNaming.isArchive(folder.appendingPathComponent("yedek.z01")))
+    #expect(ArchiveNaming.isArchive(folder.appendingPathComponent("yedek.Z12")))
+    #expect(ArchiveNaming.isArchive(folder.appendingPathComponent("yedek.z100")))
+    #expect(!ArchiveNaming.isArchive(folder.appendingPathComponent("a.doc")))
+    #expect(!ArchiveNaming.isArchive(folder.appendingPathComponent("a.txt")))
+    #expect(ArchiveNaming.firstVolume(of: folder.appendingPathComponent("yedek.z01")) == folder.appendingPathComponent("yedek.zip"))
+    #expect(ArchiveNaming.firstVolume(of: folder.appendingPathComponent("yedek.z02")) == folder.appendingPathComponent("yedek.zip"))
+    // Ana ".zip" dosyası yoksa olduğu gibi kalır.
+    #expect(ArchiveNaming.firstVolume(of: folder.appendingPathComponent("tek.z01")) == folder.appendingPathComponent("tek.z01"))
+    #expect(ArchiveNaming.baseName(of: folder.appendingPathComponent("yedek.z01")) == "yedek")
+}
+
+// MARK: - R6-3 Çok parçalı arşivlerin düzenlenememesi
+
+/// 7-Zip çok parçalı arşivleri yerinde güncellemeyi (ekleme, silme, yeniden adlandırma) desteklemez.
+@Test func multiVolumeArchivesAreNotEditable() {
+    let zipURL = URL(fileURLWithPath: "/x/a.zip")
+    let z01URL = URL(fileURLWithPath: "/x/a.z01")
+    let sevenZURL = URL(fileURLWithPath: "/x/a.7z")
+
+    #expect(!ArchiveCapabilities.supportsEditing(type: "zip", url: zipURL, volumes: 2))
+    #expect(!ArchiveCapabilities.supportsEditing(type: "7z", url: sevenZURL, volumes: 3))
+    #expect(!ArchiveCapabilities.supportsEditing(type: "zip", url: z01URL))
+    #expect(ArchiveCapabilities.supportsEditing(type: "zip", url: zipURL, volumes: 1))
+    #expect(ArchiveCapabilities.supportsEditing(type: "zip", url: zipURL, volumes: nil))
+    #expect(!ArchiveCapabilities.isEditable(type: "zip", url: zipURL, volumes: 2))
+}

@@ -81,6 +81,9 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 - Archives that are read-only, locked or on a read-only disk are no longer offered for editing (adding, deleting or renaming failed with "Permission denied"); the toolbar explains why, and dropped files go to the New Archive sheet.
 - Old-style multi-volume RAR archives (`.rar` with `.r00`, `.r01`, …) open from any volume, also with Extract Here.
 - An archive declaring a negative size, or a size too large for a signed 64-bit number, can no longer shrink or skip the free-space check before extraction.
+- Multi-part RAR archives (`.part01.rar`, `.part1.rar`, …) strip their volume suffix when extracted into a subfolder, so the resulting folder is named `film/` instead of `film.part01/`.
+- Classic split ZIP archives (`.z01` … `.z99`) are recognized as archives and redirected to the master `.zip` volume when opened or sent to Extract Here.
+- Multi-volume archives (such as split `.zip` and `.7z` archives with more than one volume) disable editing actions; 7-Zip cannot update multi-volume archives in place.
 
 ### Changed
 

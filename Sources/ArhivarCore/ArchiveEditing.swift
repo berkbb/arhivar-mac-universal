@@ -9,15 +9,18 @@ public enum ArchiveCapabilities {
     static let editableTypes: Set<String> = ["7z", "zip", "tar", "wim"]
 
     /// Biçim yerinde güncellenebilir ve arşiv yazılabilir bir yerde mi?
-    public static func isEditable(type: String?, url: URL, fileManager: FileManager = .default) -> Bool {
-        supportsEditing(type: type, url: url) && isWritable(url, fileManager: fileManager)
+    public static func isEditable(type: String?, url: URL, volumes: Int? = nil, fileManager: FileManager = .default) -> Bool {
+        supportsEditing(type: type, url: url, volumes: volumes) && isWritable(url, fileManager: fileManager)
     }
 
-    /// Biçim 7zz ile yerinde güncellenebilir mi? Bölünmüş arşivler (.001, .002, …) güncellenemez.
-    public static func supportsEditing(type: String?, url: URL) -> Bool {
+    /// Biçim 7zz ile yerinde güncellenebilir mi? Bölünmüş ve çok parçalı arşivler güncellenemez.
+    public static func supportsEditing(type: String?, url: URL, volumes: Int? = nil) -> Bool {
         guard let type, editableTypes.contains(type.lowercased()) else { return false }
+        if let volumes, volumes > 1 { return false }
         let ext = url.pathExtension
-        return !(ext.count == 3 && ext.allSatisfy(\.isNumber))
+        if ext.count == 3 && ext.allSatisfy(\.isNumber) { return false }
+        if ArchiveNaming.isSplitZipVolume(ext) || ArchiveNaming.isOldRarVolume(ext) { return false }
+        return true
     }
 
     /// 7zz güncellenmiş kopyayı arşivin yanına yazıp eskisinin yerine koyar: arşiv ve klasörü yazılabilir olmalı.

@@ -20,6 +20,49 @@
 
 ## Done
 
+### Sixth Hardening Round — RAR Multi-Part Name Stripping, Split ZIP `.z01` Handling & Multi-Volume In-Place Edit Guard (2026-10-18)
+
+All three items address multi-volume and multi-part edge cases across extraction naming, archive detection, and in-place editing safety.
+
+#### R6-1. ✅ [P2] RAR Multi-Part Volume Suffix Stripping in `ArchiveNaming.baseName(of:)`
+- **Status:** ✅ Done — `ArchiveNaming.baseName(of:)` now strips multi-part volume suffixes (`.part01`, `.part1`, etc.) via `isPartVolumeSuffix` alongside archive extensions. Extracting `film.part01.rar` with `.smart` or `.always` subfolder mode creates `film/` instead of `film.part01/`. Test `multiPartRarBaseNameStripsPartSuffix`.
+- **Location:**
+  - `Sources/ArhivarCore/Engine.swift` (`ArchiveNaming.baseName(of:)`, `isPartVolumeSuffix`, lines 162–225)
+- **Problem:**
+  - In `ArchiveNaming.baseName(of:)`, extensions are stripped in a loop of up to 3 passes if `isArchiveExtension(ext)`.
+  - For `film.part01.rar` (or `film.part1.rar`), pass 1 strips `.rar` leaving `film.part01`. In pass 2, `.part01` is not in `archiveExtensions` (it is a part suffix, not a standalone archive format), so `isArchiveExtension` returns `false` and the loop terminates, returning `"film.part01"`.
+  - When extracting with smart or always subfolder mode, Arhivar created an unwanted nested `film.part01/` folder instead of `film/`.
+- **Fix:**
+  - Added `ArchiveNaming.isPartVolumeSuffix(_ ext: String) -> Bool` matching `part\d+` case-insensitively.
+  - Allowed both `isArchiveExtension(ext)` and `isPartVolumeSuffix(ext)` in `baseName(of:)` stripping loop.
+
+#### R6-2. ✅ [P2] Split ZIP (`.z01` … `.z99`) Secondary Volume Recognition & First Volume Redirection
+- **Status:** ✅ Done — Added `ArchiveNaming.isSplitZipVolume` accepting `.z01` … `.z99` (and `.z100`+). Included in `isArchiveExtension`, `firstVolume(of:)` redirects secondary split ZIP parts to the primary `.zip` volume in the same directory, and `baseName(of:)` strips `.z01` to the base name. Test `splitZipVolumesOpenFromTheZipFile`.
+- **Location:**
+  - `Sources/ArhivarCore/Engine.swift` (`ArchiveNaming.isSplitZipVolume`, `isArchiveExtension`, `firstVolume`)
+- **Problem:**
+  - Classic split ZIP archives (WinZip, Info-ZIP, 7-Zip) use `archive.z01`, `archive.z02`... for split segments and `archive.zip` for the central directory volume.
+  - `isArchiveExtension("z01")` returned `false`, so double-clicking or invoking Finder services on `archive.z01` ignored it as an unsupported file.
+  - `firstVolume(of:)` lacked a redirect branch for `.z01`..`.z99` to `archive.zip`.
+- **Fix:**
+  - Added `ArchiveNaming.isSplitZipVolume(_ ext: String) -> Bool` (`ext.count >= 3 && ext.first?.lowercased() == "z" && ext.dropFirst().allSatisfy(\.isNumber)`).
+  - Recognized split ZIP extensions in `isArchiveExtension`.
+  - Redirected secondary volumes to `archive.zip` in `firstVolume(of:)` if present.
+
+#### R6-3. ✅ [P2] Multi-Volume Archive In-Place Edit Prevention (`ArchiveCapabilities.supportsEditing`)
+- **Status:** ✅ Done — 7-Zip does not support in-place modification of multi-volume archives. `ArchiveCapabilities.supportsEditing` and `isEditable` now accept `volumes: Int? = nil` and check both `volumes > 1` and `isSplitZipVolume`. `AppModel` passes `loaded.listing.info.volumes`, ensuring multi-volume ZIP/7z archives disable editing tools and display `.readOnlyArchive`. Test `multiVolumeArchivesAreNotEditable`.
+- **Locations:**
+  - `Sources/ArhivarCore/ArchiveEditing.swift` (`ArchiveCapabilities.supportsEditing`, `isEditable`)
+  - `Sources/Arhivar/AppModel.swift` (`isEditable`, `readOnlyReason`)
+- **Problem:**
+  - 7-Zip cannot update multi-volume archives (adding, deleting, or renaming entries fails with an engine error).
+  - Previously, `ArchiveCapabilities.supportsEditing` only checked if the URL extension was 3 numeric digits (`.001`). When opening a multi-volume ZIP (`archive.zip` with `volumes > 1` reported by 7zz) or `archive.z01`, Arhivar enabled Add, Delete, and Rename toolbar actions.
+- **Fix:**
+  - Extended `ArchiveCapabilities.supportsEditing` and `isEditable` to check `volumes > 1` and `isSplitZipVolume(ext)`.
+  - Passed `loaded.listing.info.volumes` in `AppModel.swift`, returning `false` for `isEditable` and presenting `.readOnlyArchive` in `readOnlyReason`.
+
+---
+
 ### Fifth Hardening Round — Existing Directory Conflicts, Read-Only Archive In-Place Guard, Old RAR Multi-Volume & Saturating Negative Size (2026-10-18)
 
 All four items were confirmed before the fix (7zz `errno=13` on a `0444` archive; the core tests fail on the previous commit); the suite grew from 194 to 199 tests.

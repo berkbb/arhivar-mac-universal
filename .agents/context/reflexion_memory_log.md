@@ -117,3 +117,14 @@
   4. Negative sizes in corrupted/malicious archive entries could reduce total bytes in `DiskSpace.requiredBytes`.
 - **Lesson & Guardrail:** Validate folder collisions upfront (`!isFolderConflict` in `CreateArchiveSheet`, pre-flight check in `createArchive`), verify `isWritableFile` on archive and parent directory for `isEditable`, recognize `r\d\d` in `ArchiveNaming.firstVolume`, and read sizes as non-negative with saturating arithmetic.
 
+---
+
+## Episode 15: RAR Multi-Part Name Stripping, Split ZIP `.z01` Handling & Multi-Volume In-Place Edit Guard
+- **Context:** Extracting multi-part RAR archives (`film.part01.rar`), opening split ZIP secondary volumes (`archive.z01`), and preventing in-place editing on multi-volume archives.
+- **Root Cause:**
+  1. `ArchiveNaming.baseName(of:)` only stripped extensions if `isArchiveExtension(ext)`. For `film.part01.rar`, `.rar` was removed, but `.part01` was not in `archiveExtensions`, leaving `"film.part01"` and causing smart subfolder extractions to create `film.part01/` instead of `film/`.
+  2. Classic split ZIP secondary parts (`.z01`..`.z99`) were not recognized as archive extensions and lacked redirection to `archive.zip` in `ArchiveNaming.firstVolume(of:)`.
+  3. 7-Zip cannot update multi-volume archives in place. `ArchiveCapabilities.supportsEditing` only checked for 3-digit numeric extensions (`.001`), so multi-volume ZIP/7z archives (`volumes > 1`) enabled editing buttons in the toolbar and failed upon modification.
+- **Lesson & Guardrail:** Strip `part\d+` suffixes in `ArchiveNaming.baseName(of:)`, recognize split ZIP volumes (`isSplitZipVolume`) in `isArchiveExtension` and redirect to `.zip` in `firstVolume(of:)`, and check `volumes > 1` along with split volume extensions in `ArchiveCapabilities.supportsEditing`.
+
+
