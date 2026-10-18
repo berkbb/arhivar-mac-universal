@@ -5,6 +5,8 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-10-18
+
 ### Added
 
 - **Smart subfolder extraction:** "Folder named after the archive" is now *When there is more than one item* (default), *Always* or *Never*. An archive with a single top-level item is extracted directly (no `Name/Name/…` nesting); an archive with several top-level items ("tarbomb") is gathered in a folder named after it. The old on/off preference is migrated (off → Never).
