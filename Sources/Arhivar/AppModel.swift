@@ -681,11 +681,18 @@ final class AppModel {
         selection = []
     }
 
-    /// Bir üst klasör; iç içe açılmış bir arşivin kökündeyse onu içeren arşive döner.
-    var canGoUp: Bool { listing != nil && (!currentFolder.isEmpty || !archiveStack.isEmpty) }
+    /// Tabloda açık klasörün içeriği mi gösteriliyor? (Ağaç görünümü ve arama sonuçları tüm arşivi gösterir.)
+    var showsFolderPath: Bool { browserMode == .folders && searchText.isEmpty }
+
+    /// Yol çubuğu: klasör görünümünde ve iç içe açılmış bir arşivde (üstteki arşive dönüş yolu her görünümde kalır).
+    var showsPathBar: Bool { showsFolderPath || !archiveStack.isEmpty }
+
+    /// Bir üst klasör; iç içe açılmış bir arşivin kökündeyse onu içeren arşive döner. Ağaç görünümünde ve aramada
+    /// klasör yolu yoktur; orada yalnızca üstteki arşive dönülür.
+    var canGoUp: Bool { listing != nil && ((showsFolderPath && !currentFolder.isEmpty) || !archiveStack.isEmpty) }
 
     func goUp() {
-        if currentFolder.isEmpty {
+        if currentFolder.isEmpty || !showsFolderPath {
             if !archiveStack.isEmpty { returnToArchive(level: archiveStack.count - 1) }
             return
         }
@@ -704,10 +711,9 @@ final class AppModel {
     func primaryAction(_ ids: Set<ArchiveNode.ID>) {
         guard ids.count == 1, let id = ids.first, let node = node(id) else { return }
         if node.isDirectory {
-            if browserMode == .folders || !searchText.isEmpty {
-                browserMode = .folders
-                enterFolder(id)
-            }
+            // Ağaç görünümünde ve aramada da klasöre girilir (bağlam menüsündeki "Aç" gibi).
+            browserMode = .folders
+            enterFolder(id)
         } else if ArchiveNaming.isBrowsable(node.name) {
             browseArchive(id)
         } else {

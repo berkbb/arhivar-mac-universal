@@ -805,6 +805,40 @@ struct AppModelTests {
 
     // MARK: - .agents/context/roadmap.md: 13 açık madde
 
+    /// P1-9: ağaç görünümünde iç arşive girilince yol çubuğu ve ⌘↑ üstteki arşive döndürür; klasörde Return girer.
+    @Test func treeViewKeepsTheWayBackFromNestedArchives() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let inner = try await fixture.makeArchive("ic.zip", format: .zip)
+        let outer = fixture.workspace.appendingPathComponent("dis.7z")
+        let options = CreateOptions(sources: [inner, fixture.workspace.appendingPathComponent("kaynak")], destination: outer, format: .sevenZip, level: .fast)
+        try SevenZipError.check(try await fixture.runner.run(SevenZipCommand.create(options)))
+        let model = fixture.model
+        model.browserMode = .tree
+        model.openArchive(outer)
+        await fixture.settle()
+        #expect(!model.showsPathBar)
+        #expect(!model.canGoUp)
+
+        model.primaryAction(["ic.zip"])
+        await fixture.settle()
+        #expect(model.archiveStack.map(\.url) == [outer])
+        #expect(model.browserMode == .tree)
+        #expect(model.showsPathBar)
+        #expect(model.canGoUp)
+        model.searchText = "not"
+        #expect(model.showsPathBar)
+        model.goUp()
+        #expect(model.archiveURL == outer)
+        #expect(model.archiveStack.isEmpty)
+
+        // Ağaç görünümünde klasörde Return / ⌘↓: klasör görünümüne geçip klasöre girer.
+        model.primaryAction(["kaynak"])
+        #expect(model.browserMode == .folders)
+        #expect(model.currentFolder == "kaynak")
+    }
+
     /// P1-7: aynı klasördeki bir öğenin adına (büyük/küçük harf duyarsız) yeniden adlandırılmaz.
     @Test func renameRejectsSiblingNames() async throws {
         let fixture = try Fixture()

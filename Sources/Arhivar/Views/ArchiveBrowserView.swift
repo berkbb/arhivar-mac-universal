@@ -69,7 +69,8 @@ struct ArchiveBrowserView: View {
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            if model.browserMode == .folders && model.searchText.isEmpty {
+            // İç içe açılmış arşivde ağaç görünümünde ve aramada da gösterilir: üstteki arşive dönüş yolu kaybolmasın.
+            if model.showsPathBar {
                 PathBar()
                     .padding(.horizontal, 10)
                     .padding(.top, 8)
@@ -191,13 +192,14 @@ private struct PathBar: View {
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.tertiary)
                     }
+                    // Klasör adımları yalnızca klasör görünümünde: ağaç ve aramada açık klasör tabloya yansımaz.
+                    let crumbs = model.showsFolderPath ? model.breadcrumbs : []
                     crumb(
                         title: model.archiveURL?.lastPathComponent ?? settings.t(.appName),
                         icon: model.archiveURL.map(FileIcons.icon(for:)),
                         path: "",
-                        isLast: model.currentFolder.isEmpty
+                        isLast: crumbs.isEmpty
                     )
-                    let crumbs = model.breadcrumbs
                     ForEach(Array(crumbs.enumerated()), id: \.element.path) { index, item in
                         Image(systemName: "chevron.right")
                             .font(.caption2.weight(.semibold))

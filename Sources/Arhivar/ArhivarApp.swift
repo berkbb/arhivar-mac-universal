@@ -147,7 +147,7 @@ struct AppCommands: Commands {
             Divider()
             Button(settings.t(.navUp)) { model.goUp() }
                 .keyboardShortcut(.upArrow, modifiers: .command)
-                .disabled(!model.canGoUp || model.browserMode != .folders || model.operation != nil)
+                .disabled(!model.canGoUp || model.operation != nil)
             Divider()
             Button(settings.t(.menuShowInFinder)) { model.revealArchive() }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
