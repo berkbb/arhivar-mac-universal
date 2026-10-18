@@ -127,4 +127,15 @@
   3. 7-Zip cannot update multi-volume archives in place. `ArchiveCapabilities.supportsEditing` only checked for 3-digit numeric extensions (`.001`), so multi-volume ZIP/7z archives (`volumes > 1`) enabled editing buttons in the toolbar and failed upon modification.
 - **Lesson & Guardrail:** Strip `part\d+` suffixes in `ArchiveNaming.baseName(of:)`, recognize split ZIP volumes (`isSplitZipVolume`) in `isArchiveExtension` and redirect to `.zip` in `firstVolume(of:)`, and check `volumes > 1` along with split volume extensions in `ArchiveCapabilities.supportsEditing`.
 
+---
+
+## Episode 16: Split ZIP (`.zNN`) False Positives on ROMs (`.z64`, `.z80`) & Sibling `.zip` Verification
+- **Context:** Dropping non-archive files with `z + digits` extensions (such as Nintendo 64 ROMs `.z64` or ZX Spectrum snapshots `.z80`) onto the app window or double-clicking them inside an archive.
+- **Root Cause:**
+  - `isSplitZipVolume` matched any extension starting with `z` followed by digits. When included unconditionally in `isArchiveExtension(ext)`, standalone `.z64` or `.z80` files were classified as archives by filename alone.
+  - Dropping one caused Arhivar to attempt opening it as an archive (failing with "not an archive") instead of presenting the New Archive creation sheet.
+  - Inside an archive, `isBrowsable` offered them for nested archive browsing rather than launching the default external app.
+- **Lesson & Guardrail:** Name-only `isArchiveExtension` must exclude split ZIP secondary volumes (`.z01`..`.z99`). Instead, `ArchiveNaming.isArchive(url, fileManager:)` verifies the existence of a sibling `.zip` master volume on disk before accepting a `.zNN` file as an archive. Inside an archive (where sibling checks cannot be performed), `.zNN` files open with the user's default external application.
+
+
 
