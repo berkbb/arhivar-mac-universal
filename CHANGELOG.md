@@ -5,6 +5,8 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ## [Unreleased]
 
+## [1.1.2] — 2026-10-18
+
 ### Fixed
 
 - Smart subfolder extraction ("When there is more than one item") now ignores macOS metadata (`.DS_Store`, `__MACOSX`, and `._*` AppleDouble files) when deciding whether to create a wrapper folder. Archives created on macOS containing a single root folder alongside macOS metadata now extract directly without creating an unwanted double folder (`Name/Name/…`).
