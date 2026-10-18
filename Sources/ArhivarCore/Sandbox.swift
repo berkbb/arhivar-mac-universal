@@ -25,6 +25,8 @@ public struct SandboxProfile: Sendable, Equatable {
         [
             // Kimlik bilgileri ve erişim belirteçleri
             ".ssh", ".gnupg", ".aws", ".config/gh", ".netrc", ".kube", ".docker", ".npmrc", ".pypirc", ".git-credentials",
+            // Bulut ve geliştirici kimlik bilgileri (sabit liste eksiksiz olamaz; en yaygın gizli konumlar)
+            ".config/gcloud", ".azure", ".oci", ".terraform.d", ".m2", ".gradle", ".cargo", ".gem", ".config/Code", "Library/Application Support/Code",
             // Kabuk geçmişi (komut satırına yazılmış parolalar, belirteçler)
             ".zsh_history", ".bash_history",
             // Sistem ve iletişim verileri

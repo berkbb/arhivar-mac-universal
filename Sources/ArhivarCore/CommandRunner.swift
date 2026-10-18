@@ -116,9 +116,15 @@ public struct CommandRunner: Sendable {
     ///   - workingDirectory: Göreli yollar için çalışma klasörü.
     ///   - input: stdin'e yazılacak veri (ör. parola). Yoksa stdin boştur; parola sorulursa 7zz takılmaz, durur.
     ///   - onProgress: 0...1 aralığında ilerleme (stdout'taki yüzdelerden).
+    /// Bir alt sürecin stdout'ta biriktirilebilecek en çok baytı. Kötü niyetli bir arşiv, metaverisinde on milyonlarca
+    /// küçük girdi bildirip `7zz l -slt` ile gigabaytlarca çıktı ürettirebilir; tüm çıktı bellekte biriktiği için bu,
+    /// arşiv yalnızca AÇILIRKEN belleği tüketirdi. Sınır aşılırsa süreç durdurulur ve işlem hatayla biter.
+    public static let maxOutputBytes = 512 << 20
+
     public func run(
         _ arguments: [String],
         timeout: TimeInterval? = nil,
+        maxOutputBytes: Int = CommandRunner.maxOutputBytes,
         workingDirectory: URL? = nil,
         input: Data? = nil,
         onProgress: (@Sendable (Double) -> Void)? = nil
@@ -131,7 +137,9 @@ public struct CommandRunner: Sendable {
         }
         let box = try ProcessBox(executableURL: launch.0, arguments: launch.1, input: input)
         if let workingDirectory { box.process.currentDirectoryURL = workingDirectory }
-        let state = RunState(onProgress: onProgress)
+        let state = RunState(onProgress: onProgress, maxOutputBytes: maxOutputBytes)
+        // Çıktı sınırı aşılırsa süreci durdur; drain EOF alır, bekleyen devam hata ile döner.
+        state.onLimitExceeded = { box.terminate() }
 
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<ProcessResult, Error>) in
@@ -239,10 +247,15 @@ private final class RunState: @unchecked Sendable {
     private var lastProgress = -1
     private var cancelled = false
     private var timedOut = false
+    private var overflowed = false
+    private let maxOutputBytes: Int
+    /// Çıktı sınırı aşıldığında bir kez çağrılır (süreci durdurmak için). Drain başlamadan ayarlanır.
+    var onLimitExceeded: (@Sendable () -> Void)?
     private let onProgress: (@Sendable (Double) -> Void)?
 
-    init(onProgress: (@Sendable (Double) -> Void)?) {
+    init(onProgress: (@Sendable (Double) -> Void)?, maxOutputBytes: Int = CommandRunner.maxOutputBytes) {
         self.onProgress = onProgress
+        self.maxOutputBytes = maxOutputBytes
     }
 
     var isCancelled: Bool { lock.withLock { cancelled } }
@@ -252,7 +265,15 @@ private final class RunState: @unchecked Sendable {
 
     func appendStdout(_ data: Data) {
         var report: Int?
+        var fireLimit = false
         lock.withLock {
+            if overflowed { return }
+            if stdout.count + data.count > maxOutputBytes {
+                // Sınır aşıldı: bu parçayı ve sonrasını biriktirme, süreci durdur.
+                overflowed = true
+                fireLimit = true
+                return
+            }
             stdout.append(data)
             guard onProgress != nil else { return }
             // Yüzdeler parçalar arasında bölünebilir; son birkaç karakter saklanır.
@@ -262,6 +283,7 @@ private final class RunState: @unchecked Sendable {
                 report = value
             }
         }
+        if fireLimit { onLimitExceeded?() }
         if let report { onProgress?(Double(report) / 100) }
     }
 
@@ -273,6 +295,9 @@ private final class RunState: @unchecked Sendable {
         lock.withLock {
             if cancelled { return .failure(SevenZipError.cancelled) }
             if timedOut { return .failure(SevenZipError.timedOut) }
+            if overflowed {
+                return .failure(SevenZipError.failed(code: exitCode, message: "Archive output exceeded the size limit and was stopped."))
+            }
             return .success(ProcessResult(
                 exitCode: exitCode,
                 stdout: String(decoding: stdout, as: UTF8.self),

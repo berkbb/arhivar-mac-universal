@@ -266,9 +266,12 @@ public enum StagedExtraction {
             let url = root.appendingPathComponent(link)
             guard let attributes = try? fileManager.attributesOfItem(atPath: url.path),
                   attributes[.type] as? FileAttributeType == .typeRegular,
-                  (attributes[.size] as? NSNumber)?.int64Value == 0,
-                  (try? fileManager.removeItem(at: url)) != nil else { continue }
-            removed.append(link)
+                  (attributes[.size] as? NSNumber)?.int64Value == 0 else { continue }
+            // Yer tutucu salt okunur (0555) bir klasörde olabilir; silmek için üst klasöre geçici yazma/geçiş izni verilir.
+            let deleted = OwnerAccess.granting(S_IWUSR | S_IXUSR, on: url.deletingLastPathComponent().path) {
+                (try? fileManager.removeItem(at: url)) != nil
+            }
+            if deleted { removed.append(link) }
         }
         return removed.sorted()
     }

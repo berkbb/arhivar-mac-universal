@@ -11,6 +11,7 @@ public enum OpenSafety {
         "com.apple.installer-package-archive",
         "com.apple.mobileconfig",
         "com.apple.terminal.settings",
+        "com.apple.terminal.session",
         "com.apple.automator-workflow",
         "com.apple.applescript.script",
         "com.apple.applescript.text",
@@ -25,7 +26,7 @@ public enum OpenSafety {
     /// ör. "workflow" uzantısı com.apple.automator-workflow'a değil dinamik bir türe çözülür.
     static let riskyExtensions: Set<String> = [
         "scpt", "scptd", "applescript", "shortcut", "prefpane", "qlgenerator",
-        "workflow", "action", "osax", "url", "webloc",
+        "workflow", "action", "osax", "url", "webloc", "term", "terminal",
     ]
 
     /// Dosya çalıştırılabilir ya da riskli bir türdeyse türün okunur adını (yoksa tanımlayıcısını) döndürür.
