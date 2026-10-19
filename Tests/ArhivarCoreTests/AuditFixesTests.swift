@@ -386,3 +386,21 @@ private func mode(of url: URL) -> UInt16? {
     let leaked = (try? String(contentsOf: extracted.appendingPathComponent("proje/anahtar"), encoding: .utf8)) ?? ""
     #expect(!leaked.contains("GIZLI"))
 }
+
+/// Yer tutucu erişimsiz (0000) ve salt okunur (0555) klasörlerin altındaysa da bulunup silinir; kipler geri yüklenir.
+@Test func placeholderBehindInaccessibleFoldersIsRemoved() throws {
+    let root = try tempDir("yer-tutucu"); defer { StagedExtraction.removeTree(at: root) }
+    let ro = root.appendingPathComponent("ro", isDirectory: true)
+    let deep = ro.appendingPathComponent("deep", isDirectory: true)
+    try FileManager.default.createDirectory(at: deep, withIntermediateDirectories: true)
+    try Data().write(to: deep.appendingPathComponent("esc"))
+    try "keep".write(to: deep.appendingPathComponent("real.txt"), atomically: true, encoding: .utf8)
+    #expect(chmod(deep.path, 0o000) == 0)
+    #expect(chmod(ro.path, 0o555) == 0)
+    #expect(StagedExtraction.removeLinkPlaceholders(in: root, links: ["ro/deep/esc", "ro/deep/real.txt"]) == ["ro/deep/esc"])
+    var info = stat()
+    #expect(stat(ro.path, &info) == 0 && info.st_mode & 0o777 == 0o555) // kipler geri yüklendi
+    #expect(stat(deep.path, &info) == 0 && info.st_mode & 0o777 == 0)
+    #expect(chmod(deep.path, 0o700) == 0)
+    #expect(try String(contentsOf: deep.appendingPathComponent("real.txt"), encoding: .utf8) == "keep")
+}

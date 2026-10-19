@@ -299,14 +299,20 @@ public enum StagedExtraction {
         var removed: [String] = []
         for link in links where !link.isEmpty {
             let url = root.appendingPathComponent(link)
+            // Yer tutucu salt okunur (0555) ya da erişimsiz (0000) klasörlerin altında olabilir: bakmak (lstat) için her
+            // atasında geçiş, silmek için üst klasöründe yazma izni gerekir. İzinler kısa süre açılır, sonra geri yüklenir;
+            // bakılmadan atlansaydı yer tutucu birleştirmede hedefteki gerçek dosyanın yerine geçerdi.
+            var granted: [(path: String, mode: mode_t)] = []
+            var directory = root
+            for component in (link as NSString).pathComponents.dropLast() {
+                directory.appendPathComponent(component)
+                if let old = OwnerAccess.add(S_IWUSR | S_IXUSR, on: directory.path) { granted.append((directory.path, old)) }
+            }
+            defer { OwnerAccess.restore(granted.reversed()) }
             guard let attributes = try? fileManager.attributesOfItem(atPath: url.path),
                   attributes[.type] as? FileAttributeType == .typeRegular,
                   (attributes[.size] as? NSNumber)?.int64Value == 0 else { continue }
-            // Yer tutucu salt okunur (0555) bir klasörde olabilir; silmek için üst klasöre geçici yazma/geçiş izni verilir.
-            let deleted = OwnerAccess.granting(S_IWUSR | S_IXUSR, on: url.deletingLastPathComponent().path) {
-                (try? fileManager.removeItem(at: url)) != nil
-            }
-            if deleted { removed.append(link) }
+            if (try? fileManager.removeItem(at: url)) != nil { removed.append(link) }
         }
         return removed.sorted()
     }
