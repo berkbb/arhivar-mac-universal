@@ -319,6 +319,8 @@ public struct ItemExtractor: Sendable {
             let options = ExtractOptions(archive: archive, destination: directory, items: paths, password: password, overwrite: .replace)
             let result = try await runner.run(SevenZipCommand.extract(options), workingDirectory: options.workingDirectory, input: options.input, onProgress: onProgress)
             try SevenZipError.check(result)
+            // İptal 7zz bittikten sonra geldiyse bağlantı ayıklaması ve karantina atlanır; klasör aşağıda silinir.
+            if Task.isCancelled { throw SevenZipError.cancelled }
             var links: [String] = []
             for (raw, (path, target)) in zip(paths, zip(normalized, targets)) {
                 let type = StagedExtraction.itemType(target, fileManager: fileManager)

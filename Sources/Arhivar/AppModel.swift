@@ -828,6 +828,9 @@ final class AppModel {
                 SevenZipCommand.extract(options), workingDirectory: options.workingDirectory, input: options.input, onProgress: progress
             )
             var warnings = [try SevenZipError.check(result)].compactMap { $0 }
+            // İptal 7zz bittikten sonra geldiyse: sonraki adımlar (bağlantı ayıklama, karantina, birleştirme) iptali
+            // denetlemez; hazırlık klasörü atılır, hedefe dokunulmaz.
+            if Task.isCancelled { throw SevenZipError.cancelled }
 
             // 3. Taşınacak içerik: alt klasördeyken seçilenler o klasörün yolu olmadan hedefe gider.
             let content = StagedExtraction.contentRoot(in: staging, stripping: stripping)
@@ -857,6 +860,8 @@ final class AppModel {
             if items.isEmpty {
                 StagedExtraction.leaveOutRootMetadata(in: content, destination: destination, base: base, mode: subfolderMode)
             }
+            // Birleştirme başladıktan sonra iptal edilmez (yarım hedef kalmasın); son fırsat burası.
+            if Task.isCancelled { throw SevenZipError.cancelled }
             let changed = try StagedExtraction.merge(from: content, into: destination, policy: policy)
             // Doğrudan hedefe tek anlamlı öğe çıktıysa Finder o öğeyi seçsin (macOS üst verileri sayılmaz).
             let meaningfulChanged = changed.filter { !StagedExtraction.isMacMetadata($0.lastPathComponent, in: destination) }
