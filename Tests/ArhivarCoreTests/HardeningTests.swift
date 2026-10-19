@@ -168,13 +168,14 @@ private func mode(of url: URL) -> UInt16? {
     for path in [".zsh_history", ".bash_history", "Library/Containers", "Library/Group Containers", "Library/HTTPStorages"] {
         #expect(denied.contains("/Users/ornek/" + path), "\(path)")
     }
-    // Kaynak kişisel bir klasördeyse yalnızca o klasör açılır; diğerleri kapalı kalır.
+    // Kaynak kişisel bir klasördeyse klasör yasaklı kalır; yalnızca kaynağın kendisi yasaktan sonra izinlidir.
     let profile = SandboxProfile.forOperation(
         archive: URL(fileURLWithPath: "/Users/ornek/Desktop/yedek.zip"), writable: [URL(fileURLWithPath: "/Users/ornek/Desktop")],
         readable: [URL(fileURLWithPath: "/Users/ornek/.ssh/config")], home: home
     )
     let paths = profile.deniedReadDirectories.map(\.path)
-    #expect(!paths.contains("/Users/ornek/.ssh"))
+    #expect(paths.contains("/Users/ornek/.ssh"))
+    #expect(profile.readableFiles.map(\.path).contains("/Users/ornek/.ssh/config"))
     #expect(paths.contains("/Users/ornek/.aws"))
     #expect(paths.contains("/Users/ornek/Library/Keychains"))
 }

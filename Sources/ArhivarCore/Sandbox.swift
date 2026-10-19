@@ -15,6 +15,9 @@ public struct SandboxProfile: Sendable, Equatable {
     /// klasörün tamamını açmak yerine yalnızca arşiv izinlidir; SBPL'de son eşleşen kural kazandığı için izin yasaktan
     /// sonra yazılır.
     public var readableFiles: [URL]
+    /// Yasaklı bir klasörün içindeki (ya da kendisi olan), kullanıcının açıkça seçtiği kaynak klasörler: yasaklı klasör
+    /// kapalı kalır, yalnızca bunlar (içerikleriyle) yasaktan sonra gelen izinle okunabilir.
+    public var readableDirectories: [URL]
 
     public static let launcher = URL(fileURLWithPath: "/usr/bin/sandbox-exec")
 
@@ -22,11 +25,15 @@ public struct SandboxProfile: Sendable, Equatable {
         FileManager.default.isExecutableFile(atPath: launcher.path)
     }
 
-    public init(writableDirectories: [URL], deniedReadDirectories: [URL], writableFiles: [URL] = [], readableFiles: [URL] = []) {
+    public init(
+        writableDirectories: [URL], deniedReadDirectories: [URL], writableFiles: [URL] = [], readableFiles: [URL] = [],
+        readableDirectories: [URL] = []
+    ) {
         self.writableDirectories = writableDirectories
         self.deniedReadDirectories = deniedReadDirectories
         self.writableFiles = writableFiles
         self.readableFiles = readableFiles
+        self.readableDirectories = readableDirectories
     }
 
     /// Arşiv okunurken erişilmemesi gereken kişisel veri klasörleri.
@@ -54,9 +61,10 @@ public struct SandboxProfile: Sendable, Equatable {
     /// - Parameters:
     ///   - archive: İşlenen arşiv; kişisel klasörlerden birinin içindeyse o klasör yasaklanmaz.
     ///   - writable: 7zz'nin yazabileceği klasörler.
-    ///   - readable: Kullanıcının açıkça seçtiği kaynaklar (oluşturma, ekleme); kişisel bir klasörün içindeyse o klasör
-    ///     yasaklanmaz. Kaynakların içindeki bağlantılar ise kişisel klasörlere ulaşamaz: bağlantılar izlendiğinde
-    ///     (gz/bz2/xz ya da "bağlantıları sakla" kapalıyken) "~/.ssh/id_ed25519" arşive girerdi.
+    ///   - readable: Kullanıcının açıkça seçtiği kaynaklar (oluşturma, ekleme). Kişisel bir klasörün içindeyse klasör
+    ///     yasaklı KALIR, yalnızca o kaynak yasaktan sonra gelen bir izinle okunur; eskiden klasörün tamamı açılır ve
+    ///     başka bir kaynaktaki bağlantı (proje/key → ~/.ssh/id_ed25519) izlendiğinde (gz/bz2/xz ya da "bağlantıları
+    ///     sakla" kapalıyken) anahtar arşive girerdi. 7zz'nin çalışma klasörü yasaklı olsa da göreli adlar çözülür.
     ///   - protectPersonalData: false ise kişisel veri klasörleri yasaklanmaz.
     public static func forOperation(
         archive: URL, writable: [URL], writableFiles: [URL] = [], readable: [URL] = [], protectPersonalData: Bool = true,
@@ -69,19 +77,28 @@ public struct SandboxProfile: Sendable, Equatable {
         // "Library/Containers"ın tamamı (tüm uygulama verileri) o işlem boyunca okunabilir olurdu.
         var readable = readable.map(resolved)
         if needsSiblingVolumes(archive) { readable.append(archivePath.deletingLastPathComponent()) }
-        let keep = writable + readable
         let denied = protectPersonalData
             ? personalDataDirectories(home: home).map(resolved).filter { denied in
-                // Kullanıcının açıkça çalıştığı bir yolu kapsayan yasak, işlemi bozardı.
-                !keep.contains { $0.path == denied.path || $0.path.hasPrefix(denied.path + "/") }
+                // Yazılan klasörü (hazırlık, hedef) kapsayan yasak, işlemi bozardı.
+                !writable.contains { $0.path == denied.path || $0.path.hasPrefix(denied.path + "/") }
             }
             : []
         // Arşiv bir sembolik bağlantı üzerinden verildiyse bağlantının kendisi de (readlink için) okunabilmeli.
         var readableFiles = [archivePath]
         var info = stat()
         if lstat(archive.path, &info) == 0, info.st_mode & S_IFMT == S_IFLNK { readableFiles.append(archive.standardizedFileURL) }
+        // Yasaklı bir klasörün içindeki kaynak: klasör yasaklı kalır, yalnızca kaynak (klasörse içeriğiyle) izinlidir.
+        var readableDirectories: [URL] = []
+        for source in readable where denied.contains(where: { source.path == $0.path || source.path.hasPrefix($0.path + "/") }) {
+            if stat(source.path, &info) == 0, info.st_mode & S_IFMT == S_IFDIR {
+                readableDirectories.append(source)
+            } else {
+                readableFiles.append(source)
+            }
+        }
         return SandboxProfile(
-            writableDirectories: writable, deniedReadDirectories: denied, writableFiles: writableFiles.map(resolved), readableFiles: readableFiles
+            writableDirectories: writable, deniedReadDirectories: denied, writableFiles: writableFiles.map(resolved),
+            readableFiles: readableFiles, readableDirectories: readableDirectories
         )
     }
 
@@ -122,10 +139,14 @@ public struct SandboxProfile: Sendable, Equatable {
             let reads = deniedReadDirectories.indices.map { "(subpath (param \"R\($0)\"))" }
             lines.append("(deny file-read* \(reads.joined(separator: " ")))")
         }
-        // Yasaklı klasördeki arşivin kendisi: izin yasaktan SONRA gelir (son eşleşen kural kazanır).
+        // Yasaklı klasördeki arşivin kendisi ve seçilen kaynaklar: izin yasaktan SONRA gelir (son eşleşen kural kazanır).
         if !readableFiles.isEmpty {
             let files = readableFiles.indices.map { "(literal (param \"F\($0)\"))" }
             lines.append("(allow file-read* \(files.joined(separator: " ")))")
+        }
+        if !readableDirectories.isEmpty {
+            let directories = readableDirectories.indices.map { "(subpath (param \"S\($0)\"))" }
+            lines.append("(allow file-read* \(directories.joined(separator: " ")))")
         }
         // Ele geçirilmiş bir 7zz (bozuk arşivle tetiklenen ayrıştırıcı hatası) başka program çalıştıramaz ve mach
         // servislerine (AppleEvents, launchd) ulaşamaz; yalnızca 7zz'nin kendisi çalıştırılabilir.
@@ -142,6 +163,7 @@ public struct SandboxProfile: Sendable, Equatable {
         for (index, url) in writableFiles.enumerated() { result += ["-D", "A\(index)=\(url.path)"] }
         for (index, url) in deniedReadDirectories.enumerated() { result += ["-D", "R\(index)=\(url.path)"] }
         for (index, url) in readableFiles.enumerated() { result += ["-D", "F\(index)=\(url.path)"] }
+        for (index, url) in readableDirectories.enumerated() { result += ["-D", "S\(index)=\(url.path)"] }
         // Çekirdek gerçek yolu denetler: bağlantı üzerinden verilen bir motor yolu da çözülür.
         result += ["-D", "E=\(Self.resolved(executable).path)"]
         return result + [executable.path] + arguments

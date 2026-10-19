@@ -46,7 +46,7 @@ private func mode(of url: URL) -> UInt16? {
 }
 
 /// Mail / Mesajlar eki gibi yasaklı bir klasördeki arşiv: klasör yasaklı kalır, yalnızca arşivin kendisi okunabilir.
-/// Bölünmüş arşivde kardeş parçalar gerektiğinden klasör eskisi gibi açılır.
+/// Bölünmüş arşivde kardeş parçalar gerektiğinden arşivin klasörü (yalnızca o) yasaktan sonra gelen izinle okunur.
 @Test func archiveInsideProtectedFolderNoLongerUndeniesTheFolder() throws {
     let home = try tempDir("ev"); defer { StagedExtraction.removeTree(at: home) }
     let mail = home.appendingPathComponent("Library/Containers/com.apple.mail/Data/Mail Downloads", isDirectory: true)
@@ -59,7 +59,9 @@ private func mode(of url: URL) -> UInt16? {
     #expect(profile.readableFiles.map(\.path) == [SandboxProfile.resolved(archive).path])
 
     let split = mail.appendingPathComponent("b.7z.001"); try Data("x".utf8).write(to: split)
-    #expect(!SandboxProfile.forOperation(archive: split, writable: [], home: home).deniedReadDirectories.map(\.path).contains(containers))
+    let splitProfile = SandboxProfile.forOperation(archive: split, writable: [], home: home)
+    #expect(splitProfile.deniedReadDirectories.map(\.path).contains(containers))
+    #expect(splitProfile.readableDirectories.map(\.path) == [SandboxProfile.resolved(mail).path])
     #expect(SandboxProfile.needsSiblingVolumes(URL(fileURLWithPath: "/x/film.part3.rar")))
     #expect(!SandboxProfile.needsSiblingVolumes(URL(fileURLWithPath: "/x/film.rar")))
 }
@@ -325,4 +327,62 @@ private func mode(of url: URL) -> UInt16? {
     var info = stat()
     #expect(stat(file.path, &info) == 0 && info.st_mode & 0o7777 == 0o600)
     #expect(PreservedAttributes(of: root) == nil) // yalnızca sıradan dosyalar
+}
+
+/// Kaynak yasaklı bir klasörün içindeyse klasör yasaklı kalır; yalnızca kaynak yasaktan sonra gelen bir izinle okunur.
+@Test func sourcesInsideAProtectedFolderDoNotUndenyIt() throws {
+    let home = URL(fileURLWithPath: "/Users/ornek")
+    let profile = SandboxProfile.forOperation(
+        archive: URL(fileURLWithPath: "/Users/ornek/Desktop/yedek.zip"), writable: [URL(fileURLWithPath: "/Users/ornek/Desktop")],
+        readable: [URL(fileURLWithPath: "/Users/ornek/.ssh/config"), URL(fileURLWithPath: "/Users/ornek/Desktop/proje")], home: home
+    )
+    #expect(profile.deniedReadDirectories.map(\.path).contains("/Users/ornek/.ssh"))
+    #expect(profile.readableFiles.map(\.path).contains("/Users/ornek/.ssh/config"))
+    #expect(profile.readableDirectories.isEmpty) // yasaklı olmayan kaynak için kural gerekmez
+    let text = profile.profileText
+    let deny = try #require(text.range(of: "(deny file-read*"))
+    let allow = try #require(text.range(of: "(allow file-read* (literal (param \"F"))
+    #expect(deny.lowerBound < allow.lowerBound) // son eşleşen kural kazanır
+
+    let real = try tempDir("kaynak-klasor"); defer { StagedExtraction.removeTree(at: real) }
+    let ssh = real.appendingPathComponent(".ssh", isDirectory: true)
+    let sub = ssh.appendingPathComponent("alt", isDirectory: true)
+    try FileManager.default.createDirectory(at: sub, withIntermediateDirectories: true)
+    let folderProfile = SandboxProfile.forOperation(archive: real.appendingPathComponent("y.zip"), writable: [], readable: [sub], home: real)
+    #expect(folderProfile.deniedReadDirectories.map(\.path).contains(SandboxProfile.resolved(ssh).path))
+    #expect(folderProfile.readableDirectories.map(\.path) == [SandboxProfile.resolved(sub).path])
+    #expect(folderProfile.profileText.hasSuffix("(allow file-read* (subpath (param \"S0\")))\n(deny mach-lookup)\n(deny process-exec)\n(allow process-exec (literal (param \"E\")))"))
+    let args = folderProfile.launchArguments(executable: URL(fileURLWithPath: "/usr/bin/true"), arguments: [])
+    #expect(args.contains("S0=" + SandboxProfile.resolved(sub).path))
+}
+
+/// Canlı: ~/.ssh/config kaynak olarak seçilince ~/.ssh kapalı kalır; başka bir kaynaktaki bağlantı anahtara ulaşamaz.
+@Test func liveSandboxKeepsAProtectedFolderClosedAroundASourceInsideIt() async throws {
+    let engine = try #require(engineURL)
+    let home = try tempDir("ev"); defer { StagedExtraction.removeTree(at: home) }
+    let ssh = home.appendingPathComponent(".ssh", isDirectory: true)
+    let project = home.appendingPathComponent("Desktop/proje", isDirectory: true)
+    let out = home.appendingPathComponent("cikti", isDirectory: true)
+    for dir in [ssh, project, out] { try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true) }
+    try "GIZLI".write(to: ssh.appendingPathComponent("id_ed25519"), atomically: true, encoding: .utf8)
+    try "cfg".write(to: ssh.appendingPathComponent("config"), atomically: true, encoding: .utf8)
+    try "src".write(to: project.appendingPathComponent("a.txt"), atomically: true, encoding: .utf8)
+    try FileManager.default.createSymbolicLink(at: project.appendingPathComponent("anahtar"), withDestinationURL: ssh.appendingPathComponent("id_ed25519"))
+    let archive = out.appendingPathComponent("c.7z")
+    let sources = [project, ssh.appendingPathComponent("config")]
+    let profile = SandboxProfile.forOperation(archive: archive, writable: [out], readable: sources, home: home)
+    #expect(profile.deniedReadDirectories.map(\.path).contains(SandboxProfile.resolved(ssh).path))
+    let plain = CommandRunner(executableURL: engine)
+    // Bağlantılar izlenir ("bağlantıları sakla" kapalı): anahtar okunamaz (7zz uyarır); config ve a.txt arşive girer.
+    let result = try await plain.sandboxed(profile).run(SevenZipCommand.create(
+        CreateOptions(sources: sources, destination: archive, format: .sevenZip, level: .fast, storeSymlinks: false)
+    ))
+    #expect(try SevenZipError.check(result) != nil) // uyarı: anahtar okunamadı
+    let listed = try await plain.run(SevenZipCommand.list(archive: archive))
+    let paths = ListingParser.parse(listed.stdout).entries.map(\.path)
+    #expect(paths.contains("config") && paths.contains("proje/a.txt"))
+    let extracted = home.appendingPathComponent("acilan", isDirectory: true)
+    _ = try await plain.run(SevenZipCommand.extract(ExtractOptions(archive: archive, destination: extracted, overwrite: .replace)))
+    let leaked = (try? String(contentsOf: extracted.appendingPathComponent("proje/anahtar"), encoding: .utf8)) ?? ""
+    #expect(!leaked.contains("GIZLI"))
 }

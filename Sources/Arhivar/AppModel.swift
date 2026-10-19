@@ -1181,11 +1181,10 @@ final class AppModel {
                 archiveType: archiveType, storeSymlinks: storeSymlinks, excludeMacMetadata: excludeMetadata, excluding: excluded,
                 workDirectory: work
             )
-            // Kişisel veri klasörleri, kullanıcı oradan açıkça bir kaynak seçmedikçe okunamaz (kaynaktaki bir bağlantı
-            // "~/.ssh" içindeki bir anahtarı arşive taşımasın).
-            let writer = self.confined(
-                runner, archive: archive, writable: [work], writableFiles: [archive], readable: sources + [plan.workingDirectory]
-            )
+            // Kişisel veri klasörleri kapalı kalır; yalnızca kullanıcının oradan açıkça seçtiği kaynaklar okunabilir
+            // (başka bir kaynaktaki bağlantı "~/.ssh" içindeki bir anahtarı arşive taşımasın). 7zz'nin çalışma klasörü
+            // (kaynakların üst klasörü) yasaklı olsa da göreli adlar çözülür; klasörün kendisine izin gerekmez.
+            let writer = self.confined(runner, archive: archive, writable: [work], writableFiles: [archive], readable: sources)
             // 7zz arşivi yeni bir inode olarak yazar: karantina işareti, Finder etiketleri ve kip (0600) kaybolmasın.
             let preserved = PreservedAttributes(of: archive)
             defer { preserved?.restore(to: archive) }
@@ -1537,7 +1536,8 @@ final class AppModel {
 
     /// 7zz'yi işleme uygun kum havuzu kurallarıyla çalıştıran kopya: ağ kapalı, yalnızca `writable` klasörlerine yazar,
     /// arşiv okunurken kişisel veri klasörlerini okuyamaz. Ayarlar › Gelişmiş'ten kapatılabilir.
-    /// `readable`: kullanıcının seçtiği kaynaklar (oluşturma, ekleme); kişisel bir klasörün içindelerse o klasör açık kalır.
+    /// `readable`: kullanıcının seçtiği kaynaklar (oluşturma, ekleme); kişisel bir klasörün içindelerse klasör kapalı kalır,
+    /// yalnızca o kaynaklar okunabilir.
     func confined(_ runner: CommandRunner, archive: URL, writable: [URL] = [], writableFiles: [URL] = [], readable: [URL] = []) -> CommandRunner {
         guard settings.sandboxEngine else { return runner }
         return runner.sandboxed(.forOperation(archive: archive, writable: writable, writableFiles: writableFiles, readable: readable))
