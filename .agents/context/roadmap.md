@@ -18,6 +18,13 @@
 
 ---
 
+### Test-Quality Items
+
+#### 2. 🟡 [Medium] Strengthen the 11-Discipline Chaos & Security Matrix (`ChaosAndSecurityMatrixTests.swift`)
+- **Status:** ⬜ Open — an adversarially verified audit (2026-10-19) graded every discipline of the matrix on whether its tests *prove* the architectural claim they are named after: 01 sandbox isolation, 02 hierarchy stress, 03 malformed data, 05 saturating arithmetic, 06 endurance/leaks, 07 input sanitization, 08 access containment, 10 chaos/concurrency and 11 atomic extraction are **partial**; 04 quarantine **does not prove** its claim (it only checks `derivedValue` string math, never a propagated xattr); 09 parser fuzz was **tautological** (`count >= 0`, now replaced by determinism assertions). The real coverage of those claims lives in `SandboxTests`, `AuditFixesTests`, `SecurityHardeningTests`, `FuzzTests`, `HardeningIntegrationTests` and `AppModelTests`.
+- **Strengthen (per discipline):** 01 — live stdin password delivery through `CommandRunner` (`/bin/cat`), argv-wide secret scan over every builder, live read-deny and network-deny runs via the `home:` injection point, and an app-level check that `AppModel.confined` wires the profile when the setting is on. 02 — assert the built tree structurally (`index`, `search`, `sorted`, `contents`, depth = `maxDepth` for an over-deep listing) and drop the hardcoded `< 1.0 s` wall-clock bound. 03 — assert the exact error case (`.notArchive`, `needsPassword == false`), use the seeded SplitMix64 generator with real signatures, add truncated/bit-flipped real archives, run through the sandboxed runner. 04 — propagate a real `com.apple.quarantine` to an extracted tree and read it back (including `._*`, read-only items, symlinked archive). 05 — exercise `requiredBytes` with `Int64.max` sizes and the header `Physical Size`. 06 — repeat extraction cycles and assert no staging folders or file descriptors remain (`lsof`-free: count entries of `/dev/fd`). 07 — route hostile names through `OpenSafety.visibleName`/`hasDeceptiveCharacters` and the rename/create validators. 08 — hard links, destination symlinks, placeholders below `0000` folders (now in `AuditFixesTests`). 10 — real cancellation races (`cancelOperation` during post-processing, queue head) and the re-entrancy comparison (done). 11 — a cancel between 7-Zip exit and merge must leave the destination untouched; replace-across-types rollback.
+- **Location:** `Tests/ArhivarCoreTests/ChaosAndSecurityMatrixTests.swift`
+
 ## Done
 
 ### Fuzz & Security Testing Round — Deeply Nested Path Stack Overflow (2026-10-18)
@@ -100,6 +107,89 @@ A deterministic seeded fuzz suite (`FuzzTests.swift`) was added over all pure pa
 - **Status:** ✅ Done — in `ArchiveTree.build` a file node is no longer flipped to a directory when a later entry uses it as a path prefix (malformed `tar -r`); the file wins and the colliding tail is not shown (it stays in `listing.entries`). Test `fileEntryWinsOverACollidingDeeperPath`.
 - **Location:** `Sources/ArhivarCore/ArchiveTree.swift`
 
+
+### Third & Fourth Audit Rounds — 11-Discipline Ultracode Audit Findings (2026-10-19)
+
+A workflow of 68 agents (recon per discipline → adversarial verification of every candidate with live 7-Zip probes → completeness critic) audited the chaos/security matrix and the real code paths behind it: 56 candidates, 26 confirmed by reproduction, 30 dismissed with evidence, plus 6 critic findings. Everything confirmed and reproducible was fixed below; the rest is recorded in S36.
+
+#### S19. ✅ [P1] Refused TAR Hard Link Left an Unrecognised 0-Byte Placeholder (Zeroed an Existing File)
+- **Status:** ✅ Done — 7-Zip lists `Hard Link = ../outside.txt`, refuses the escaping link and leaves a 0-byte file; the app only knew symlinks, so the placeholder merged under "Replace it" and emptied `dest/<name>` (verified live: "KEEP" → ""). `ArchiveEntry.isHardLink` (`ListingParser.Block.hardLink`), `ItemExtractor.hardLinks`, and `runExtract` pass hard links to `removeLinkPlaceholders`. `TarBuilder.hardLink` in the tests. Test `hardLinkEntriesAreRecognizedAndTheirPlaceholdersRemoved`.
+- **Location:** `Sources/ArhivarCore/ArchiveListing.swift`, `ArchiveEditing.swift`, `Sources/Arhivar/AppModel.swift`
+
+#### S20. ✅ [P2] NUL / Control Characters in a Name Crashed the App
+- **Status:** ✅ Done — `Process` raises an uncatchable ObjC exception for an argument containing NUL; `ArchiveTree.isValidName` rejects control characters (rename) and `CreateArchiveSheet.sanitizedName` strips them. Test `controlCharactersAreNotValidNames`.
+- **Location:** `Sources/ArhivarCore/ArchiveEditing.swift`, `Sources/Arhivar/Views/CreateArchiveSheet.swift`
+
+#### S21. ✅ [P2] Trailing CR Stripped From Entry Names
+- **Status:** ✅ Done — `forEachLine` dropped a CR before LF as if lines were CRLF, so `name\r` was listed as `name` (badge bypassed, per-item 7-Zip operations matched nothing). macOS 7-Zip ends lines with LF only; the CR is now data and `hasDeceptiveCharacters` flags it. Test `trailingCarriageReturnIsEntryData`.
+- **Location:** `Sources/ArhivarCore/ArchiveListing.swift`
+
+#### S22. ✅ [P2] `D` Attribute Plus POSIX Link Mode Parsed as a Folder
+- **Status:** ✅ Done — 7z listings carry no `Folder` field; `Attributes = D lrwxr-xr-x` was a directory to the parser while 7-Zip extracts a symlink (whose refused placeholder was then never cleaned). The link mode now wins, as in 7-Zip. Test `posixLinkModeWinsOverTheWindowsDirectoryBit`.
+- **Location:** `Sources/ArhivarCore/ArchiveListing.swift`
+
+#### S23. ✅ [P2] Grapheme-Based Splitting Hid Entries Starting With a Combining Mark
+- **Status:** ✅ Done — `keyValue` searched `" = "` and `normalizedPath`/`ArchiveTree.build` split on `"/"` at grapheme level, so `Path = \u{301}name` lost the separator (entry dropped) and `a/\u{301}b` never split (entry merged into its parent). Both now work on UTF-8 bytes. Test `combiningMarkAfterASeparatorDoesNotHideTheEntry`.
+- **Location:** `Sources/ArhivarCore/ArchiveListing.swift`, `ArchiveTree.swift`
+
+#### S24. ✅ [P2] `merge` Wrote Through a Symlink at the Destination Path Itself
+- **Status:** ✅ Done — children were lstat-checked but the top-level destination (`base/<archiveName>`) was not; a pre-existing symlink there received the extraction wherever it pointed. The conflict policy is now applied to the destination item (skip → nothing, rename → `name_1`, replace → the link itself is removed). Test `mergeDoesNotWriteThroughADestinationSymlink`.
+- **Location:** `Sources/ArhivarCore/StagedExtraction.swift`
+
+#### S25. ✅ [P2] Editing an Archive Opened Through a Symlink
+- **Status:** ✅ Done — under the narrowed S11 profile an edit through a link failed (`rc=2`, `.tmp` left in the work dir); before S11 it replaced the link with a diverging copy. `openArchive` now resolves a symlinked archive to its real path (sandbox literal, quarantine source and edits all target the real file). Test `editingASymlinkedArchiveUpdatesTheRealFile` (app).
+- **Location:** `Sources/Arhivar/AppModel.swift`
+
+#### S26. ✅ [P2] Password Request Applied to the Wrong Archive
+- **Status:** ✅ Done — a request opened for archive A (Quick Look, test, edit) was applied to archive B opened meanwhile via ⌘O. `targetsOpenArchive` classifies requests; `submitPassword` ignores a mismatched one and opening another archive drops it. Test `passwordRequestForAnotherArchiveIsNotAppliedToTheOpenOne` (app).
+- **Location:** `Sources/Arhivar/AppModel.swift`
+
+#### S27. ✅ [P3] Dequeued "Extract Here" Head Survived Cancel
+- **Status:** ✅ Done — the service loop removed the head before waiting for the running operation; `cancelOperation` emptied the queue but the head was already out. Peek → wait → re-check → remove. Test `serviceQueueHeadIsDroppedByCancel` (app).
+- **Location:** `Sources/Arhivar/AppModel.swift`
+
+#### S28. ✅ [P3] Cold-Start Cancel Skipped the Pending Consent Prompt
+- **Status:** ✅ Done — the cancelled path of the engine check returned without `presentPendingConsentIfIdle()`.
+- **Location:** `Sources/Arhivar/AppModel.swift`
+
+#### S29. ✅ [P1] In-Place Edits Dropped the Archive's Quarantine Flag, Finder Tags and Mode (critic)
+- **Status:** ✅ Done — 7-Zip 26.04 rewrites the archive by unlink + rename of the temp copy: new inode, umask mode, no xattrs (verified live for `a`, `rn`, `d` on zip and 7z). Afterwards `Quarantine.propagate` found no source value and every later extraction, preview and drag was unquarantined; a `0600` archive became `0644`. `PreservedAttributes` captures mode + xattrs before the command and restores them after (`com.apple.provenance` excluded). Tests `preservedAttributesSurviveReplacingTheFile`, `inPlaceEditKeepsQuarantineTagsAndMode` (asserts the inode really changes).
+- **Location:** `Sources/ArhivarCore/PreservedAttributes.swift`, `Sources/Arhivar/AppModel.swift`
+
+#### S30. ✅ [P2] Edit Written but Re-List Cancelled or Failed Left the Pre-Edit State Silently (critic)
+- **Status:** ✅ Done — `relistAfterEdit` runs the listing in an unstructured task so Cancel cannot interrupt it (the archive is already rewritten; a deleted item stayed selectable, stale previews opened); a real listing failure resets the archive state (`resetArchiveState`) and reports the error instead of showing the old tree. Tests `relistAfterAnEditIsNotCancellable`, `relistFailureAfterAnEditClosesTheArchive` (app).
+- **Location:** `Sources/Arhivar/AppModel.swift`
+
+#### S31. ✅ [P2] Cancel Ignored Between 7-Zip Exit and Merge (critic)
+- **Status:** ✅ Done — placeholder removal, `secureSymlinks`, `Quarantine.propagate` and `merge` are synchronous and never checked cancellation, so the destination was populated and the success toast shown after Cancel. `runExtract` and `ItemExtractor.extract` now throw `.cancelled` after 7-Zip returns and again right before `merge` (the merge itself stays uninterruptible so no half-merged destination is left).
+- **Location:** `Sources/Arhivar/AppModel.swift`, `Sources/ArhivarCore/ArchiveEditing.swift`
+
+#### S32. ✅ [P2] A Source Inside a Protected Folder Un-denied the Whole Folder for Create/Add (critic)
+- **Status:** ✅ Done — `forOperation` removed any denied directory containing a readable source, so choosing `~/.ssh/config` (or a Mail attachment) exposed all of `~/.ssh`, and a symlink planted in another source (`project/key → ~/.ssh/id_ed25519`) was followed into the archive when links are followed. The denied folder now stays denied; the chosen source is allowed after the deny (`readableFiles` literal for files, `readableDirectories` subpath for folders; SBPL last-match-wins, verified live: `config` reads, the planted link fails with EPERM). `addFiles` no longer passes the working directory (7-Zip resolves relative names in a denied cwd). Tests `sourcesInsideAProtectedFolderDoNotUndenyIt`, `liveSandboxKeepsAProtectedFolderClosedAroundASourceInsideIt`; `creatingKeepsPersonalDataProtected` and the split-volume case of `archiveInsideProtectedFolderNoLongerUndeniesTheFolder` updated to the new contract.
+- **Location:** `Sources/ArhivarCore/Sandbox.swift`, `Sources/Arhivar/AppModel.swift`
+
+#### S33. ✅ [P3] Placeholder Removal Looked Before Granting Access and Only on the Parent (critic)
+- **Status:** ✅ Done — `removeLinkPlaceholders` ran `lstat` before the owner-access grant, and the grant covered only the immediate parent; a placeholder below a `0000`/`0555` folder survived into the merge (currently masked by 7-Zip forcing `0700` on extracted folders). Access is now granted along every ancestor before looking and restored afterwards. Test `placeholderBehindInaccessibleFoldersIsRemoved`.
+- **Location:** `Sources/ArhivarCore/StagedExtraction.swift`
+
+#### S34. ✅ [P3] Closing the Archive Left Its Password Sheet Behind
+- **Status:** ✅ Done — `closeArchive` (via `resetArchiveState`) drops a pending request bound to the closed archive; requests carrying their own archive (open, nested, Extract Here) are kept. Test `closingTheArchiveDropsItsPasswordRequest` (app).
+- **Location:** `Sources/Arhivar/AppModel.swift`
+
+#### S35. ✅ [P3] Assertion-Free Matrix Tests (critic)
+- **Status:** ✅ Done — `chaosConcurrentReentrancy` compares every task's result with the serial result; the parser fuzz loops assert determinism and non-empty paths instead of `count >= 0`.
+- **Location:** `Tests/ArhivarCoreTests/ChaosAndSecurityMatrixTests.swift`
+
+#### S36. ⬜ [P3] Accepted limitations / deferred (confirmed by the audit, not fixed)
+- **Main-actor tree work:** `ArchiveTree.build/index/sorted` at open and `search` on every keystroke run synchronously on the main actor; an archive with hundreds of thousands of entries stalls the UI (no crash, no data risk). Would need off-main building with a snapshot handoff.
+- **`installArchive` for split archives** deletes the stale `name.7z.00N` volumes before moving the new ones in; a crash in between loses the old split archive. Move-aside + rollback like `mergeItem` is the fix.
+- **Drag export runs outside `perform`:** `dragItem(for:)` extracts in `ArchiveItemTransfer` with no operation state and no cancel path; closing/switching the archive mid-drop runs `discardAllSessions()` under the running 7-Zip (it fails with `errno=2`, nothing escapes). Needs a drag lifecycle tied to the operation state.
+- **LF in an entry name:** 7-Zip prints it as `_` in listings, so the deceptive-name badge cannot see it and per-item extract/open/delete match nothing (S17 reports the error instead of success); whole-archive extraction works. 7-Zip limitation.
+- **Grace-period SIGKILL** targets only the child pid; 7-Zip spawns no children and `process-exec` is denied in the sandbox, so no grandchild can hold the pipe.
+- **Merge is not interruptible** once started (S31 checks before it); a cancel during a very large merge finishes the merge.
+- **Staging folders on a volume never used again** (crash mid-extraction to an external disk) are swept only when that destination is used again (S15).
+- **Matrix test-quality grades** (9 partial, 1 does-not-prove, 1 tautological) are tracked as open item 2 above.
+- **Location:** n/a (design notes)
 ---
 
 
