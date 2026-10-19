@@ -256,3 +256,10 @@ private func mode(of url: URL) -> UInt16? {
     #expect(listing.entries.map(\.path) == ["son\r", "son"])
     #expect(OpenSafety.hasDeceptiveCharacters("son\r"))
 }
+
+/// 7z akış öğesinde "D" biti ile POSIX bağlantı kipi birlikteyse bağlantı kazanır (7zz'nin yaptığı gibi).
+@Test func posixLinkModeWinsOverTheWindowsDirectoryBit() {
+    let listing = ListingParser.parse("--\nType = 7z\n\n----------\nPath = sub/config.json\nSize = 16\nAttributes = D lrwxr-xr-x\n")
+    let entry = try! #require(listing.entries.first)
+    #expect(entry.isSymbolicLink && !entry.isDirectory)
+}

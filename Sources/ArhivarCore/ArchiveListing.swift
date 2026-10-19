@@ -275,7 +275,10 @@ public enum ListingParser {
         let path = normalizedPath(raw)
         // "." (arşivin kendi kök klasörü) gibi boş kalan yollar ağaçta gösterilmez.
         guard !path.isEmpty else { return nil }
-        let isDirectory = block.folder == "+" || (block.attributes?.hasPrefix("D") ?? false)
+        // Bir 7z akış öğesinde Windows "D" biti ile POSIX bağlantı kipi birlikte olabilir ("D lrwxr-xr-x"); 7zz'nin kendisi
+        // gibi bağlantı kipi kazanır (yoksa reddedilen bağlantının yer tutucusu temizlenmez, hedefteki dosya sıfırlanırdı).
+        let isLink = block.isSymbolicLink
+        let isDirectory = !isLink && (block.folder == "+" || (block.attributes?.hasPrefix("D") ?? false))
         var modified: Date?
         if let value = block.modified, value.utf8.count >= 19 {
             modified = parseTimestamp(value, timeZone: timeZone)
@@ -290,8 +293,8 @@ public enum ListingParser {
             isEncrypted: block.encrypted == "+",
             method: block.method.flatMap { $0.isEmpty ? nil : String($0) },
             crc: block.crc.flatMap { $0.isEmpty ? nil : String($0) },
-            isSymbolicLink: !isDirectory && block.isSymbolicLink,
-            isHardLink: !isDirectory && !block.isSymbolicLink && block.isHardLink
+            isSymbolicLink: isLink,
+            isHardLink: !isDirectory && !isLink && block.isHardLink
         )
     }
 }
