@@ -375,7 +375,9 @@ struct ChaosAndSecurityMatrixTests {
 
         for seed in fuzzSeeds {
             let result = ListingParser.parse(seed)
-            #expect(result.entries.count >= 0)
+            // Belirlenimci: aynı metin aynı listeyi verir; hiçbir girdinin yolu boş değildir.
+            #expect(result.entries == ListingParser.parse(seed).entries)
+            #expect(result.entries.allSatisfy { !$0.path.isEmpty })
         }
 
         // Rastgele ASCII/UTF-8 mutasyonları
@@ -392,7 +394,8 @@ struct ChaosAndSecurityMatrixTests {
                 }
             }
             let parsed = ListingParser.parse(randomText)
-            #expect(parsed.entries.count >= 0)
+            #expect(parsed.entries == ListingParser.parse(randomText).entries)
+            #expect(parsed.entries.allSatisfy { !$0.path.isEmpty && ($0.size ?? 0) >= 0 })
         }
     }
 
@@ -460,16 +463,27 @@ struct ChaosAndSecurityMatrixTests {
     /// Çok sayıda eşzamanlı Task üzerinden ayrıştırma, adlandırma ve kum havuzu fonksiyonları çağrılır;
     /// yarış koşulu (race condition) veya veri bozulması olmadığı doğrulanır.
     @Test func chaosConcurrentReentrancy() async throws {
-        await withTaskGroup(of: Void.self) { group in
-            for i in 1...20 {
-                group.addTask {
-                    let sample = "--\nPath = thread_\(i).zip\nType = zip\n----------\nPath = file_\(i).txt\nSize = 10\n"
-                    let listing = ListingParser.parse(sample)
-                    _ = ArchiveTree.build(from: listing.entries)
-                    _ = ArchiveNaming.baseName(of: URL(fileURLWithPath: "/tmp/test_\(i).tar.gz"))
-                    _ = SandboxProfile.forOperation(archive: URL(fileURLWithPath: "/tmp/t\(i).7z"), writable: [], protectPersonalData: true)
-                }
-            }
+        struct Snapshot: Equatable, Sendable {
+            let paths: [String], roots: [String], base: String, profile: String
         }
+        // Her görevin sonucu, aynı girdinin tek başına (sırayla) verdiği sonuçla birebir aynı olmalı.
+        @Sendable func compute(_ i: Int) -> Snapshot {
+            let sample = "--\nPath = thread_\(i).zip\nType = zip\n----------\nPath = file_\(i).txt\nSize = 10\n"
+            let listing = ListingParser.parse(sample)
+            return Snapshot(
+                paths: listing.entries.map(\.path), roots: ArchiveTree.build(from: listing.entries).map(\.id),
+                base: ArchiveNaming.baseName(of: URL(fileURLWithPath: "/tmp/test_\(i).tar.gz")),
+                profile: SandboxProfile.forOperation(archive: URL(fileURLWithPath: "/tmp/t\(i).7z"), writable: [], protectPersonalData: true).profileText
+            )
+        }
+        let expected = Dictionary(uniqueKeysWithValues: (1...20).map { ($0, compute($0)) })
+        let concurrent = await withTaskGroup(of: (Int, Snapshot).self) { group in
+            for i in 1...20 { group.addTask { (i, compute(i)) } }
+            var collected: [Int: Snapshot] = [:]
+            for await (i, snapshot) in group { collected[i] = snapshot }
+            return collected
+        }
+        #expect(concurrent == expected)
+        #expect(expected[7]?.paths == ["file_7.txt"] && expected[7]?.roots == ["file_7.txt"] && expected[7]?.base == "test_7")
     }
 }
