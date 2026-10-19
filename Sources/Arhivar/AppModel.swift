@@ -1295,9 +1295,11 @@ final class AppModel {
         }
         guard serviceTask == nil, !serviceQueue.isEmpty else { return }
         serviceTask = Task {
-            while !serviceQueue.isEmpty {
-                let archive = serviceQueue.removeFirst()
+            while let archive = serviceQueue.first {
                 await waitUntilIdle()
+                // Beklerken iptal kuyruğu boşalttıysa bu arşiv de çıkarılmaz (baş öğe önce kuyruktan alınsaydı kaçardı).
+                guard serviceQueue.first == archive else { continue }
+                serviceQueue.removeFirst()
                 // Açık (ya da iç içe gezinmede en dıştaki) arşivin bilinen parolası kullanılır: parolasız deneme
                 // "yanlış parola" sayılıp açık arşivin parolasını silerdi.
                 runExtract(archive: archive, items: [], base: archive.deletingLastPathComponent(), stripping: "", password: knownPassword(for: archive))

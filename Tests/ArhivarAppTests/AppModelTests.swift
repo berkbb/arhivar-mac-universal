@@ -1416,4 +1416,24 @@ struct AppModelTests {
         await fixture.settle()
         #expect(model.quickLookURL == nil && model.operation == nil)
     }
+
+    /// "Buraya Çıkar" kuyruğunun baş öğesi beklerken iptal edilirse o da çıkarılmaz.
+    @Test func serviceQueueHeadIsDroppedByCancel() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let open = try await fixture.makeArchive("acik.7z", format: .sevenZip)
+        let queued = try await fixture.makeArchive("sirada.zip", format: .zip)
+        let model = fixture.model
+        model.openArchive(open)
+        await fixture.settle()
+
+        model.testArchive()
+        #expect(model.operation != nil)
+        model.extractHere([queued])
+        model.cancelOperation()
+        await model.serviceQueueTask?.value
+        await fixture.settle()
+        #expect(!fixture.exists("sirada"))
+    }
 }
