@@ -494,8 +494,12 @@ final class AppModel {
     }
 
     func openArchive(_ url: URL) {
+        // Sembolik bağlantı üzerinden verilen arşiv gerçek dosyasıyla açılır: yerinde düzenleme bağlantıyı bozmasın,
+        // kum havuzu ve karantina gerçek dosyaya baksın. (Yalnızca son bileşen bağlantıysa; /private gibi yazım korunur.)
+        var url = url
+        if StagedExtraction.itemType(url) == .typeSymbolicLink { url = url.resolvingSymlinksInPath() }
         // Bölünmüş arşivin herhangi bir parçası seçildiyse ilk parçadan açılır.
-        let url = ArchiveNaming.firstVolume(of: url)
+        url = ArchiveNaming.firstVolume(of: url)
         // İç içe gezinirken en dıştaki arşiv yeniden seçildiyse (kenar çubuğu) diskten yeniden okunmaz:
         // ona dönülür, parolası ve klasörü korunur.
         if url == rootArchiveURL, !archiveStack.isEmpty {

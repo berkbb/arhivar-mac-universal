@@ -1369,4 +1369,29 @@ struct AppModelTests {
         #expect(model.toast == nil)
         #expect(!FileManager.default.fileExists(atPath: output.appendingPathComponent("yok.txt").path))
     }
+
+    /// Sembolik bağlantı üzerinden açılan arşiv gerçek dosyasıyla açılır; ekleme gerçek arşive gider, bağlantı bozulmaz.
+    @Test func editingASymlinkedArchiveUpdatesTheRealFile() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let real = try await fixture.makeArchive("gercek.7z", format: .sevenZip)
+        let linkDir = fixture.workspace.appendingPathComponent("baglar", isDirectory: true)
+        try FileManager.default.createDirectory(at: linkDir, withIntermediateDirectories: true)
+        let link = linkDir.appendingPathComponent("kisayol.7z")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: real)
+        let extra = fixture.workspace.appendingPathComponent("ek.txt")
+        try "ek".write(to: extra, atomically: true, encoding: .utf8)
+        let model = fixture.model
+
+        model.openArchive(link)
+        await fixture.settle()
+        #expect(model.archiveURL?.lastPathComponent == "gercek.7z")
+        model.addFiles([extra])
+        await fixture.settle()
+        #expect(model.alert == nil)
+        #expect(model.node("ek.txt") != nil)
+        #expect(StagedExtraction.itemType(link) == .typeSymbolicLink)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: linkDir.path) == ["kisayol.7z"]) // yanında .tmp yok
+    }
 }
