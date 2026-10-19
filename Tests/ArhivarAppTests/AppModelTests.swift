@@ -1437,6 +1437,38 @@ struct AppModelTests {
         #expect(!fixture.exists("sirada"))
     }
 
+    /// Yerinde düzenleme (7zz arşivi yeni bir inode olarak yazar) karantina işaretini, Finder etiketlerini ve kipi korur.
+    @Test func inPlaceEditKeepsQuarantineTagsAndMode() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let archive = try await fixture.makeArchive("indirilen.zip", format: .zip)
+        let quarantine = Array("0083;68f1a2b3;Safari;0A1B2C3D-0000-4000-8000-000000000000".utf8)
+        #expect(setxattr(archive.path, "com.apple.quarantine", quarantine, quarantine.count, 0, XATTR_NOFOLLOW) == 0)
+        let tags = Array("bplist00-etiketler".utf8)
+        #expect(setxattr(archive.path, "com.apple.metadata:_kMDItemUserTags", tags, tags.count, 0, XATTR_NOFOLLOW) == 0)
+        #expect(chmod(archive.path, 0o600) == 0)
+        var before = stat()
+        #expect(stat(archive.path, &before) == 0)
+        let extra = fixture.workspace.appendingPathComponent("ek.txt")
+        try "ek".write(to: extra, atomically: true, encoding: .utf8)
+        let model = fixture.model
+        model.openArchive(archive)
+        await fixture.settle()
+        model.addFiles([extra])
+        await fixture.settle()
+        #expect(model.alert == nil && model.node("ek.txt") != nil)
+
+        var after = stat()
+        #expect(stat(archive.path, &after) == 0)
+        #expect(after.st_ino != before.st_ino) // 7zz 26.04 arşivi değiştirir; korunma bu yüzden gerekir
+        #expect(Quarantine.value(of: archive) == String(decoding: quarantine, as: UTF8.self))
+        #expect(after.st_mode & 0o7777 == 0o600)
+        var buffer = [UInt8](repeating: 0, count: 64)
+        let read = getxattr(archive.path, "com.apple.metadata:_kMDItemUserTags", &buffer, 64, 0, XATTR_NOFOLLOW)
+        #expect(read == tags.count && Array(buffer.prefix(max(0, read))) == tags)
+    }
+
     /// Düzenlemeden sonraki yeniden listeleme iptal edilemez: iptal edilmiş bir görevde bile liste yenilenir.
     @Test func relistAfterAnEditIsNotCancellable() async throws {
         let fixture = try Fixture()

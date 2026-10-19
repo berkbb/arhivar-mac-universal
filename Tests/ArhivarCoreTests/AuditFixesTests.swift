@@ -302,3 +302,27 @@ private func mode(of url: URL) -> UInt16? {
     #expect(try elsewhereIsEmpty()) // gösterdiği yere dokunulmadı
     #expect(FileManager.default.fileExists(atPath: link.appendingPathComponent("y.txt").path))
 }
+
+// MARK: - Denetim turu 4 (eleştirmen bulguları)
+
+/// 7zz yerinde düzenlemede arşivi yeni bir inode olarak yazar; karantina işareti ve kip alınıp geri yazılır.
+@Test func preservedAttributesSurviveReplacingTheFile() throws {
+    let root = try tempDir("oznitelik"); defer { StagedExtraction.removeTree(at: root) }
+    let file = root.appendingPathComponent("arsiv.zip")
+    try Data("PK".utf8).write(to: file)
+    let quarantine = Array("0083;68f1a2b3;Safari;0A1B2C3D".utf8)
+    #expect(setxattr(file.path, "com.apple.quarantine", quarantine, quarantine.count, 0, XATTR_NOFOLLOW) == 0)
+    #expect(chmod(file.path, 0o600) == 0)
+    let preserved = try #require(PreservedAttributes(of: file))
+    #expect(preserved.permissions == 0o600)
+    #expect(preserved.extendedAttributes["com.apple.quarantine"] == quarantine)
+    // 7zz gibi: dosya yeni bir inode ile değiştirilir
+    try FileManager.default.removeItem(at: file)
+    try Data("PK2".utf8).write(to: file)
+    #expect(Quarantine.value(of: file) == nil)
+    #expect(preserved.restore(to: file).isEmpty)
+    #expect(Quarantine.value(of: file) == String(decoding: quarantine, as: UTF8.self))
+    var info = stat()
+    #expect(stat(file.path, &info) == 0 && info.st_mode & 0o7777 == 0o600)
+    #expect(PreservedAttributes(of: root) == nil) // yalnızca sıradan dosyalar
+}

@@ -1181,6 +1181,9 @@ final class AppModel {
             let writer = self.confined(
                 runner, archive: archive, writable: [work], writableFiles: [archive], readable: sources + [plan.workingDirectory]
             )
+            // 7zz arşivi yeni bir inode olarak yazar: karantina işareti, Finder etiketleri ve kip (0600) kaybolmasın.
+            let preserved = PreservedAttributes(of: archive)
+            defer { preserved?.restore(to: archive) }
             let result = try await writer.run(command, workingDirectory: plan.workingDirectory, input: SevenZipCommand.passwordInput(currentPassword), onProgress: progress)
             let warning = try SevenZipError.check(result)
             try await self.relistAfterEdit(of: archive, runner: runner, password: currentPassword)
@@ -1212,6 +1215,8 @@ final class AppModel {
             try self.checkSpaceForWriting(archive: archive, sourceBytes: 0, compresses: true)
             let work = try self.editWorkDirectory(for: archive)
             defer { StagedExtraction.removeTree(at: work) }
+            let preserved = PreservedAttributes(of: archive)
+            defer { preserved?.restore(to: archive) }
             let result = try await self.confined(runner, archive: archive, writable: [work], writableFiles: [archive]).run(SevenZipCommand.delete(archive: archive, items: rawItems, workDirectory: work), input: SevenZipCommand.passwordInput(currentPassword), onProgress: progress)
             let warning = try SevenZipError.check(result)
             try await self.relistAfterEdit(of: archive, runner: runner, password: currentPassword)
@@ -1256,6 +1261,8 @@ final class AppModel {
             try self.checkSpaceForWriting(archive: archive, sourceBytes: 0, compresses: true)
             let work = try self.editWorkDirectory(for: archive)
             defer { StagedExtraction.removeTree(at: work) }
+            let preserved = PreservedAttributes(of: archive)
+            defer { preserved?.restore(to: archive) }
             let result = try await self.confined(runner, archive: archive, writable: [work], writableFiles: [archive]).run(SevenZipCommand.rename(archive: archive, from: rawPath, to: rawNewPath, workDirectory: work), input: SevenZipCommand.passwordInput(currentPassword))
             let warning = try SevenZipError.check(result)
             try await self.relistAfterEdit(of: archive, runner: runner, password: currentPassword)
