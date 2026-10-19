@@ -573,6 +573,8 @@ final class AppModel {
         )
         symbolicLinks = Self.symbolicLinks(in: loaded.listing)
         hardLinks = Set(loaded.listing.entries.lazy.filter(\.isHardLink).map(\.path))
+        // Başka bir arşive geçildi: önceki arşiv için bekleyen parola isteği (ör. Hızlı Bakış) yenisine uygulanmasın.
+        if let pending = passwordRequest, Self.targetsOpenArchive(pending), pending.archive != loaded.url { passwordRequest = nil }
         previewCache = [:]
         selection = []
         updatingDisplayOnce {
@@ -1434,9 +1436,21 @@ final class AppModel {
 
     // MARK: - Parola
 
+    /// İstek açık arşive mi aittir (parola o arşiv için saklanır ve eylem onun üzerinde çalışır)? Kendi arşivini taşıyan
+    /// eylemler (açma, iç arşiv, Buraya Çıkar) bağlı değildir.
+    private static func targetsOpenArchive(_ request: PasswordRequest) -> Bool {
+        switch request.action {
+        case .open, .openNested: return false
+        case .extract(_, let destination, _): return destination == nil
+        default: return true
+        }
+    }
+
     func submitPassword(_ value: String) {
         guard let request = passwordRequest else { return }
         passwordRequest = nil
+        // Bu arada başka bir arşiv açıldıysa (⌘O) eski arşivin isteği yenisine uygulanmaz.
+        if Self.targetsOpenArchive(request), request.archive != archiveURL { return }
         // Parola yalnızca açık arşive aitse saklanır; başka bir arşivin işi (ör. Buraya Çıkar) kendi parolasını taşır.
         let isCurrentArchive = request.archive == archiveURL
         if isCurrentArchive { password = value }

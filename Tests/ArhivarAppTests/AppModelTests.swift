@@ -1394,4 +1394,26 @@ struct AppModelTests {
         #expect(StagedExtraction.itemType(link) == .typeSymbolicLink)
         #expect(try FileManager.default.contentsOfDirectory(atPath: linkDir.path) == ["kisayol.7z"]) // yanında .tmp yok
     }
+
+    /// Bir arşiv için açılan parola isteği, bu arada başka bir arşiv açılırsa ona uygulanmaz.
+    @Test func passwordRequestForAnotherArchiveIsNotAppliedToTheOpenOne() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let secret = try await fixture.makeArchive("gizli.7z", format: .sevenZip, password: "p", encryptNames: false)
+        let plain = try await fixture.makeArchive("acik.7z", format: .sevenZip)
+        let model = fixture.model
+        model.openArchive(secret)
+        await fixture.settle()
+        model.toggleQuickLook("kaynak/not.txt")
+        #expect(model.passwordRequest?.archive == secret)
+
+        model.openArchive(plain)
+        await fixture.settle()
+        #expect(model.archiveURL == plain)
+        #expect(model.passwordRequest == nil) // eski istek düştü
+        model.submitPassword("p")
+        await fixture.settle()
+        #expect(model.quickLookURL == nil && model.operation == nil)
+    }
 }
