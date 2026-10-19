@@ -127,9 +127,9 @@ public enum ListingParser {
         var start = utf8.startIndex
         while start < utf8.endIndex {
             let end = utf8[start...].firstIndex(of: 0x0A) ?? utf8.endIndex
-            var line = Substring(utf8[start..<end])
-            if line.utf8.last == 0x0D { line = line.dropLast() }
-            body(line)
+            // Sondaki CR atılmaz: macOS'ta 7zz satırları yalnızca LF ile bitirir; LF'den önceki CR girdi adının parçasıdır
+            // ("ad\r" ile "ad" ayrı öğelerdir; atılsaydı 7zz'ye yanlış ad verilir ya da yanlış öğe açılırdı).
+            body(Substring(utf8[start..<end]))
             guard end < utf8.endIndex else { return }
             start = utf8.index(after: end)
         }

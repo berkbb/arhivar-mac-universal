@@ -248,3 +248,11 @@ private func mode(of url: URL) -> UInt16? {
     #expect(!ArchiveTree.isValidName("sekme\tli"))
     #expect(ArchiveTree.isValidName("Çalışma Planı 2026.pdf"))
 }
+
+/// Satır sonundaki CR girdi adının parçasıdır (macOS 7zz yalnızca LF yazar): "ad\r" ile "ad" karışmaz, ad yanıltıcı işaretlenir.
+@Test func trailingCarriageReturnIsEntryData() {
+    let listing = ListingParser.parse("--\nType = zip\n\n----------\nPath = son\r\nSize = 1\n\nPath = son\nSize = 2\n")
+    #expect(listing.entries.map(\.archivePath) == ["son\r", "son"])
+    #expect(listing.entries.map(\.path) == ["son\r", "son"])
+    #expect(OpenSafety.hasDeceptiveCharacters("son\r"))
+}
