@@ -235,6 +235,9 @@ public struct ItemExtractor: Sendable {
     public let root: URL
     /// Arşivdeki sembolik bağlantı girdilerinin normalleştirilmiş yolları (bkz. `ArchiveEntry.isSymbolicLink`).
     public let symbolicLinks: Set<String>
+    /// Sabit bağlantı girdileri: 7zz dışarıyı göstereni reddedip 0 baytlık yer tutucu bırakır; kabul edileni sıradan
+    /// dosya olarak yazar (tek başına verilebilir).
+    public let hardLinks: Set<String>
 
     /// Tek başına istenen sembolik bağlantı verilmez: taşındığı yerde (Finder, pano) hedef ağacın dışını gösterir ya da
     /// boşa düşer; 7zz reddettiyse yerinde 0 baytlık sahte bir dosya vardır.
@@ -249,13 +252,14 @@ public struct ItemExtractor: Sendable {
 
     public init(
         runner: CommandRunner, archive: URL, password: String?, root: URL = ItemExtractor.temporaryRoot,
-        symbolicLinks: Set<String> = []
+        symbolicLinks: Set<String> = [], hardLinks: Set<String> = []
     ) {
         self.runner = runner
         self.archive = archive
         self.password = password
         self.root = root
         self.symbolicLinks = symbolicLinks
+        self.hardLinks = hardLinks
     }
 
     public static var temporaryRoot: URL {
@@ -325,7 +329,7 @@ public struct ItemExtractor: Sendable {
                 }
                 guard type == .typeDirectory else { continue }
                 // 7zz'nin reddettiği bağlantıların yer tutucuları önizlemede ya da sağlama değerinde içerik sanılmasın.
-                let links = symbolicLinks.filter { $0.hasPrefix(path + "/") }.map { String($0.dropFirst(path.count + 1)) }
+                let links = symbolicLinks.union(hardLinks).filter { $0.hasPrefix(path + "/") }.map { String($0.dropFirst(path.count + 1)) }
                 StagedExtraction.removeLinkPlaceholders(in: target, links: links, fileManager: fileManager)
                 // Bağlantılar yalnızca öğenin kendi içini gösterebilir: sürüklenen ya da kopyalanan öğe tek başına
                 // taşınır, kardeş klasörleri ("../dış") ve mutlak hedefler yanında gitmez.

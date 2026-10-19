@@ -24,7 +24,12 @@ struct TarBuilder {
 
     var archive: Data { data + Data(count: 1024) }
 
-    private mutating func add(_ name: String, type: UInt8, body: Data) {
+    /// Sabit bağlantı girdisi (tar typeflag "1"): 7zz "Hard Link = hedef" yazar.
+    mutating func hardLink(_ name: String, to target: String) {
+        add(name, type: UInt8(ascii: "1"), body: Data(), linkname: target)
+    }
+
+    private mutating func add(_ name: String, type: UInt8, body: Data, linkname: String = "") {
         var header = [UInt8](repeating: 0, count: 512)
         func put(_ text: String, at offset: Int) {
             let bytes = Array(text.utf8)
@@ -38,6 +43,7 @@ struct TarBuilder {
         put(String(format: "%011o\0", 1_700_000_000), at: 136)
         put("        ", at: 148)
         header[156] = type
+        if !linkname.isEmpty { put(linkname, at: 157) }
         put("ustar\0", at: 257)
         put("00", at: 263)
         put(String(format: "%06o\0 ", header.reduce(0) { $0 + Int($1) }), at: 148)

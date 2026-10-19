@@ -187,6 +187,8 @@ final class AppModel {
     @ObservationIgnored private var consentPending = false
     /// Açık arşivdeki sembolik bağlantı girdilerinin yolları (bkz. `ItemExtractor.symbolicLinks`).
     @ObservationIgnored private var symbolicLinks: Set<String> = []
+    /// Açık arşivdeki sabit bağlantı girdilerinin yolları (bkz. `ItemExtractor.hardLinks`).
+    @ObservationIgnored private var hardLinks: Set<String> = []
     /// Birden çok görünüm durumu birlikte değişirken tablo verisi her adımda değil, sonunda bir kez hesaplanır.
     @ObservationIgnored private var displayUpdatesPaused = false
     /// Tablo verisinin kaç kez yeniden hesaplandığı (testler için).
@@ -566,6 +568,7 @@ final class AppModel {
             type: loaded.listing.info.type, url: loaded.url, volumes: loaded.listing.info.volumes
         )
         symbolicLinks = Self.symbolicLinks(in: loaded.listing)
+        hardLinks = Set(loaded.listing.entries.lazy.filter(\.isHardLink).map(\.path))
         previewCache = [:]
         selection = []
         updatingDisplayOnce {
@@ -588,6 +591,7 @@ final class AppModel {
         listing = nil
         statistics = nil
         symbolicLinks = []
+        hardLinks = []
         updatingDisplayOnce {
             tree = []
             searchText = ""
@@ -659,6 +663,7 @@ final class AppModel {
             sessionRoot = context.sessionRoot
             if archiveStack.count == level {
                 symbolicLinks = Self.symbolicLinks(in: context.listing)
+                hardLinks = Set(context.listing.entries.lazy.filter(\.isHardLink).map(\.path))
                 updatingDisplayOnce {
                     searchText = ""
                     tree = ArchiveTree.build(from: context.listing.entries)
@@ -821,7 +826,8 @@ final class AppModel {
 
             // 4. 7zz'nin reddettiği bağlantıların 0 baytlık yer tutucularını sil (hedefteki dosyaları ezmesinler);
             // taşınan içeriğin dışını gösteren bağlantıları ayıkla, karantina işaretini aktar.
-            let links = (entries ?? []).filter(\.isSymbolicLink).map(\.path)
+            // Sembolik VE sabit bağlantılar: 7zz dışarıyı göstereni reddedip yerine 0 baytlık dosya bırakır.
+            let links = (entries ?? []).filter { $0.isSymbolicLink || $0.isHardLink }.map(\.path)
             let placeholders = StagedExtraction.removeLinkPlaceholders(in: staging, links: links)
             let prefix = content == staging ? "" : stripping + "/"
             let escaping = StagedExtraction.secureSymlinks(in: content, extractionRoot: staging).map { prefix + $0 }
@@ -945,7 +951,7 @@ final class AppModel {
         let session = sessionDirectory()
         let extractor = ItemExtractor(
             runner: confined(runner, archive: archive, writable: [session]), archive: archive, password: currentPassword, root: session,
-            symbolicLinks: symbolicLinks
+            symbolicLinks: symbolicLinks, hardLinks: hardLinks
         )
         let url = try await extractor.extract(archivePath(for: path), expectedSize: node(path)?.size, onProgress: progress)
         previewCache[path] = url
@@ -983,7 +989,7 @@ final class AppModel {
         guard let archive = archiveURL, let engineURL, !isSymbolicLink(node.id), !needsPassword(for: [node.id]) else { return nil }
         let session = sessionDirectory()
         let runner = confined(CommandRunner(executableURL: engineURL), archive: archive, writable: [session])
-        let extractor = ItemExtractor(runner: runner, archive: archive, password: password, root: session, symbolicLinks: symbolicLinks)
+        let extractor = ItemExtractor(runner: runner, archive: archive, password: password, root: session, symbolicLinks: symbolicLinks, hardLinks: hardLinks)
         let name = (node.id as NSString).lastPathComponent
         return ArchiveItemTransfer(extractor: extractor, path: node.archivePath, name: name, size: node.size)
     }
@@ -1008,12 +1014,12 @@ final class AppModel {
         }
         let currentPassword = password
         let entries = listing?.entries ?? []
-        let links = symbolicLinks
+        let links = symbolicLinks, hard = hardLinks
         perform(.progressCopying, archive: archive, retry: .copy(items: items)) { runner, progress in
             let session = self.sessionDirectory()
             let extractor = ItemExtractor(
                 runner: self.confined(runner, archive: archive, writable: [session]), archive: archive, password: currentPassword, root: session,
-                symbolicLinks: links
+                symbolicLinks: links, hardLinks: hard
             )
             let urls = try await extractor.extract(
                 items.map(self.archivePath(for:)), expectedSize: DiskSpace.requiredBytes(for: items, in: entries), onProgress: progress

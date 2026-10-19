@@ -212,3 +212,32 @@ private func mode(of url: URL) -> UInt16? {
     #expect(file?.isDirectory == false && file?.size == 42 && file?.children == nil)
     #expect(index["a/b.txt/c.txt"] == nil)
 }
+
+// MARK: - Denetim turu 3 (06–10)
+
+/// Tar sabit bağlantısı dışarıyı gösteriyorsa 7zz onu reddedip 0 baytlık yer tutucu bırakır; artık bu girdiler de
+/// bağlantı olarak tanınır ve yer tutucu silinir ("üzerine yaz" hedefteki gerçek dosyayı sıfırlamaz).
+@Test func hardLinkEntriesAreRecognizedAndTheirPlaceholdersRemoved() async throws {
+    let engine = try #require(engineURL)
+    let root = try tempDir("sabit"); defer { StagedExtraction.removeTree(at: root) }
+    var tar = TarBuilder()
+    tar.file("real.txt", "real")
+    tar.hardLink("hl_out", to: "../outside.txt")
+    tar.hardLink("hl_ok", to: "real.txt")
+    let archive = root.appendingPathComponent("hl.tar"); try tar.archive.write(to: archive)
+    let runner = CommandRunner(executableURL: engine)
+    let listed = try await runner.run(SevenZipCommand.list(archive: archive))
+    let entries = ListingParser.parse(listed.stdout).entries
+    let byPath = Dictionary(uniqueKeysWithValues: entries.map { ($0.path, $0) })
+    #expect(byPath["hl_out"]?.isHardLink == true && byPath["hl_out"]?.isSymbolicLink == false && byPath["hl_out"]?.isDirectory == false)
+    #expect(byPath["real.txt"]?.isHardLink == false)
+
+    let out = root.appendingPathComponent("out", isDirectory: true)
+    try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
+    _ = try await runner.run(SevenZipCommand.extract(ExtractOptions(archive: archive, destination: out, overwrite: .replace)))
+    #expect(StagedExtraction.itemType(out.appendingPathComponent("hl_out")) == .typeRegular) // 7zz'nin yer tutucusu
+    let links = entries.filter { $0.isSymbolicLink || $0.isHardLink }.map(\.path)
+    #expect(StagedExtraction.removeLinkPlaceholders(in: out, links: links) == ["hl_out"])
+    #expect(StagedExtraction.itemType(out.appendingPathComponent("hl_out")) == nil)
+    #expect(try String(contentsOf: out.appendingPathComponent("hl_ok"), encoding: .utf8) == "real") // kabul edilen bağlantı sıradan dosya
+}
