@@ -274,3 +274,31 @@ private func mode(of url: URL) -> UInt16? {
     #expect(index["a/\u{301}b.txt"]?.isDirectory == false)
     #expect(ListingParser.normalizedPath("./a/\u{301}b/") == "a/\u{301}b")
 }
+
+/// Hedef yolun kendisi bir sembolik bağlantıysa içine (gösterdiği yere) yazılmaz; çakışma kuralı uygulanır.
+@Test func mergeDoesNotWriteThroughADestinationSymlink() throws {
+    let root = try tempDir("hedef-bag"); defer { StagedExtraction.removeTree(at: root) }
+    let elsewhere = root.appendingPathComponent("baska", isDirectory: true)
+    let base = root.appendingPathComponent("indirilenler", isDirectory: true)
+    for dir in [elsewhere, base] { try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true) }
+    let staging = root.appendingPathComponent("hazirlik", isDirectory: true)
+    try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+    try "x".write(to: staging.appendingPathComponent("x.txt"), atomically: true, encoding: .utf8)
+    let link = base.appendingPathComponent("rapor")
+    try FileManager.default.createSymbolicLink(at: link, withDestinationURL: elsewhere)
+
+    func elsewhereIsEmpty() throws -> Bool { try FileManager.default.contentsOfDirectory(atPath: elsewhere.path).isEmpty }
+    #expect(try StagedExtraction.merge(from: staging, into: link, policy: .skip).isEmpty)
+    #expect(StagedExtraction.itemType(link) == .typeSymbolicLink)
+    #expect(try elsewhereIsEmpty())
+
+    let renamed = try StagedExtraction.merge(from: staging, into: link, policy: .rename)
+    #expect(renamed.first?.path.contains("/rapor_1/") == true)
+    #expect(try elsewhereIsEmpty())
+
+    try "y".write(to: staging.appendingPathComponent("y.txt"), atomically: true, encoding: .utf8)
+    try StagedExtraction.merge(from: staging, into: link, policy: .replace)
+    #expect(StagedExtraction.itemType(link) == .typeDirectory) // bağlantının yerine gerçek klasör
+    #expect(try elsewhereIsEmpty()) // gösterdiği yere dokunulmadı
+    #expect(FileManager.default.fileExists(atPath: link.appendingPathComponent("y.txt").path))
+}

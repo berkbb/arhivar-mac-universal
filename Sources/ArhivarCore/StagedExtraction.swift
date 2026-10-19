@@ -122,6 +122,16 @@ public enum StagedExtraction {
     public static func merge(
         from staging: URL, into destination: URL, policy: OverwriteMode, fileManager: FileManager = .default
     ) throws -> [URL] {
+        // Hedef yolun kendisi bir sembolik bağlantı ya da dosyaysa (ör. hedefte arşivle aynı adlı bir bağlantı varken
+        // "arşiv adıyla klasör") içine, yani bağlantının gösterdiği yere yazılmaz; alt öğelerdeki çakışma kuralı uygulanır.
+        var destination = destination
+        if let type = itemType(destination, fileManager: fileManager), type != .typeDirectory {
+            switch policy {
+            case .skip: return []
+            case .replace: try fileManager.removeItem(at: destination) // bağlantının kendisi silinir, gösterdiği yer değil
+            case .rename: destination = uniqueURL(for: destination, fileManager: fileManager)
+            }
+        }
         try fileManager.createDirectory(at: destination, withIntermediateDirectories: true)
         // Önceki bir çıkarmadan kalan salt okunur (0555) hedef klasöre de taşınabilsin; kip sonra geri yüklenir
         // (yoksa ilk öğede durulur ve hedef yarım güncellenmiş kalırdı).
