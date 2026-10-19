@@ -241,3 +241,10 @@ private func mode(of url: URL) -> UInt16? {
     #expect(StagedExtraction.itemType(out.appendingPathComponent("hl_out")) == nil)
     #expect(try String(contentsOf: out.appendingPathComponent("hl_ok"), encoding: .utf8) == "real") // kabul edilen bağlantı sıradan dosya
 }
+
+@Test func controlCharactersAreNotValidNames() {
+    #expect(!ArchiveTree.isValidName("a\u{0}b"))
+    #expect(!ArchiveTree.isValidName("a\rb"))
+    #expect(!ArchiveTree.isValidName("sekme\tli"))
+    #expect(ArchiveTree.isValidName("Çalışma Planı 2026.pdf"))
+}

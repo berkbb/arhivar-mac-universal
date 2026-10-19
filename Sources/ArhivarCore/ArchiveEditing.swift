@@ -410,6 +410,8 @@ extension ArchiveTree {
 
     public static func isValidName(_ name: String) -> Bool {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Denetim karakterleri (NUL, CR, LF…): NUL içeren bir ad süreç argümanı olarak verilemez ve uygulamayı çökertirdi.
+        guard !trimmed.unicodeScalars.contains(where: { $0.properties.generalCategory == .control }) else { return false }
         return !trimmed.isEmpty && trimmed != "." && trimmed != ".." && !trimmed.contains("/")
     }
 }

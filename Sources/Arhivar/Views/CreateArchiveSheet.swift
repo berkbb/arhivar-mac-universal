@@ -168,7 +168,10 @@ struct CreateArchiveSheet: View {
     // MARK: - Doğrulama
 
     private var sanitizedName: String {
-        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Denetim karakterleri (yapıştırılan NUL vb.) süreç argümanına giremez; atılır.
+        var cleaned = String.UnicodeScalarView()
+        for scalar in name.unicodeScalars where scalar.properties.generalCategory != .control { cleaned.append(scalar) }
+        let name = String(cleaned).trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "/", with: "-")
             .replacingOccurrences(of: ":", with: "-")
         // "." ve ".." gizli ya da bozuk adlar üretirdi (".7z", "..7z").
