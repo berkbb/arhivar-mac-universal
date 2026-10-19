@@ -52,6 +52,22 @@ A deterministic seeded fuzz suite (`FuzzTests.swift`) was added over all pure pa
 - **Critic-only ideas (unverified):** self-update URL host validation, hardlink *entries inside* an archive on extraction, localization format-string validator gaps, listing TOCTOU between open and operation, and silent fail-open when `sandbox-exec` is unavailable. Tracked for future tests.
 - **Location:** n/a (design notes)
 
+#### S7. ✅ [P1] Archive Opened Through a Symlink Propagated No Quarantine
+- **Status:** ✅ Done — `Quarantine.value` uses `XATTR_NOFOLLOW` (correct for extracted items), so when the *source archive* path is a symlink the link's own empty attribute was read and `propagate` marked nothing: extracted `.command`/apps bypassed Gatekeeper. `Quarantine.sourceValue(of:)` now reads the real file (`realpath`) with the link's own value as fallback; `propagate(from:)` uses it. Test `quarantineFollowsSymlinkedArchive`.
+- **Location:** `Sources/ArhivarCore/Quarantine.swift`
+
+#### S8. ✅ [P2] Oversized Password Deadlocked the Pre-Launch stdin Write
+- **Status:** ✅ Done — `ProcessBox` writes the password to the stdin pipe *before* launching 7zz; a line of ≥ 16 384 chars repeated 4× exceeded the 64 KiB pipe buffer and `write` blocked forever on the main actor (Cancel unreachable). `SevenZipCommand.passwordInput` now keeps the data under `maxPasswordInputBytes` (60 KiB) by reducing repeats (never altering a realistic password; only an absurd single line > 60 KiB is cut). Test `passwordInputNeverExceedsThePipeBuffer` (incl. a live `/bin/cat` round-trip).
+- **Location:** `Sources/ArhivarCore/ArchiveOptions.swift`
+
+#### S9. ✅ [P2] Dangerous-Link Downgrade Masked Archive-Level Errors
+- **Status:** ✅ Done — `SevenZipError.check` treated exit 2 as a warning when every `ERROR:` line was a dangerous-link rejection, but 7zz reports a truncated/unreadable archive as an `ERRORS:` block (plural header, reason on the next line, no `ERROR:` substring), so a crafted truncated archive with one dangerous link was merged as "extracted with warnings". The downgrade now requires no `ERRORS:` / `Open Errors:` block, and `diagnostic` keeps the reason line after a block header. Test `truncatedArchiveWithDangerousLinkIsNotDowngradedToWarning`.
+- **Location:** `Sources/ArhivarCore/CommandRunner.swift`
+
+#### S10. ✅ [P3] `Physical Size` Parsed Signed
+- **Status:** ✅ Done — `parseInfo` used `Int64($0)`: a negative value became a negative packed size in the status bar and a value > `Int64.max` became `nil`. Now parsed with `parseSize` like entry sizes (negative → nil, overflow → `Int64.max`). Test `physicalSizeIsParsedLikeEntrySizes`.
+- **Location:** `Sources/ArhivarCore/ArchiveListing.swift`
+
 ---
 
 

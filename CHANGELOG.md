@@ -8,7 +8,7 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 ### Added
 
 - Comprehensive 11-discipline chaos and security test matrix (`ChaosAndSecurityMatrixTests.swift`) with 17 dedicated automated tests covering Security (Zip-Slip traversal, zero CLI password exposure), Stress (2,000 flat entries, 35-level hierarchy depth, rapid parsing), Destructive (0-byte archives, corrupt random bytes), Penetration (quarantine user-approval bit stripping), Load & Volume (zip bomb `Int64.max` saturating sum), Endurance (multi-cycle staging cleanup under read-only permissions), Vulnerability Scanning (option injection shielding, Trojan Source Unicode spoofing detection, risky executable UTType detection), Red Team (standalone symlink exfiltration rejection, read-only and multi-volume in-place edit blocking), Fuzzing (listing parser mutations, malformed braces and negative sizes), and Chaos (process termination SIGKILL timeout after 2s grace period, `0o000`/`0o555` owner permissions recovery, high-concurrency reentrancy). Total automated test count increased to 230 tests.
-- Deterministic, seeded fuzz suite (`FuzzTests.swift`) that feeds hostile and grammar-like input to every pure parser and path helper (listing, checksum, progress, timestamp, path normalization, tree build, naming, quarantine, open-safety) and asserts no crash, termination, and invariants (non-negative sizes, normalized ids), plus a depth regression suite (`ArchiveTreeDepthTests.swift`). Total automated test count is now 241.
+- Deterministic, seeded fuzz suite (`FuzzTests.swift`) that feeds hostile and grammar-like input to every pure parser and path helper (listing, checksum, progress, timestamp, path normalization, tree build, naming, quarantine, open-safety) and asserts no crash, termination, and invariants (non-negative sizes, normalized ids), plus a depth regression suite (`ArchiveTreeDepthTests.swift`). Total automated test count is now 245.
 
 ### Fixed
 
@@ -17,6 +17,10 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 - Terminal session files (`.term`) are now treated as risky and ask for confirmation before opening, like `.terminal` and `.command` (a `.term` file can run a shell command on open).
 - `7zz` is kept away from more credential stores when reading archives and when creating/adding from a folder that symlinks into them: `~/.config/gcloud`, `~/.azure`, `~/.oci`, `~/.terraform.d`, `~/.m2`, `~/.gradle`, `~/.cargo`, `~/.gem` and VS Code settings.
 - The 0-byte placeholder that `7zz` leaves for a rejected dangerous link is now removed even inside a read-only (`0555`) folder, so "Replace it" can no longer zero an existing same-named file there.
+- An archive opened through a symbolic link (for example a Finder symlink to a download) now propagates the real file's quarantine flag to extracted items; previously the link's own (empty) attribute was read and nothing was flagged.
+- An extremely long password (tens of thousands of characters) no longer freezes the app before 7-Zip starts: the data written to 7-Zip's standard input is kept under the pipe buffer size (the password is not changed; it is just repeated fewer times).
+- A truncated archive that also contains a dangerous link is reported as a failure instead of being merged into the destination as "extracted with warnings"; error messages now keep 7-Zip's reason line (e.g. "Unexpected end of archive").
+- A negative or overlarge "Physical Size" in a listing no longer produces a negative packed size in the status bar.
 
 ## [1.1.2] — 2026-10-18
 
