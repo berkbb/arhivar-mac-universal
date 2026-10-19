@@ -1533,8 +1533,8 @@ final class AppModel {
                 await ensureEngine()
                 operation = nil
                 currentTask = nil
-                // Motor denetlenirken iptal edildiyse işlem başlamaz.
-                guard !Task.isCancelled else { return }
+                // Motor denetlenirken iptal edildiyse işlem başlamaz; bekleyen izin sorusu yine sorulabilir.
+                guard !Task.isCancelled else { presentPendingConsentIfIdle(); return }
                 perform(title, archive: archive, retry: retry, usedPassword: usedPassword, body)
             }
             return
