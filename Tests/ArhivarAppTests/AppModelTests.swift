@@ -1437,6 +1437,41 @@ struct AppModelTests {
         #expect(!fixture.exists("sirada"))
     }
 
+    /// Düzenlemeden sonraki yeniden listeleme iptal edilemez: iptal edilmiş bir görevde bile liste yenilenir.
+    @Test func relistAfterAnEditIsNotCancellable() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let archive = try await fixture.makeArchive("yeniden.7z", format: .sevenZip)
+        let model = fixture.model
+        model.openArchive(archive)
+        await fixture.settle()
+        let engine = try #require(model.engineURL)
+        let task = Task { @MainActor in
+            try await model.relistAfterEdit(of: archive, runner: CommandRunner(executableURL: engine), password: nil)
+        }
+        task.cancel()
+        try await task.value
+        #expect(model.archiveURL == archive && model.listing != nil)
+    }
+
+    /// Yazma diske işlendi ama liste okunamıyorsa eski liste gösterilmez; arşiv kapanır ve hata fırlatılır.
+    @Test func relistFailureAfterAnEditClosesTheArchive() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let archive = try await fixture.makeArchive("bozuk-liste.7z", format: .sevenZip)
+        let model = fixture.model
+        model.openArchive(archive)
+        await fixture.settle()
+        // 7zz'de çıkış kodu 1 yalnızca uyarıdır; listeleme gerçekten başarısız olmalı (motor yok).
+        let failing = CommandRunner(executableURL: URL(fileURLWithPath: "/nonexistent/7zz-yok"))
+        await #expect(throws: (any Error).self) {
+            try await model.relistAfterEdit(of: archive, runner: failing, password: nil)
+        }
+        #expect(model.archiveURL == nil && model.listing == nil && model.tree.isEmpty)
+    }
+
     /// Kapatılan arşive bağlı parola isteği (Hızlı Bakış için açılmış) arşivsiz bir sayfa olarak kalmaz.
     @Test func closingTheArchiveDropsItsPasswordRequest() async throws {
         let fixture = try Fixture()

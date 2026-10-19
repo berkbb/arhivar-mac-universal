@@ -1183,7 +1183,7 @@ final class AppModel {
             )
             let result = try await writer.run(command, workingDirectory: plan.workingDirectory, input: SevenZipCommand.passwordInput(currentPassword), onProgress: progress)
             let warning = try SevenZipError.check(result)
-            try await self.readListing(of: archive, runner: runner, keepFolder: true, password: currentPassword)
+            try await self.relistAfterEdit(of: archive, runner: runner, password: currentPassword)
             self.finishEdit(warning: warning)
         }
     }
@@ -1214,7 +1214,7 @@ final class AppModel {
             defer { StagedExtraction.removeTree(at: work) }
             let result = try await self.confined(runner, archive: archive, writable: [work], writableFiles: [archive]).run(SevenZipCommand.delete(archive: archive, items: rawItems, workDirectory: work), input: SevenZipCommand.passwordInput(currentPassword), onProgress: progress)
             let warning = try SevenZipError.check(result)
-            try await self.readListing(of: archive, runner: runner, keepFolder: true, password: currentPassword)
+            try await self.relistAfterEdit(of: archive, runner: runner, password: currentPassword)
             self.finishEdit(warning: warning)
         }
     }
@@ -1258,7 +1258,7 @@ final class AppModel {
             defer { StagedExtraction.removeTree(at: work) }
             let result = try await self.confined(runner, archive: archive, writable: [work], writableFiles: [archive]).run(SevenZipCommand.rename(archive: archive, from: rawPath, to: rawNewPath, workDirectory: work), input: SevenZipCommand.passwordInput(currentPassword))
             let warning = try SevenZipError.check(result)
-            try await self.readListing(of: archive, runner: runner, keepFolder: true, password: currentPassword)
+            try await self.relistAfterEdit(of: archive, runner: runner, password: currentPassword)
             self.selection = [newPath]
             self.finishEdit(warning: warning)
         }
@@ -1280,6 +1280,22 @@ final class AppModel {
     /// Kaynaklardaki özel dosyaların (FIFO, soket, aygıt) arşivdeki yolları; arka planda taranır.
     nonisolated private static func specialFiles(in urls: [URL], followingSymlinks: Bool) async -> [String] {
         await Task.detached(priority: .userInitiated) { SpecialFiles.archivePaths(in: urls, followingSymlinks: followingSymlinks) }.value
+    }
+
+    /// Düzenleme diske yazıldı; eski liste artık yanlıştır. Yeniden listeleme iptal EDİLEMEZ (kısa sürer; iptal
+    /// edilseydi silinen öğe seçilebilir, eski önizleme açılabilir kalırdı). Gerçekten başarısız olursa eski liste
+    /// gösterilmez, arşiv kapatılır ve hata bildirilir.
+    func relistAfterEdit(of archive: URL, runner: CommandRunner, password: String?) async throws {
+        // Yapısal olmayan görev iptali devralmaz; `.value` beklemesi dış görev iptal edilse de kesilmez.
+        let listing = Task { try await self.fetchListing(of: archive, runner: runner, password: password) }
+        do {
+            let loaded = try await listing.value
+            discardSessionDirectory()
+            apply(loaded, keepFolder: true)
+        } catch {
+            resetArchiveState()
+            throw error
+        }
     }
 
     private func finishEdit(warning: String?) {
