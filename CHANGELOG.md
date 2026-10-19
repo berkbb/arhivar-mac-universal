@@ -8,7 +8,7 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 ### Added
 
 - Comprehensive 11-discipline chaos and security test matrix (`ChaosAndSecurityMatrixTests.swift`) with 17 dedicated automated tests covering Security (Zip-Slip traversal, zero CLI password exposure), Stress (2,000 flat entries, 35-level hierarchy depth, rapid parsing), Destructive (0-byte archives, corrupt random bytes), Penetration (quarantine user-approval bit stripping), Load & Volume (zip bomb `Int64.max` saturating sum), Endurance (multi-cycle staging cleanup under read-only permissions), Vulnerability Scanning (option injection shielding, Trojan Source Unicode spoofing detection, risky executable UTType detection), Red Team (standalone symlink exfiltration rejection, read-only and multi-volume in-place edit blocking), Fuzzing (listing parser mutations, malformed braces and negative sizes), and Chaos (process termination SIGKILL timeout after 2s grace period, `0o000`/`0o555` owner permissions recovery, high-concurrency reentrancy). Total automated test count increased to 230 tests.
-- Deterministic, seeded fuzz suite (`FuzzTests.swift`) that feeds hostile and grammar-like input to every pure parser and path helper (listing, checksum, progress, timestamp, path normalization, tree build, naming, quarantine, open-safety) and asserts no crash, termination, and invariants (non-negative sizes, normalized ids), plus a depth regression suite (`ArchiveTreeDepthTests.swift`). Total automated test count is now 245.
+- Deterministic, seeded fuzz suite (`FuzzTests.swift`) that feeds hostile and grammar-like input to every pure parser and path helper (listing, checksum, progress, timestamp, path normalization, tree build, naming, quarantine, open-safety) and asserts no crash, termination, and invariants (non-negative sizes, normalized ids), plus a depth regression suite (`ArchiveTreeDepthTests.swift`). Total automated test count is now 255.
 
 ### Fixed
 
@@ -21,6 +21,13 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 - An extremely long password (tens of thousands of characters) no longer freezes the app before 7-Zip starts: the data written to 7-Zip's standard input is kept under the pipe buffer size (the password is not changed; it is just repeated fewer times).
 - A truncated archive that also contains a dangerous link is reported as a failure instead of being merged into the destination as "extracted with warnings"; error messages now keep 7-Zip's reason line (e.g. "Unexpected end of archive").
 - A negative or overlarge "Physical Size" in a listing no longer produces a negative packed size in the status bar.
+- **Sandbox narrowed for in-place edits:** adding, deleting and renaming inside an archive no longer give 7-Zip write access to the archive's whole parent folder (e.g. all of Downloads or your home folder). 7-Zip's temporary copy now goes to a private work folder (`-w`), and only that folder and the archive file itself are writable. A force-quit mid-edit no longer leaves an `archive.tmp` next to the archive either.
+- **Sandbox narrowed for protected folders:** opening an archive that lives inside a protected folder (a Mail or Messages attachment, an app container) no longer makes that entire folder readable to 7-Zip; only the archive itself is. Split archives still open their sibling volumes.
+- **Sandbox hardened:** 7-Zip can no longer launch other programs or reach system (mach) services while it runs, as defense in depth should a crafted archive ever exploit the engine.
+- Extracting with "Replace it" into a destination folder that is itself read-only completes instead of stopping at the first item; replacing a folder by a file (or vice versa) keeps the old item until the new one is in place, so a locked file inside can no longer cause data loss; stale staging folders left behind by a crash on volumes without a system replacement directory are cleaned up.
+- A partially downloaded archive is reported with 7-Zip's reason ("Unexpected end of archive") instead of "not an archive".
+- Extracting a selected item that 7-Zip cannot match (for example a name containing a line break) now reports an error instead of claiming success; cancelling while the header-encryption check runs is no longer ignored.
+- In a malformed TAR where a file also appears as a folder prefix of another entry, the file keeps its size and can be opened.
 
 ## [1.1.2] — 2026-10-18
 

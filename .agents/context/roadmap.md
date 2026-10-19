@@ -68,6 +68,38 @@ A deterministic seeded fuzz suite (`FuzzTests.swift`) was added over all pure pa
 - **Status:** ✅ Done — `parseInfo` used `Int64($0)`: a negative value became a negative packed size in the status bar and a value > `Int64.max` became `nil`. Now parsed with `parseSize` like entry sizes (negative → nil, overflow → `Int64.max`). Test `physicalSizeIsParsedLikeEntrySizes`.
 - **Location:** `Sources/ArhivarCore/ArchiveListing.swift`
 
+#### S11. ✅ [P1] In-Place Edits Made the Archive's Whole Parent Folder Writable
+- **Status:** ✅ Done — 7zz writes the updated archive as a temp file next to the original, so `addFiles`/`deleteItems`/`rename` granted `(allow file-write* (subpath <archive dir>))`: a compromised 7zz could write anywhere in Downloads/Desktop/home. Now `SevenZipCommand.add/delete/rename(workDirectory:)` pass `-w<staging>` (same-volume `makeStagingDirectory`), and the profile allows writes only to that staging dir plus the archive file as a literal (`SandboxProfile.writableFiles`). Verified live: with the archive's folder not writable, add/rename/delete succeed and leave no `.tmp` beside the archive. Tests `editCommandsCarryTheWorkDirectory`, `liveInPlaceEditOnlyNeedsTheWorkDirectoryAndTheArchiveFile`.
+- **Location:** `Sources/ArhivarCore/Sandbox.swift`, `ArchiveEditing.swift`, `Sources/Arhivar/AppModel.swift`
+
+#### S12. ✅ [P1] Opening an Archive Inside a Protected Folder Un-denied the Whole Folder
+- **Status:** ✅ Done — `forOperation` removed any denied directory that *contained* the archive, so a Mail attachment (`~/Library/Containers/com.apple.mail/…`) exposed all of `Library/Containers` to 7zz for that operation. The archive no longer counts toward un-denying; instead it is granted as a literal read after the deny (`SandboxProfile.readableFiles`; SBPL last-match-wins, verified live: the archive reads, a sibling file is denied). Multi-volume names (`.001`, `.z01`, `.r00`, `.partN.rar`) still un-deny their folder because 7zz reads sibling volumes. A symlinked archive also gets its own link path. Tests `archiveInsideProtectedFolderNoLongerUndeniesTheFolder`, `liveSandboxReadsOnlyTheArchiveInsideAProtectedFolder`; `SandboxTests.personalFoldersAreProtectedOnlyWhenReadingArchives` updated to the new contract.
+- **Location:** `Sources/ArhivarCore/Sandbox.swift`
+
+#### S13. ✅ [P2] `(allow default)` Left Exec and Mach Services Open to a Compromised 7zz
+- **Status:** ✅ Done — the profile now adds `(deny mach-lookup)`, `(deny process-exec)` and `(allow process-exec (literal <engine realpath>))` (param `E`, resolved at launch). Verified live that list/extract/create(+password, `-mhe`)/hash all still work and that a child exec is refused (note: macOS `/bin/sh` is itself a re-exec shim, so `env` is used in the test). Test `profileDeniesExecAndMachAndAllowsOnlyTheEngine`, live in `liveSandboxReadsOnlyTheArchiveInsideAProtectedFolder`.
+- **Location:** `Sources/ArhivarCore/Sandbox.swift`
+
+#### S14. ✅ [P2] Merge Not Atomic Against a Read-Only Destination and Cross-Type Replace Deleted Before Moving
+- **Status:** ✅ Done — `merge` now grants temporary owner write/exec on the destination base (a `0555` destination used to stop at the first item, leaving a partial result); the cross-type `.replace` branch moves the old item aside, places the new one, then deletes the aside with rollback on failure (previously `removeTree` + `moveItem`: a locked file inside the old folder caused the delete to half-succeed and the move to fail, losing data). Tests `mergeIntoReadOnlyDestinationBaseRestoresItsMode`, `crossTypeReplaceDoesNotDestroyTheOldItemWhenCleanupFails`.
+- **Location:** `Sources/ArhivarCore/StagedExtraction.swift`
+
+#### S15. ✅ [P3] Stale Fallback Staging Folders Were Never Swept
+- **Status:** ✅ Done — `.arhivar-staging-*` (used when `.itemReplacementDirectory` is unavailable, e.g. some external/network volumes) survived crashes forever; `makeStagingDirectory` now sweeps siblings older than an hour (`sweepStaleStaging`). Test `staleFallbackStagingIsSwept`.
+- **Location:** `Sources/ArhivarCore/StagedExtraction.swift`
+
+#### S16. ✅ [P3] Truncated Archive Reported as "Not an Archive"
+- **Status:** ✅ Done — when 7zz prints both an `ERRORS:` block ("Unexpected end of archive") and "Cannot open the file as [7z] archive", `check` now prefers the `.failed` error carrying the reason over `.notArchive`. Test `truncatedArchiveReportsTheReasonInsteadOfNotAnArchive`.
+- **Location:** `Sources/ArhivarCore/CommandRunner.swift`
+
+#### S17. ✅ [P3] Selective Extraction of an Unmatchable Entry Reported Success; Cancel Swallowed During Header Probe
+- **Status:** ✅ Done — `runExtract` fails with the item names when nothing was extracted for an explicit selection (7zz exits 0 with "No files to process" for a name it cannot match, e.g. one containing a line break); `fetchListing` rethrows `.cancelled` from the header-encryption probe instead of `try?` swallowing it and opening the archive anyway. Test `extractingAMissingItemIsAnErrorNotASuccess` (app).
+- **Location:** `Sources/Arhivar/AppModel.swift`
+
+#### S18. ✅ [P3] File Entry Turned Into a Folder by a Colliding Deeper Path
+- **Status:** ✅ Done — in `ArchiveTree.build` a file node is no longer flipped to a directory when a later entry uses it as a path prefix (malformed `tar -r`); the file wins and the colliding tail is not shown (it stays in `listing.entries`). Test `fileEntryWinsOverACollidingDeeperPath`.
+- **Location:** `Sources/ArhivarCore/ArchiveTree.swift`
+
 ---
 
 
