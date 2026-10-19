@@ -172,7 +172,7 @@ public enum ListingParser {
             method: values["Method"].flatMap { $0.isEmpty ? nil : $0 },
             isSolid: values["Solid"] == "+",
             // Bölünmüş arşivde "Physical Size" yalnızca ilk parçanın boyutudur.
-            physicalSize: (values["Total Physical Size"] ?? values["Physical Size"]).flatMap { Int64($0) },
+            physicalSize: (values["Total Physical Size"] ?? values["Physical Size"]).flatMap { parseSize($0[...]) },
             comment: comment?.isEmpty == false ? comment : nil,
             blocks: values["Blocks"].flatMap { Int($0) },
             volumes: values["Volumes"].flatMap { Int($0) }

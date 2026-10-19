@@ -43,7 +43,10 @@ public enum SevenZipError: Error, Equatable, Sendable {
         // 7zz hedef dışını gösteren bağlantıları yazmaz ve 2 ile çıkar; geri kalan her şey çıkarılmıştır.
         // Tek hata buysa işlem uyarıyla tamamlanmış sayılır.
         let errors = combined.split(whereSeparator: \.isNewline).filter { $0.contains("ERROR:") }
-        if result.exitCode == 2, !errors.isEmpty, errors.allSatisfy({ $0.contains("Dangerous link path was ignored") }) {
+        // Arşiv düzeyinde bir hata bloğu ("ERRORS:" başlığı, ör. "Unexpected end of archive"; "Open Errors:") ayrı
+        // satırlarda ve "ERROR:" içermeden yazılır: yalnızca bağlantı hatalarına bakıp kesik bir arşivi uyarıya indirgemeyelim.
+        let archiveLevelError = combined.range(of: "ERRORS:") != nil || combined.range(of: "Open Errors:") != nil
+        if result.exitCode == 2, !archiveLevelError, !errors.isEmpty, errors.allSatisfy({ $0.contains("Dangerous link path was ignored") }) {
             return diagnostic(from: combined)
         }
         // "Cannot open the file as archive", "Cannot open the file as [7z] archive", "Is not archive"
@@ -73,7 +76,12 @@ public enum SevenZipError: Error, Equatable, Sendable {
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty && !$0.contains("\u{8}") }
         let markers = ["ERROR", "WARNING", "Error", "Warning", "Can not", "Cannot"]
-        let interesting = lines.filter { line in markers.contains { line.contains($0) } }
+        var interesting: [String] = []
+        for (index, line) in lines.enumerated() where markers.contains(where: { line.contains($0) }) {
+            interesting.append(line)
+            // "ERRORS:" / "WARNINGS:" blok başlığının açıklaması bir sonraki satırdadır ("Unexpected end of archive").
+            if line.hasSuffix("S:"), index + 1 < lines.count, !interesting.contains(lines[index + 1]) { interesting.append(lines[index + 1]) }
+        }
         let chosen = interesting.isEmpty ? Array(lines.suffix(3)) : Array(interesting.prefix(6))
         return chosen.joined(separator: "\n")
     }

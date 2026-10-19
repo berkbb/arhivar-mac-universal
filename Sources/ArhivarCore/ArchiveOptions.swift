@@ -223,10 +223,18 @@ public enum SevenZipCommand {
     /// Parola hiçbir zaman komut satırına yazılmaz (`ps` ile okunabilirdi); 7zz'nin stdin'ine verilir.
     /// l/t/x/d/rn şifreli girdide parolayı kendisi sorar; `a` için çıplak `-p` sorulmasını sağlar.
     /// Ad şifreli (-mhe) arşive eklemede birden fazla istem gelebildiği için satır birkaç kez yazılır.
+    /// stdin'e yazılacak en çok bayt. Veri süreç başlamadan boruya yazılır (`CommandRunner`); boru tamponu (64 KiB)
+    /// dolarsa okuyucu olmadığı için yazma sonsuza dek bloklanır ve iptal de ulaşamazdı.
+    public static let maxPasswordInputBytes = 60 * 1024
+
     public static func passwordInput(_ password: String?) -> Data? {
         guard let password, !password.isEmpty else { return nil }
-        let line = password.split(whereSeparator: \.isNewline).first.map(String.init) ?? password
-        return Data(String(repeating: line + "\n", count: 4).utf8)
+        var line = password.split(whereSeparator: \.isNewline).first.map(String.init) ?? password
+        // Anlamsız uzunlukta tek bir satır bile sığmıyorsa kesilir (UTF-8 sınırında).
+        while line.utf8.count + 1 > maxPasswordInputBytes { line.removeLast() }
+        let lineBytes = line.utf8.count + 1
+        let repeats = Swift.max(1, Swift.min(4, maxPasswordInputBytes / lineBytes))
+        return Data(String(repeating: line + "\n", count: repeats).utf8)
     }
 
     // Arşiv yolunun kendisi de joker karakter sayılır: "yedek*1.7z" açılırken "-spd" olmadan aynı klasördeki

@@ -27,6 +27,15 @@ public enum Quarantine {
         return String(decoding: buffer.prefix(read), as: UTF8.self)
     }
 
+    /// Kaynak arşivin karantina değeri. Arşiv bir sembolik bağlantı üzerinden açıldıysa (Finder'da bir bağlantıya çift
+    /// tık ya da bağlantıyı sürükleme) `value(of:)` bağlantının kendi (boş) özniteliğini okur ve hiçbir çıkarılan dosya
+    /// işaretlenmezdi; bu yüzden gerçek dosyanın değeri okunur, bağlantının kendisininki yedek olarak kalır.
+    public static func sourceValue(of archive: URL) -> String? {
+        let real = StagedExtraction.resolvedPath(archive.path)
+        if real != archive.path, let value = value(of: URL(fileURLWithPath: real)) { return value }
+        return value(of: archive)
+    }
+
     /// Arşivin değerinden çıkarılan dosyalara yazılacak değer: biçim "bayraklar;zaman;ajan;uuid", onay biti temizlenir.
     public static func derivedValue(from archiveValue: String) -> String {
         var fields = archiveValue.split(separator: ";", omittingEmptySubsequences: false).map(String.init)
@@ -64,7 +73,7 @@ public enum Quarantine {
         from archive: URL, to destination: URL, roots: [String] = [], since start: Date,
         fileManager: FileManager = .default
     ) -> Int {
-        guard let archiveValue = value(of: archive) else { return 0 }
+        guard let archiveValue = sourceValue(of: archive) else { return 0 }
         let mark = derivedValue(from: archiveValue)
         // Dosya sistemi zaman çözünürlüğü için küçük pay.
         let threshold = start.addingTimeInterval(-1)
