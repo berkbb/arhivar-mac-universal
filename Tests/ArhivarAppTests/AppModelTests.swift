@@ -1436,4 +1436,19 @@ struct AppModelTests {
         await fixture.settle()
         #expect(!fixture.exists("sirada"))
     }
+
+    /// Kapatılan arşive bağlı parola isteği (Hızlı Bakış için açılmış) arşivsiz bir sayfa olarak kalmaz.
+    @Test func closingTheArchiveDropsItsPasswordRequest() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let secret = try await fixture.makeArchive("gizli.7z", format: .sevenZip, password: "p", encryptNames: false)
+        let model = fixture.model
+        model.openArchive(secret)
+        await fixture.settle()
+        model.toggleQuickLook("kaynak/not.txt")
+        #expect(model.passwordRequest != nil)
+        model.closeArchive()
+        #expect(model.passwordRequest == nil && model.archiveURL == nil)
+    }
 }

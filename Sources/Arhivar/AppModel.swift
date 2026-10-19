@@ -592,7 +592,14 @@ final class AppModel {
     /// getirirdi; işlem sırasında kapatılmaz.
     func closeArchive() {
         guard operation == nil else { return }
+        resetArchiveState()
+    }
+
+    /// Açık arşive ait her durumu siler (kapatma; düzenlemeden sonra yeniden listeleme başarısız olduğunda).
+    private func resetArchiveState() {
         discardAllSessions()
+        // Kapanan arşive bağlı parola isteği (ör. Hızlı Bakış) arşivsiz bir sayfa olarak kalmasın.
+        if let pending = passwordRequest, Self.targetsOpenArchive(pending) { passwordRequest = nil }
         archiveURL = nil
         listing = nil
         statistics = nil
