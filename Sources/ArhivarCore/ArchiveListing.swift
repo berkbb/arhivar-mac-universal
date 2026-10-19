@@ -186,12 +186,21 @@ public enum ListingParser {
         line.trimmingCharacters(in: .whitespaces) == marker
     }
 
+    /// "Anahtar = değer" satırını bayt düzeyinde ayırır. Karakter (grapheme) düzeyinde arama, değer bir birleştirme
+    /// işaretiyle başlıyorsa (ör. "Path = \u{301}ad") " = " kalıbını bulamaz ve girdi kaybolurdu.
     static func keyValue(_ line: Substring) -> (Substring, Substring)? {
-        if let range = line.range(of: " = ") {
-            return (line[..<range.lowerBound], line[range.upperBound...])
-        }
-        if line.hasSuffix(" =") {
-            return (line.dropLast(2), "")
+        let bytes = line.utf8
+        var index = bytes.startIndex
+        while let space = bytes[index...].firstIndex(of: 0x20) {
+            let equals = bytes.index(after: space)
+            if equals < bytes.endIndex, bytes[equals] == 0x3D {
+                let afterEquals = bytes.index(after: equals)
+                if afterEquals == bytes.endIndex { return (Substring(bytes[..<space]), "") }
+                if bytes[afterEquals] == 0x20 {
+                    return (Substring(bytes[..<space]), Substring(bytes[bytes.index(after: afterEquals)...]))
+                }
+            }
+            index = equals
         }
         return nil
     }
@@ -241,7 +250,9 @@ public enum ListingParser {
     public static func normalizedPath<S: StringProtocol>(_ raw: S) -> String {
         // Hızlı yol: neredeyse tüm yollar zaten normaldir; tek bayt taramasıyla anlaşılır, kopya yapılmaz.
         guard needsNormalization(raw) else { return String(raw) }
-        return raw.split(separator: "/", omittingEmptySubsequences: true)
+        // Bayt düzeyinde bölünür: "/" ardından birleştirme işareti gelirse karakter düzeyinde "/" ayraç sayılmazdı.
+        return Array(raw.utf8).split(separator: 0x2F, omittingEmptySubsequences: true)
+            .map { String(decoding: $0, as: UTF8.self) }
             .filter { $0 != "." && $0 != ".." }
             .joined(separator: "/")
     }

@@ -69,7 +69,8 @@ public enum ArchiveTree {
     public static func build(from entries: [ArchiveEntry]) -> [ArchiveNode] {
         let root = TreeBuilderNode(path: "", name: "", archivePath: "", isDirectory: true)
         for entry in entries {
-            let components = entry.path.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
+            // Bayt düzeyinde: "/" ardından birleştirme işareti gelen bir ad ("a/\u{301}b") karakter düzeyinde bölünmezdi.
+            let components = Array(entry.path.utf8).split(separator: 0x2F, omittingEmptySubsequences: true).map { String(decoding: $0, as: UTF8.self) }
             guard !components.isEmpty else { continue }
             // Ham yol normalden farklıysa (ör. "./a/b") ara klasörlerin ham yolu da ondan türetilir.
             let raw = entry.archivePath == entry.path ? nil : entry.archivePath

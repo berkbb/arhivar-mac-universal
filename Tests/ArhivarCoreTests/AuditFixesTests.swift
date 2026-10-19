@@ -263,3 +263,14 @@ private func mode(of url: URL) -> UInt16? {
     let entry = try! #require(listing.entries.first)
     #expect(entry.isSymbolicLink && !entry.isDirectory)
 }
+
+/// Bir birleştirme işaretiyle başlayan ad ("\u{301}root.txt") " = " ayracını karakter düzeyinde gizlerdi; girdi kaybolmaz
+/// ve "/" ardından gelen işaret klasör sınırını bozmaz.
+@Test func combiningMarkAfterASeparatorDoesNotHideTheEntry() {
+    let listing = ListingParser.parse("--\nType = zip\n\n----------\nPath = \u{301}root.txt\nSize = 1\n\nPath = a/\u{301}b.txt\nSize = 2\n")
+    #expect(listing.entries.map(\.path) == ["\u{301}root.txt", "a/\u{301}b.txt"])
+    let index = ArchiveTree.index(ArchiveTree.build(from: listing.entries))
+    #expect(index["a"]?.isDirectory == true)
+    #expect(index["a/\u{301}b.txt"]?.isDirectory == false)
+    #expect(ListingParser.normalizedPath("./a/\u{301}b/") == "a/\u{301}b")
+}
