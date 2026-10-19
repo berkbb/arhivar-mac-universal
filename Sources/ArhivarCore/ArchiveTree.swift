@@ -83,6 +83,9 @@ public enum ArchiveTree {
                 currentPath = currentPath.isEmpty ? component : currentPath + "/" + component
                 let isLast = index == components.count - 1
                 if let existing = current.children[component] {
+                    // Bozuk bir tar'da bir dosya girdisi başka bir girdinin yolunda klasör gibi geçebilir ("a/b.txt" ve
+                    // "a/b.txt/c.txt"): dosya kazanır, derin kuyruk gösterilmez (dosyanın boyutu ve açılabilirliği kaybolmasın).
+                    if !isLast, existing.entry != nil, !existing.isDirectory { break }
                     current = existing
                 } else {
                     let archivePath = isLast ? entry.archivePath : raw.map { rawPrefix($0, components: index + 1) } ?? currentPath

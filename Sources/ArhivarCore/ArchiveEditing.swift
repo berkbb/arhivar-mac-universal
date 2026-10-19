@@ -37,9 +37,13 @@ extension SevenZipCommand {
     /// - Parameters:
     ///   - archiveType: 7zz'nin bildirdiği tür ("zip", "7z", …); yoksa uzantıdan anlaşılır.
     ///   - excluding: Eklenmeyecek özel dosyaların arşivdeki yolları (bkz. `SpecialFiles`).
+    /// `workDirectory`: 7zz'nin güncellenmiş arşivin geçici kopyasını yazdığı klasör (`-w`). Verilmezse arşivin yanına
+    /// yazar; o zaman kum havuzunda arşivin klasörünün tamamı yazılabilir olmak zorunda kalırdı ve zorla kapanışta
+    /// "arşiv.tmp" dosyası orada kalırdı.
     public static func add(
         archive: URL, names: [String], password: String? = nil, encryptHeaders: Bool = false,
-        archiveType: String? = nil, storeSymlinks: Bool = true, excludeMacMetadata: Bool = false, excluding: [String] = []
+        archiveType: String? = nil, storeSymlinks: Bool = true, excludeMacMetadata: Bool = false, excluding: [String] = [],
+        workDirectory: URL? = nil
     ) -> [String] {
         // Parola stdin'den verilir (bkz. passwordInput); burada yalnızca sorulması istenir.
         let hasPassword = password?.isEmpty == false
@@ -50,15 +54,19 @@ extension SevenZipCommand {
         args += sourceSwitches(
             names: names + [archive.path], storeSymlinks: storeSymlinks, excludeMacMetadata: excludeMacMetadata, excluding: excluding
         )
-        return args + ["--", archive.path] + names
+        return args + workSwitch(workDirectory) + ["--", archive.path] + names
     }
 
-    public static func delete(archive: URL, items: [String]) -> [String] {
-        ["d", "-bsp1", "-bb0", "-y", "-spd"] + common + ["--", archive.path] + items
+    public static func delete(archive: URL, items: [String], workDirectory: URL? = nil) -> [String] {
+        ["d", "-bsp1", "-bb0", "-y", "-spd"] + common + workSwitch(workDirectory) + ["--", archive.path] + items
     }
 
-    public static func rename(archive: URL, from oldPath: String, to newPath: String) -> [String] {
-        ["rn", "-bb0", "-y", "-spd"] + common + ["--", archive.path, oldPath, newPath]
+    public static func rename(archive: URL, from oldPath: String, to newPath: String, workDirectory: URL? = nil) -> [String] {
+        ["rn", "-bb0", "-y", "-spd"] + common + workSwitch(workDirectory) + ["--", archive.path, oldPath, newPath]
+    }
+
+    static func workSwitch(_ workDirectory: URL?) -> [String] {
+        workDirectory.map { ["-w" + $0.path] } ?? []
     }
 }
 

@@ -527,9 +527,15 @@ final class AppModel {
         // Adlar şifreliyse (7z -mhe) parolasız liste parola ister; eklemelerde de korunmalı.
         // Parolasız liste başarılıysa adlar açıktır (-mhe=off).
         var encryptedHeaders = false
-        if currentPassword != nil, listing.info.type == "7z",
-           let plain = try? await runner.run(SevenZipCommand.list(archive: url)) {
-            encryptedHeaders = SevenZipError.needsPassword(plain)
+        if currentPassword != nil, listing.info.type == "7z" {
+            do {
+                encryptedHeaders = SevenZipError.needsPassword(try await runner.run(SevenZipCommand.list(archive: url)))
+            } catch SevenZipError.cancelled {
+                // Kullanıcının iptali bu ek sorgu sırasında gelirse yutulmasın; arşiv açılmasın.
+                throw SevenZipError.cancelled
+            } catch {
+                // Sorgu yapılamadıysa adlar açık varsayılır.
+            }
         }
         return LoadedListing(url: url, password: currentPassword, listing: listing, headersEncrypted: encryptedHeaders)
     }
@@ -807,6 +813,11 @@ final class AppModel {
 
             // 3. Taşınacak içerik: alt klasördeyken seçilenler o klasörün yolu olmadan hedefe gider.
             let content = StagedExtraction.contentRoot(in: staging, stripping: stripping)
+            // 7zz seçilen öğeyi eşleştiremezse (ör. adında satır sonu olan girdi listede "_" ile yazılır) 0 ile biter ama
+            // hiçbir şey çıkmaz; "çıkarıldı" denmesin.
+            if !items.isEmpty, ((try? StagedExtraction.entries(ofDirectory: content.path)) ?? []).isEmpty {
+                throw SevenZipError.failed(code: result.exitCode, message: items.map { ($0 as NSString).lastPathComponent }.joined(separator: ", "))
+            }
 
             // 4. 7zz'nin reddettiği bağlantıların 0 baytlık yer tutucularını sil (hedefteki dosyaları ezmesinler);
             // taşınan içeriğin dışını gösteren bağlantıları ayıkla, karantina işaretini aktar.
@@ -1139,14 +1150,17 @@ final class AppModel {
             let excluded = await Self.specialFiles(
                 in: plan.names.map { plan.workingDirectory.appendingPathComponent($0) }, followingSymlinks: !storeSymlinks
             )
+            let work = try self.editWorkDirectory(for: archive)
+            defer { StagedExtraction.removeTree(at: work) }
             let command = SevenZipCommand.add(
                 archive: archive, names: plan.names, password: currentPassword, encryptHeaders: encryptHeaders,
-                archiveType: archiveType, storeSymlinks: storeSymlinks, excludeMacMetadata: excludeMetadata, excluding: excluded
+                archiveType: archiveType, storeSymlinks: storeSymlinks, excludeMacMetadata: excludeMetadata, excluding: excluded,
+                workDirectory: work
             )
             // Kişisel veri klasörleri, kullanıcı oradan açıkça bir kaynak seçmedikçe okunamaz (kaynaktaki bir bağlantı
             // "~/.ssh" içindeki bir anahtarı arşive taşımasın).
             let writer = self.confined(
-                runner, archive: archive, writable: [archive.deletingLastPathComponent()], readable: sources + [plan.workingDirectory]
+                runner, archive: archive, writable: [work], writableFiles: [archive], readable: sources + [plan.workingDirectory]
             )
             let result = try await writer.run(command, workingDirectory: plan.workingDirectory, input: SevenZipCommand.passwordInput(currentPassword), onProgress: progress)
             let warning = try SevenZipError.check(result)
@@ -1177,7 +1191,9 @@ final class AppModel {
         let rawItems = items.map(archivePath(for:))
         perform(.progressUpdating, archive: archive, retry: .delete(items: items)) { runner, progress in
             try self.checkSpaceForWriting(archive: archive, sourceBytes: 0, compresses: true)
-            let result = try await self.confined(runner, archive: archive, writable: [archive.deletingLastPathComponent()]).run(SevenZipCommand.delete(archive: archive, items: rawItems), input: SevenZipCommand.passwordInput(currentPassword), onProgress: progress)
+            let work = try self.editWorkDirectory(for: archive)
+            defer { StagedExtraction.removeTree(at: work) }
+            let result = try await self.confined(runner, archive: archive, writable: [work], writableFiles: [archive]).run(SevenZipCommand.delete(archive: archive, items: rawItems, workDirectory: work), input: SevenZipCommand.passwordInput(currentPassword), onProgress: progress)
             let warning = try SevenZipError.check(result)
             try await self.readListing(of: archive, runner: runner, keepFolder: true, password: currentPassword)
             self.finishEdit(warning: warning)
@@ -1219,7 +1235,9 @@ final class AppModel {
         let rawNewPath = ArchiveTree.renamedPath(rawPath, to: name)
         perform(.progressUpdating, archive: archive, retry: .rename(path: path, newName: name)) { runner, _ in
             try self.checkSpaceForWriting(archive: archive, sourceBytes: 0, compresses: true)
-            let result = try await self.confined(runner, archive: archive, writable: [archive.deletingLastPathComponent()]).run(SevenZipCommand.rename(archive: archive, from: rawPath, to: rawNewPath), input: SevenZipCommand.passwordInput(currentPassword))
+            let work = try self.editWorkDirectory(for: archive)
+            defer { StagedExtraction.removeTree(at: work) }
+            let result = try await self.confined(runner, archive: archive, writable: [work], writableFiles: [archive]).run(SevenZipCommand.rename(archive: archive, from: rawPath, to: rawNewPath, workDirectory: work), input: SevenZipCommand.passwordInput(currentPassword))
             let warning = try SevenZipError.check(result)
             try await self.readListing(of: archive, runner: runner, keepFolder: true, password: currentPassword)
             self.selection = [newPath]
@@ -1459,9 +1477,15 @@ final class AppModel {
     /// 7zz'yi işleme uygun kum havuzu kurallarıyla çalıştıran kopya: ağ kapalı, yalnızca `writable` klasörlerine yazar,
     /// arşiv okunurken kişisel veri klasörlerini okuyamaz. Ayarlar › Gelişmiş'ten kapatılabilir.
     /// `readable`: kullanıcının seçtiği kaynaklar (oluşturma, ekleme); kişisel bir klasörün içindelerse o klasör açık kalır.
-    func confined(_ runner: CommandRunner, archive: URL, writable: [URL] = [], readable: [URL] = []) -> CommandRunner {
+    func confined(_ runner: CommandRunner, archive: URL, writable: [URL] = [], writableFiles: [URL] = [], readable: [URL] = []) -> CommandRunner {
         guard settings.sandboxEngine else { return runner }
-        return runner.sandboxed(.forOperation(archive: archive, writable: writable, readable: readable))
+        return runner.sandboxed(.forOperation(archive: archive, writable: writable, writableFiles: writableFiles, readable: readable))
+    }
+
+    /// Yerinde düzenlemede 7zz'nin geçici arşiv kopyasını yazacağı, arşivle aynı birimdeki klasör (`-w`). Böylece kum
+    /// havuzunda yalnızca bu klasör ve arşivin kendisi yazılabilir olur; arşivin klasörünün tamamı değil.
+    private func editWorkDirectory(for archive: URL) throws -> URL {
+        try StagedExtraction.makeStagingDirectory(for: archive.deletingLastPathComponent())
     }
 
     /// Süren işlem (varsa); sıralı işlemler bunun bitmesini bekler.

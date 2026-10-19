@@ -1350,4 +1350,23 @@ struct AppModelTests {
         #expect(try String(contentsOf: extracted.appendingPathComponent("Proje/._notlar"), encoding: .utf8) == "ic")
         #expect(Quarantine.value(of: extracted.appendingPathComponent("._config")) == mark)
     }
+
+    /// Seçilen öğe 7zz tarafından eşleştirilemezse (listede yok, ya da adında satır sonu var) 7zz 0 ile biter ama hiçbir
+    /// şey çıkmaz; "çıkarıldı" denmez, hata gösterilir.
+    @Test func extractingAMissingItemIsAnErrorNotASuccess() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let archive = try await fixture.makeArchive("eksik.7z", format: .sevenZip)
+        let output = fixture.useExtractFolder()
+        let model = fixture.model
+        model.openArchive(archive)
+        await fixture.settle()
+
+        model.extract(items: ["yok.txt"])
+        await fixture.settle()
+        #expect(model.alert != nil)
+        #expect(model.toast == nil)
+        #expect(!FileManager.default.fileExists(atPath: output.appendingPathComponent("yok.txt").path))
+    }
 }

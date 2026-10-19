@@ -8,6 +8,13 @@ import Foundation
 public struct SandboxProfile: Sendable, Equatable {
     public var writableDirectories: [URL]
     public var deniedReadDirectories: [URL]
+    /// Yazılabilir tek dosyalar: yerinde düzenlemede arşivin kendisi (7zz geçici dosyayı `-w` klasörüne yazar, sonra
+    /// arşivi yerinde günceller; arşivin klasörünün tamamına yazma hakkı gerekmez).
+    public var writableFiles: [URL]
+    /// Yasaklı bir klasörün içinde olsa da okunabilir tek dosyalar: açılan arşivin kendisi (ör. Mail eki). Yasak
+    /// klasörün tamamını açmak yerine yalnızca arşiv izinlidir; SBPL'de son eşleşen kural kazandığı için izin yasaktan
+    /// sonra yazılır.
+    public var readableFiles: [URL]
 
     public static let launcher = URL(fileURLWithPath: "/usr/bin/sandbox-exec")
 
@@ -15,9 +22,11 @@ public struct SandboxProfile: Sendable, Equatable {
         FileManager.default.isExecutableFile(atPath: launcher.path)
     }
 
-    public init(writableDirectories: [URL], deniedReadDirectories: [URL]) {
+    public init(writableDirectories: [URL], deniedReadDirectories: [URL], writableFiles: [URL] = [], readableFiles: [URL] = []) {
         self.writableDirectories = writableDirectories
         self.deniedReadDirectories = deniedReadDirectories
+        self.writableFiles = writableFiles
+        self.readableFiles = readableFiles
     }
 
     /// Arşiv okunurken erişilmemesi gereken kişisel veri klasörleri.
@@ -50,18 +59,38 @@ public struct SandboxProfile: Sendable, Equatable {
     ///     (gz/bz2/xz ya da "bağlantıları sakla" kapalıyken) "~/.ssh/id_ed25519" arşive girerdi.
     ///   - protectPersonalData: false ise kişisel veri klasörleri yasaklanmaz.
     public static func forOperation(
-        archive: URL, writable: [URL], readable: [URL] = [], protectPersonalData: Bool = true,
+        archive: URL, writable: [URL], writableFiles: [URL] = [], readable: [URL] = [], protectPersonalData: Bool = true,
         home: URL = FileManager.default.homeDirectoryForCurrentUser
     ) -> SandboxProfile {
         let writable = writable.map(resolved)
-        let keep = [resolved(archive)] + writable + readable.map(resolved)
+        let archivePath = resolved(archive)
+        // Bölünmüş arşivde 7zz kardeş parçaları da okur; o zaman arşivin klasörü açık kalır. Aksi hâlde arşiv yasaklı bir
+        // klasördeyse (ör. Mail ya da Mesajlar eki) klasör yasaklı kalır, yalnızca arşivin kendisi okunabilir: eskiden
+        // "Library/Containers"ın tamamı (tüm uygulama verileri) o işlem boyunca okunabilir olurdu.
+        var readable = readable.map(resolved)
+        if needsSiblingVolumes(archive) { readable.append(archivePath.deletingLastPathComponent()) }
+        let keep = writable + readable
         let denied = protectPersonalData
             ? personalDataDirectories(home: home).map(resolved).filter { denied in
                 // Kullanıcının açıkça çalıştığı bir yolu kapsayan yasak, işlemi bozardı.
                 !keep.contains { $0.path == denied.path || $0.path.hasPrefix(denied.path + "/") }
             }
             : []
-        return SandboxProfile(writableDirectories: writable, deniedReadDirectories: denied)
+        // Arşiv bir sembolik bağlantı üzerinden verildiyse bağlantının kendisi de (readlink için) okunabilmeli.
+        var readableFiles = [archivePath]
+        var info = stat()
+        if lstat(archive.path, &info) == 0, info.st_mode & S_IFMT == S_IFLNK { readableFiles.append(archive.standardizedFileURL) }
+        return SandboxProfile(
+            writableDirectories: writable, deniedReadDirectories: denied, writableFiles: writableFiles.map(resolved), readableFiles: readableFiles
+        )
+    }
+
+    /// Çok parçalı bir arşiv mi (".001", ".z01", ".r00", ".part1.rar")? 7zz kardeş parçaları aynı klasörden okur.
+    static func needsSiblingVolumes(_ url: URL) -> Bool {
+        let ext = url.pathExtension
+        if ext.count == 3, ext.allSatisfy(\.isNumber) { return true }
+        if ArchiveNaming.isOldRarVolume(ext) || ArchiveNaming.isSplitZipVolume(ext) { return true }
+        return ext.lowercased() == "rar" && ArchiveNaming.isPartVolumeSuffix((url.deletingPathExtension().lastPathComponent as NSString).pathExtension)
     }
 
     /// Sembolik bağlantıları çöz (/tmp → /private/tmp, /var → /private/var); çekirdek gerçek yolları denetler.
@@ -86,12 +115,23 @@ public struct SandboxProfile: Sendable, Equatable {
     /// SBPL kuralları. Yollar `-D` parametreleriyle verilir; tırnak ya da kaçış sorunu olmaz.
     public var profileText: String {
         var lines = ["(version 1)", "(allow default)", "(deny network*)", "(deny file-write*)"]
-        let writes = ["(subpath \"/dev\")"] + writableDirectories.indices.map { "(subpath (param \"W\($0)\"))" }
+        var writes = ["(subpath \"/dev\")"] + writableDirectories.indices.map { "(subpath (param \"W\($0)\"))" }
+        writes += writableFiles.indices.map { "(literal (param \"A\($0)\"))" }
         lines.append("(allow file-write* \(writes.joined(separator: " ")))")
         if !deniedReadDirectories.isEmpty {
             let reads = deniedReadDirectories.indices.map { "(subpath (param \"R\($0)\"))" }
             lines.append("(deny file-read* \(reads.joined(separator: " ")))")
         }
+        // Yasaklı klasördeki arşivin kendisi: izin yasaktan SONRA gelir (son eşleşen kural kazanır).
+        if !readableFiles.isEmpty {
+            let files = readableFiles.indices.map { "(literal (param \"F\($0)\"))" }
+            lines.append("(allow file-read* \(files.joined(separator: " ")))")
+        }
+        // Ele geçirilmiş bir 7zz (bozuk arşivle tetiklenen ayrıştırıcı hatası) başka program çalıştıramaz ve mach
+        // servislerine (AppleEvents, launchd) ulaşamaz; yalnızca 7zz'nin kendisi çalıştırılabilir.
+        lines.append("(deny mach-lookup)")
+        lines.append("(deny process-exec)")
+        lines.append("(allow process-exec (literal (param \"E\")))")
         return lines.joined(separator: "\n")
     }
 
@@ -99,7 +139,11 @@ public struct SandboxProfile: Sendable, Equatable {
     public func launchArguments(executable: URL, arguments: [String]) -> [String] {
         var result = ["-p", profileText]
         for (index, url) in writableDirectories.enumerated() { result += ["-D", "W\(index)=\(url.path)"] }
+        for (index, url) in writableFiles.enumerated() { result += ["-D", "A\(index)=\(url.path)"] }
         for (index, url) in deniedReadDirectories.enumerated() { result += ["-D", "R\(index)=\(url.path)"] }
+        for (index, url) in readableFiles.enumerated() { result += ["-D", "F\(index)=\(url.path)"] }
+        // Çekirdek gerçek yolu denetler: bağlantı üzerinden verilen bir motor yolu da çözülür.
+        result += ["-D", "E=\(Self.resolved(executable).path)"]
         return result + [executable.path] + arguments
     }
 }

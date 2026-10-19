@@ -16,9 +16,22 @@ public enum StagedExtraction {
             return replacement
         }
         // Bazı birimlerde (ör. ağ paylaşımları) sistem klasörü verilemez; hedefin yanında gizli bir klasör kullanılır.
-        let fallback = anchor.appendingPathComponent(".arhivar-staging-\(UUID().uuidString)", isDirectory: true)
+        // Sistem klasörünü OS temizler; bu yedek klasörler çökme ya da zorla kapanışta kalır: eskileri burada süpürülür.
+        sweepStaleStaging(in: anchor, fileManager: fileManager)
+        let fallback = anchor.appendingPathComponent(stagingPrefix + UUID().uuidString, isDirectory: true)
         try fileManager.createDirectory(at: fallback, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         return fallback
+    }
+
+    static let stagingPrefix = ".arhivar-staging-"
+
+    /// Bir çökmeden kalan, `age` saniyeden eski yedek hazırlık klasörlerini siler.
+    static func sweepStaleStaging(in directory: URL, olderThan age: TimeInterval = 3600, now: Date = Date(), fileManager: FileManager = .default) {
+        for name in (try? entries(ofDirectory: directory.path)) ?? [] where name.hasPrefix(stagingPrefix) {
+            let url = directory.appendingPathComponent(name)
+            let modified = (try? fileManager.attributesOfItem(atPath: url.path)[.modificationDate] as? Date) ?? .distantPast
+            if now.timeIntervalSince(modified) > age { removeTree(at: url, fileManager: fileManager) }
+        }
     }
 
     /// Hazırlık klasöründe taşınacak içeriğin kökü. Klasör görünümünde bir alt klasördeyken seçilen öğeler
@@ -110,14 +123,18 @@ public enum StagedExtraction {
         from staging: URL, into destination: URL, policy: OverwriteMode, fileManager: FileManager = .default
     ) throws -> [URL] {
         try fileManager.createDirectory(at: destination, withIntermediateDirectories: true)
-        var changed: [URL] = []
-        for name in try entries(ofDirectory: staging.path) {
-            let item = staging.appendingPathComponent(name)
-            if let result = try mergeItem(item, into: destination.appendingPathComponent(name), policy: policy, fileManager: fileManager) {
-                changed.append(result)
+        // Önceki bir çıkarmadan kalan salt okunur (0555) hedef klasöre de taşınabilsin; kip sonra geri yüklenir
+        // (yoksa ilk öğede durulur ve hedef yarım güncellenmiş kalırdı).
+        return try OwnerAccess.granting(S_IWUSR | S_IXUSR, on: destination.path) {
+            var changed: [URL] = []
+            for name in try entries(ofDirectory: staging.path) {
+                let item = staging.appendingPathComponent(name)
+                if let result = try mergeItem(item, into: destination.appendingPathComponent(name), policy: policy, fileManager: fileManager) {
+                    changed.append(result)
+                }
             }
+            return changed
         }
-        return changed
     }
 
     private static func mergeItem(_ source: URL, into target: URL, policy: OverwriteMode, fileManager: FileManager) throws -> URL? {
@@ -157,9 +174,17 @@ public enum StagedExtraction {
                 Quarantine.ensure(mark, on: result)
                 return result
             }
-            // Türü farklı öğe (ör. dosyanın yerine klasör): içinde salt okunur klasörler olsa da silinir.
-            removeTree(at: target, fileManager: fileManager)
-            try fileManager.moveItem(at: source, to: target)
+            // Türü farklı öğe (ör. dosyanın yerine klasör): eski öğe önce yanına taşınır, yenisi yerine konur, sonra eski
+            // silinir. Önce silip sonra taşıyamamak (ör. içinde kilitli bir dosya varken) eski öğeyi yok ederdi.
+            let aside = target.deletingLastPathComponent().appendingPathComponent(".arhivar-replaced-" + UUID().uuidString)
+            try fileManager.moveItem(at: target, to: aside)
+            do {
+                try fileManager.moveItem(at: source, to: target)
+            } catch {
+                try? fileManager.moveItem(at: aside, to: target)
+                throw error
+            }
+            removeTree(at: aside, fileManager: fileManager)
             return target
         case .rename:
             let unique = uniqueURL(for: target, fileManager: fileManager)

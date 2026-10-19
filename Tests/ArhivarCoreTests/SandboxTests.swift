@@ -40,7 +40,9 @@ import Testing
     let inside = SandboxProfile.forOperation(
         archive: URL(fileURLWithPath: "/Users/ornek/.ssh/yedek.zip"), writable: [], protectPersonalData: true, home: home
     )
-    #expect(!inside.deniedReadDirectories.contains { $0.path.hasSuffix("/.ssh") })
+    // Arşiv kişisel bir klasörün içindeyse (ör. Mail eki) klasör yasaklı KALIR; yalnızca arşivin kendisi okunabilir.
+    #expect(inside.deniedReadDirectories.contains { $0.path.hasSuffix("/.ssh") })
+    #expect(inside.readableFiles.map(\.path) == ["/Users/ornek/.ssh/yedek.zip"])
 }
 
 private let engine: URL? = {

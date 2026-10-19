@@ -49,8 +49,11 @@ public enum SevenZipError: Error, Equatable, Sendable {
         if result.exitCode == 2, !archiveLevelError, !errors.isEmpty, errors.allSatisfy({ $0.contains("Dangerous link path was ignored") }) {
             return diagnostic(from: combined)
         }
-        // "Cannot open the file as archive", "Cannot open the file as [7z] archive", "Is not archive"
-        if combined.range(of: "open the file as", options: .caseInsensitive) != nil
+        // "Cannot open the file as archive", "Cannot open the file as [7z] archive", "Is not archive".
+        // Arşiv düzeyinde bir hata bloğu da varsa (ör. yarım inmiş dosya: "Unexpected end of archive") nedeni gösteren
+        // genel hata yeğlenir; "arşiv değil" demek yanıltırdı.
+        if !archiveLevelError,
+           combined.range(of: "open the file as", options: .caseInsensitive) != nil
             || combined.range(of: "is not archive", options: .caseInsensitive) != nil {
             throw SevenZipError.notArchive
         }
