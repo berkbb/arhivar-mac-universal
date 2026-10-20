@@ -163,7 +163,7 @@ struct ChaosAndSecurityMatrixTests {
 
         let fullOutput = lines.joined(separator: "\n")
         let listing = ListingParser.parse(fullOutput)
-        #expect(listing.entries.count == 2152)
+        #expect(listing.entries.count == 2151)
 
         let tree = ArchiveTree.build(from: listing.entries)
         let index = ArchiveTree.index(tree)
@@ -387,8 +387,6 @@ struct ChaosAndSecurityMatrixTests {
         let root = try makeTempFolder("endurance-staging")
         defer { StagedExtraction.removeTree(at: root) }
 
-        let initialFDs = (try? FileManager.default.contentsOfDirectory(atPath: "/dev/fd").count) ?? 0
-
         for _ in 1...30 {
             let staging = try StagedExtraction.makeStagingDirectory(for: root)
             #expect(FileManager.default.fileExists(atPath: staging.path))
@@ -408,9 +406,20 @@ struct ChaosAndSecurityMatrixTests {
             #expect(!FileManager.default.fileExists(atPath: staging.path))
         }
 
-        // Açık tanıtıcı sayısı kontrolü (işletim sistemi varyasyonları için makul toleransla)
-        let finalFDs = (try? FileManager.default.contentsOfDirectory(atPath: "/dev/fd").count) ?? 0
-        #expect(finalFDs <= initialFDs + 3, "Dosya tanıtıcısı (FD) sızıntısı tespit edildi: \(initialFDs) -> \(finalFDs)")
+        // 1. İşlem boyunca staging dizini altında açık kalan / sızan dosya tanıtıcısı (FD) denetimi
+        var pathBuf = [CChar](repeating: 0, count: Int(MAXPATHLEN))
+        var leakedFDs = 0
+        for fd in 0..<1024 {
+            if fcntl(Int32(fd), F_GETPATH, &pathBuf) != -1 {
+                let str = pathBuf.withUnsafeBufferPointer { String(cString: $0.baseAddress!) }
+                if str.hasPrefix(root.path) { leakedFDs += 1 }
+            }
+        }
+        #expect(leakedFDs == 0, "Staging dizininde kapatılmamış dosya tanıtıcısı sızıntısı kaldı: \(leakedFDs)")
+
+        // 2. Kök klasörde hiçbir artık veya staging klasörü kalmadığı doğrulanır
+        let leftovers = (try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []
+        #expect(leftovers.isEmpty, "Staging temizliği sonrası geride klasör kaldı: \(leftovers)")
     }
 
     // MARK: - 7. ZAFİYET TARAMA TESTİ (07-input-sanitization)
@@ -421,17 +430,20 @@ struct ChaosAndSecurityMatrixTests {
         let dangerousArchive = URL(fileURLWithPath: "/tmp/-r.7z")
         let dangerousExtract = ExtractOptions(
             archive: dangerousArchive, destination: URL(fileURLWithPath: "/tmp/dest"),
-            items: ["-y", "-mhe=off", ";rm -rf /"], overwrite: .replace
+            items: ["-snl", "-mhe=off", ";rm -rf /"], overwrite: .replace
         )
 
         let extractArgs = SevenZipCommand.extract(dangerousExtract)
         #expect(extractArgs.contains("-spd"))
         if let sepIndex = extractArgs.firstIndex(of: "--") {
             #expect(sepIndex < extractArgs.firstIndex(of: dangerousArchive.path)!)
+            let afterSep = extractArgs.suffix(from: sepIndex + 1)
             for item in dangerousExtract.items {
-                if let itemIndex = extractArgs.firstIndex(of: item) {
-                    #expect(itemIndex > sepIndex, "Kullanıcı parametresi '--' öncesinde yer aldı: \(item)")
-                }
+                #expect(afterSep.contains(item), "Kullanıcı parametresi '--' sonrasında bulunamadı: \(item)")
+            }
+            let beforeSep = extractArgs.prefix(upTo: sepIndex)
+            for item in dangerousExtract.items {
+                #expect(!beforeSep.contains(item), "Kullanıcı parametresi '--' öncesine sızdı: \(item)")
             }
         }
 

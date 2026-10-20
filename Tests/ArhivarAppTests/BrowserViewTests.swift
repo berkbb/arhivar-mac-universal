@@ -46,7 +46,10 @@ struct BrowserViewTests {
         let folder = workspace.appendingPathComponent("Şirket", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         for name in ["Dekont1.pdf", "EAR2026.pdf", "Ekran Resmi.png"] {
-            try Data(name.utf8).write(to: folder.appendingPathComponent(name))
+            let file = folder.appendingPathComponent(name)
+            try Data(name.utf8).write(to: file)
+            var info = [UInt8](repeating: 0, count: 32)
+            _ = setxattr(file.path, "com.apple.FinderInfo", &info, 32, 0, 0)
         }
         let zip = workspace.appendingPathComponent("Şirket.zip")
         let ditto = Process()
@@ -94,16 +97,16 @@ struct BrowserViewTests {
         model.openArchive(zip)
         await settle()
         await render(window)
-        #expect(model.displayNodes.map(\.id) == ["__MACOSX", "Şirket"])
+        #expect(model.displayNodes.map { $0.id.precomposedStringWithCanonicalMapping } == ["__MACOSX", "Şirket"])
 
         for back in [{ model.goTo("") }, { model.goUp() }] {
             model.primaryAction(["Şirket"])
             await render(window)
-            #expect(model.currentFolder == "Şirket")
+            #expect(model.currentFolder.precomposedStringWithCanonicalMapping == "Şirket")
             back()
             await render(window)
             #expect(model.currentFolder == "")
-            #expect(model.displayNodes.map(\.id) == ["__MACOSX", "Şirket"])
+            #expect(model.displayNodes.map { $0.id.precomposedStringWithCanonicalMapping } == ["__MACOSX", "Şirket"])
         }
 
         // Ağaç görünümüne geçiş ve geri dönüş de satırları yeniden kurar.
