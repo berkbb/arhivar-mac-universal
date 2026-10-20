@@ -165,8 +165,26 @@
   10. *Fuzzing Resilience:* `ListingParser.parse` recovers gracefully from malformed listings, unclosed brace blocks, missing fields, and negative sizes without unhandled fatal errors.
   11. *Chaos & Termination Escalation:* When a child process refuses SIGTERM cancellation, `CommandRunner` escalates to SIGKILL within 2 seconds. Owner permissions on unreadable files (`0o000` / `0o555`) are safely elevated and restored by `OwnerAccess`, and concurrent execution across 20 parallel async tasks operates reentrantly without race conditions.
 - **Lesson & Guardrail:** Dedicated matrix tests must be retained in `ChaosAndSecurityMatrixTests.swift` and executed on every CI and pre-release gate.
+---
 
+## Episode 19: SwiftUI `.quickLookPreview` Framework Trap on Rapid Key Toggles (`Cmd+Y` / `Space`)
+- **Context:** Rapidly toggling file previews inside an archive using `Cmd+Y` or `Space` 3 or more times consecutively.
+- **Root Cause:** Apple's private `_QuickLook_SwiftUI` framework has an unhandled condition on macOS Tahoe: when the binding `$model.quickLookURL` changes rapidly, `-[QLPreviewPanelController _doReloadDataIfNecessary]` executes Foundation KVO notifications where `currentPreviewItemIndex` evaluates to `NSNotFound` (`Int.max` = `0x7fffffffffffffff`). Apple's internal Swift closure in `_QuickLook_SwiftUI` performs an out-of-bounds array subscript or range check with `Int.max`, triggering an immediate `EXC_BREAKPOINT` / `SIGTRAP` fatal trap that crashes the application process.
+- **Solution & Guardrail:**
+  1. Remove SwiftUI's `.quickLookPreview` modifier entirely from views.
+  2. Implement a dedicated AppKit `QuickLookCoordinator` managing the native `QLPreviewPanel.shared()` singleton conforming to `QLPreviewPanelDataSource` and `QLPreviewPanelDelegate`.
+  3. Wire AppKit responder methods `acceptsPreviewPanelControl`, `beginPreviewPanelControl`, and `endPreviewPanelControl` on `AppDelegate`.
+  4. Intercept `Space` (key code 49) and `Esc` (key code 53) in `previewPanel(_:handle:)` to ensure clean keyboard dismissal.
+  5. In headless unit testing environments (`isTesting`), bypass `makeKeyAndOrderFront` and asynchronous window visibility KVO observation to prevent background tasks from prematurely clearing `model.quickLookURL`.
 
+---
 
-
-
+## Episode 19: SwiftUI `.quickLookPreview` Framework Trap on Rapid Key Toggles (`Cmd+Y` / `Space`)
+- **Context:** Rapidly toggling file previews inside an archive using `Cmd+Y` or `Space` 3 or more times consecutively.
+- **Root Cause:** Apple's private `_QuickLook_SwiftUI` framework has an unhandled condition on macOS Tahoe: when the binding `$model.quickLookURL` changes rapidly, `-[QLPreviewPanelController _doReloadDataIfNecessary]` executes Foundation KVO notifications where `currentPreviewItemIndex` evaluates to `NSNotFound` (`Int.max` = `0x7fffffffffffffff`). Apple's internal Swift closure in `_QuickLook_SwiftUI` performs an out-of-bounds array subscript or range check with `Int.max`, triggering an immediate `EXC_BREAKPOINT` / `SIGTRAP` fatal trap that crashes the application process.
+- **Solution & Guardrail:**
+  1. Remove SwiftUI's `.quickLookPreview` modifier entirely from views.
+  2. Implement a dedicated AppKit `QuickLookCoordinator` managing the native `QLPreviewPanel.shared()` singleton conforming to `QLPreviewPanelDataSource` and `QLPreviewPanelDelegate`.
+  3. Wire AppKit responder methods `acceptsPreviewPanelControl`, `beginPreviewPanelControl`, and `endPreviewPanelControl` on `AppDelegate`.
+  4. Intercept `Space` (key code 49) and `Esc` (key code 53) in `previewPanel(_:handle:)` to ensure clean keyboard dismissal.
+  5. In headless unit testing environments (`isTesting`), bypass `makeKeyAndOrderFront` and asynchronous window visibility KVO observation to prevent background tasks from prematurely clearing `model.quickLookURL`.

@@ -935,6 +935,46 @@ struct AppModelTests {
         #expect(model.displayRebuildCount - before == 1)
     }
 
+    /// Arka arkaya hızlıca Cmd+Y / Boşluk yapıldığında (ör. 5 kez üst üste) çökmeden açılıp kapanmalıdır.
+    @Test func quickLookRapidTogglesDoNotCrash() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let archive = try await fixture.makeArchive("rapid.7z", format: .sevenZip)
+        let model = fixture.model
+        model.openArchive(archive)
+        await fixture.settle()
+
+        // 1. Aç (not.txt)
+        model.toggleQuickLook("kaynak/not.txt")
+        await fixture.settle()
+        #expect(model.quickLookURL?.lastPathComponent == "not.txt")
+
+        // 2. Kapat
+        model.toggleQuickLook("kaynak/not.txt")
+        await fixture.settle()
+        #expect(model.quickLookURL == nil)
+
+        // 3. Yeniden Aç (Cmd+Y 3. kez basılmış gibi)
+        model.toggleQuickLook("kaynak/not.txt")
+        await fixture.settle()
+        #expect(model.quickLookURL?.lastPathComponent == "not.txt")
+
+        // 4. Kapat
+        model.toggleQuickLook("kaynak/not.txt")
+        await fixture.settle()
+        #expect(model.quickLookURL == nil)
+
+        // 5. Yeniden Aç
+        model.toggleQuickLook("kaynak/not.txt")
+        await fixture.settle()
+        #expect(model.quickLookURL?.lastPathComponent == "not.txt")
+
+        // 6. Parametresiz kapat
+        model.toggleQuickLook()
+        #expect(model.quickLookURL == nil)
+    }
+
     /// P1-7: aynı klasördeki bir öğenin adına (büyük/küçük harf duyarsız) yeniden adlandırılmaz.
     @Test func renameRejectsSiblingNames() async throws {
         let fixture = try Fixture()

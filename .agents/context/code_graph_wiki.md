@@ -35,6 +35,7 @@
 | `AppModel.swift` | `AppModel`, `ArchiveContext`, `PendingAction`, `EngineStatus`, `UpdateState`, `AppUpdateState` | Central `@Observable` state machine, async `7zz` workflows, off-main tree building, debounced async search (`searchTask`, `isSearching`), nested archive stack (`archiveStack` with cached trees), password retry queue, Finder service queue (`serviceQueue`) |
 | `AppSettings.swift` | `AppSettings`, `AppAppearance`, `ExtractLocation` | `UserDefaults`-backed preferences, legacy `extractIntoSubfolder` migration, locale-aware byte/date/percent formatting |
 | `FinderServices.swift` | `FinderServices` | macOS `NSServices` handler for `extractHere`, `openArchive`, and `compress` |
+| `QuickLookCoordinator.swift` | `QuickLookCoordinator` | Native AppKit `QLPreviewPanel.shared()` singleton coordinator replacing SwiftUI `.quickLookPreview` to prevent rapid toggle crash |
 | `Views/ContentView.swift` | `ContentView`, `InfoToolbarButton`, `EditDialogs` | `NavigationSplitView` shell, toolbar, drop target, alerts, sheets, and edit confirmation dialogs |
 | `Views/ArchiveBrowserView.swift` | `ArchiveBrowserView`, `NameCell`, `PathBar`, `StatusBarView`, `ArchiveInfoView`, `ProgressOverlay`, `ToastView`, `FileIcons` | Hierarchical `Table`, breadcrumb path bar with nested archive crumbs and folder drop targets, status bar, info popover, bounded icon cache |
 | `Views/CreateArchiveSheet.swift` | `CreateArchiveSheet`, `PasswordSheet` | New Archive modal form, duplicate source basename disambiguation, validation messages, password unlock sheet |

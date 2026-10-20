@@ -1,5 +1,6 @@
 import AppKit
 import ArhivarCore
+@preconcurrency import QuickLookUI
 import SwiftUI
 
 @main
@@ -45,6 +46,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Finder sağ tık menüsündeki "Hızlı Eylemler / Servisler" öğeleri.
         NSApp.servicesProvider = services
         NSUpdateDynamicServices()
+    }
+
+    nonisolated override func acceptsPreviewPanelControl(_ panel: QLPreviewPanel!) -> Bool {
+        true
+    }
+
+    nonisolated override func beginPreviewPanelControl(_ panel: QLPreviewPanel!) {
+        MainActor.assumeIsolated {
+            panel.dataSource = QuickLookCoordinator.shared
+            panel.delegate = QuickLookCoordinator.shared
+        }
+    }
+
+    nonisolated override func endPreviewPanelControl(_ panel: QLPreviewPanel!) {
+        MainActor.assumeIsolated {
+            QuickLookCoordinator.shared.handlePanelDidClose()
+        }
     }
 
     /// Finder'dan "Birlikte Aç" ile gelen arşivler.

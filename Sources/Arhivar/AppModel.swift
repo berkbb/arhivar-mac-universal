@@ -167,7 +167,18 @@ final class AppModel {
     var createRequest: CreateRequest?
     var isDropTargeted = false
     var showInfo = false
-    var quickLookURL: URL?
+    var quickLookURL: URL? {
+        didSet {
+            guard quickLookURL != oldValue else { return }
+            if let url = quickLookURL {
+                QuickLookCoordinator.shared.show(url: url) { [weak self] in
+                    self?.quickLookURL = nil
+                }
+            } else {
+                QuickLookCoordinator.shared.close()
+            }
+        }
+    }
     var renameRequest: RenameRequest?
     var deleteRequest: DeleteRequest?
     var addRequest: AddRequest?

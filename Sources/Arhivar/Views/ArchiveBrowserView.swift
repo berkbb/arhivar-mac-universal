@@ -58,7 +58,6 @@ struct ArchiveBrowserView: View {
             model.primaryAction(model.selection)
             return .handled
         }
-        .quickLookPreview($model.quickLookURL)
         .overlay {
             if model.displayNodes.isEmpty {
                 if model.isSearching {
