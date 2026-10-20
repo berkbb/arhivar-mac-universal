@@ -48,14 +48,14 @@ A native archive manager for macOS 26+, built with SwiftUI and Liquid Glass on t
 
 Double-click in Finder:
 
-- **`Paketle.command`** (package): runs the tests and produces a universal `build/Arhivar.app` plus a `.dmg`, an Ed25519 signature (`.dmg.sig`) and a SHA-256 file under `dist/`.
+- **`Paketle.command`** (package): runs the tests and produces a universal `build/Arhivar.app` plus a `.dmg`, an Ed25519 signature (`.dmg.sig`) and a `SHA256SUMS.txt` checksum file under `dist/`.
 - **`7-Zip-Guncelle.command`** (update 7-Zip): updates `Vendor/7-Zip` and, if present, the 7-Zip copy inside `build/Arhivar.app` to the latest version.
 - **`Yayimla.command`** (publish): first shows what it will do in dry-run mode. If you confirm, it packages the release and uploads it to GitHub Releases with a `v<version>` tag. GitHub Actions is not used; everything runs on this Mac.
 
 The same tasks from the terminal:
 
 ```bash
-./Scripts/package.sh                  # tests + universal .app + .dmg + .dmg.sig + .sha256
+./Scripts/package.sh                  # tests + universal .app + .dmg + .dmg.sig + SHA256SUMS.txt
 ./Scripts/package.sh --update-7zip    # update 7-Zip first, then package
 ./Scripts/build_app.sh                # build/Arhivar.app only
 ./Scripts/update-7zip.sh check        # is a newer 7-Zip available?

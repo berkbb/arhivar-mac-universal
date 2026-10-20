@@ -74,11 +74,10 @@ fi
 
 echo "▸ SHA-256 özetleri oluşturuluyor…"
 (cd "$DIST" && shasum -a 256 "$NAME.dmg" > SHA256SUMS.txt)
-cp "$DIST/SHA256SUMS.txt" "$DIST/$NAME.sha256"
 
 echo "✓ Paketler hazır:"
 # ls | awk '{ print $9 }' boşluk içeren yolları keserdi; boyut ve yol ayrı ayrı yazılır.
-READY_FILES=("$DIST/$NAME.dmg" "$DIST/SHA256SUMS.txt" "$DIST/$NAME.sha256")
+READY_FILES=("$DIST/$NAME.dmg" "$DIST/SHA256SUMS.txt")
 if [ -f "$DMG_PATH.sig" ]; then
   READY_FILES+=("$DMG_PATH.sig")
 fi
