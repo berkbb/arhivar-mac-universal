@@ -4,6 +4,8 @@
 <dict>
 	<key>ArhivarRepository</key>
 	<string>berkbb/arhivar-mac-universal</string>
+	<key>ArhivarUpdatePublicEDKey</key>
+	<string>UVeX9fORWNxY2zDuN2tfLASLUSxMpatvtNet6gj2n/w=</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>tr</string>
 	<key>CFBundleDisplayName</key>

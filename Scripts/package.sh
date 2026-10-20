@@ -58,10 +58,32 @@ cp "$ROOT/LICENSE" "$STAGING/LICENSE.txt"
 cp "$ROOT/THIRD_PARTY_NOTICES.md" "$STAGING/THIRD_PARTY_NOTICES.txt"
 hdiutil create -quiet -volname "Arhivar $VERSION" -srcfolder "$STAGING" -fs HFS+ -format UDZO "$DIST/$NAME.dmg"
 
-(cd "$DIST" && shasum -a 256 "$NAME.zip" "$NAME.dmg" > "$NAME.sha256")
+DMG_PATH="$DIST/$NAME.dmg"
+SIGNING_TOOL=(xcrun swift "$ROOT/Scripts/update_signing.swift")
+APP_PUBLIC_KEY="$(/usr/libexec/PlistBuddy -c 'Print :ArhivarUpdatePublicEDKey' "$ROOT/Support/Info.plist" 2>/dev/null || true)"
+
+if [ -n "$APP_PUBLIC_KEY" ]; then
+  KEYCHAIN_PUBLIC_KEY="$("${SIGNING_TOOL[@]}" public-key 2>/dev/null || true)"
+  if [ "$APP_PUBLIC_KEY" = "$KEYCHAIN_PUBLIC_KEY" ]; then
+    echo "▸ DMG imzalanıyor (Ed25519)…"
+    "${SIGNING_TOOL[@]}" sign "$DMG_PATH" > "$DMG_PATH.sig"
+    "${SIGNING_TOOL[@]}" verify "$DMG_PATH" "$(cat "$DMG_PATH.sig")" "$APP_PUBLIC_KEY"
+    echo "✓ İmza doğrulandı ($DMG_PATH.sig)"
+  else
+    echo "UYARI: Keychain anahtarı ile Info.plist'teki ArhivarUpdatePublicEDKey uyuşmuyor; .sig üretilemedi." >&2
+  fi
+fi
+
+echo "▸ SHA-256 özetleri oluşturuluyor…"
+(cd "$DIST" && shasum -a 256 "$NAME.dmg" "$NAME.zip" > SHA256SUMS.txt)
+cp "$DIST/SHA256SUMS.txt" "$DIST/$NAME.sha256"
 
 echo "✓ Paketler hazır:"
 # ls | awk '{ print $9 }' boşluk içeren yolları keserdi; boyut ve yol ayrı ayrı yazılır.
-for file in "$DIST/$NAME.zip" "$DIST/$NAME.dmg" "$DIST/$NAME.sha256"; do
+READY_FILES=("$DIST/$NAME.zip" "$DIST/$NAME.dmg" "$DIST/SHA256SUMS.txt" "$DIST/$NAME.sha256")
+if [ -f "$DMG_PATH.sig" ]; then
+  READY_FILES+=("$DMG_PATH.sig")
+fi
+for file in "${READY_FILES[@]}"; do
   printf '   %s\t%s\n' "$(du -h "$file" | cut -f1)" "$file"
 done

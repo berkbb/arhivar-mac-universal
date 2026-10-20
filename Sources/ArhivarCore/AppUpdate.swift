@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// GitHub Releases'teki bir Arhivar sürümü.
@@ -80,3 +81,60 @@ public enum AppUpdateChecker {
         return try parse(data)
     }
 }
+
+// MARK: - Ed25519 Update Signatures
+
+public enum UpdateSignature {
+    public static let publicKeyInfoKey = "ArhivarUpdatePublicEDKey"
+
+    /// The base64 Ed25519 public key that release DMGs must be signed with.
+    public static var bundledPublicKey: String? {
+        Bundle.main.object(forInfoDictionaryKey: publicKeyInfoKey) as? String
+    }
+
+    /// Returns true when `signatureBase64` is a valid Ed25519 signature of the file for `publicKeyBase64`.
+    public static func isValid(fileURL: URL, signatureBase64: String, publicKeyBase64: String) throws -> Bool {
+        guard
+            let signature = Data(base64Encoded: signatureBase64.trimmingCharacters(in: .whitespacesAndNewlines)),
+            let publicKeyData = Data(base64Encoded: publicKeyBase64),
+            let publicKey = try? Curve25519.Signing.PublicKey(rawRepresentation: publicKeyData)
+        else {
+            return false
+        }
+        let data = try Data(contentsOf: fileURL, options: .mappedIfSafe)
+        return publicKey.isValidSignature(signature, for: data)
+    }
+}
+
+// MARK: - SHA-256 Checksums
+
+public enum UpdateChecksums {
+    /// Parses `shasum -a 256` output into a file name → lowercase hex digest map.
+    public static func parse(_ text: String) -> [String: String] {
+        var result: [String: String] = [:]
+        for line in text.split(whereSeparator: \.isNewline) {
+            let parts = line.split(maxSplits: 1, whereSeparator: \.isWhitespace)
+            guard parts.count == 2 else { continue }
+            let digest = parts[0].lowercased()
+            guard digest.count == 64, digest.allSatisfy(\.isHexDigit) else { continue }
+            var fileName = parts[1].trimmingCharacters(in: .whitespaces)
+            if fileName.hasPrefix("*") {
+                fileName.removeFirst()
+            }
+            result[fileName] = digest
+        }
+        return result
+    }
+
+    /// Streams the file through SHA-256 and returns the lowercase hex digest.
+    public static func sha256(of fileURL: URL) throws -> String {
+        let handle = try FileHandle(forReadingFrom: fileURL)
+        defer { try? handle.close() }
+        var hasher = SHA256()
+        while let chunk = try handle.read(upToCount: 1 << 20), !chunk.isEmpty {
+            hasher.update(data: chunk)
+        }
+        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+}
+

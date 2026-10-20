@@ -2,4 +2,5 @@
 build/
 dist/
 .swiftpm/
+.secrets/
 .DS_Store

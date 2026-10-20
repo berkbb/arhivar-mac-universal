@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Testing
 @testable import ArhivarCore
@@ -47,3 +48,43 @@ private func releaseJSON(tag: String, draft: Bool = false, prerelease: Bool = fa
     #expect(AppUpdateChecker.latestReleaseURL(repository: "berkbb/arhivar-mac-universal")?.absoluteString
         == "https://api.github.com/repos/berkbb/arhivar-mac-universal/releases/latest")
 }
+
+@Test func updateChecksumsParsingAndCalculation() throws {
+    let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("arhivar-test-\(UUID().uuidString).txt")
+    defer { try? FileManager.default.removeItem(at: tmp) }
+    try "hello arhivar".data(using: .utf8)!.write(to: tmp)
+
+    let hex = try UpdateChecksums.sha256(of: tmp)
+    #expect(!hex.isEmpty)
+    #expect(hex.count == 64)
+
+    let checksumsText = """
+    \(hex)  Arhivar-1.2.0.dmg
+    e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 *Arhivar-1.2.0.zip
+    """
+    let map = UpdateChecksums.parse(checksumsText)
+    #expect(map["Arhivar-1.2.0.dmg"] == hex)
+    #expect(map["Arhivar-1.2.0.zip"] == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+}
+
+@Test func updateSignatureVerification() throws {
+    let key = Curve25519.Signing.PrivateKey()
+    let pubKey = key.publicKey.rawRepresentation.base64EncodedString()
+
+    let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("arhivar-test-dmg-\(UUID().uuidString).bin")
+    defer { try? FileManager.default.removeItem(at: tmp) }
+    let data = Data(repeating: 0x42, count: 1024)
+    try data.write(to: tmp)
+
+    let sig = try key.signature(for: data).base64EncodedString()
+    #expect(try UpdateSignature.isValid(fileURL: tmp, signatureBase64: sig, publicKeyBase64: pubKey))
+
+    // Corrupted signature or payload
+    let badSig = sig.reversed().map(String.init).joined()
+    #expect(try !UpdateSignature.isValid(fileURL: tmp, signatureBase64: badSig, publicKeyBase64: pubKey))
+
+    let otherKey = Curve25519.Signing.PrivateKey()
+    let otherPub = otherKey.publicKey.rawRepresentation.base64EncodedString()
+    #expect(try !UpdateSignature.isValid(fileURL: tmp, signatureBase64: sig, publicKeyBase64: otherPub))
+}
+
