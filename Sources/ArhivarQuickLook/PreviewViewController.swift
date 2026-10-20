@@ -26,31 +26,22 @@ public final class PreviewViewController: NSViewController, QLPreviewingControll
                 }
             }
             do {
-                guard let engineURL = EngineLocator.locate(customPath: nil) else {
-                    presentError("7-Zip (7zz) motoru bulunamadı.", for: url)
-                    handler(nil)
-                    return
+                let fallbackName = ArchiveNaming.streamItemName(for: url)
+                let listing: ArchiveListing
+                if let result = await runEngineList(for: url) {
+                    if SevenZipError.needsPassword(result) {
+                        presentEncryptedHeaders(for: url)
+                        handler(nil)
+                        return
+                    }
+                    try SevenZipError.check(result)
+                    listing = ListingParser.parse(result.stdout, fallbackName: fallbackName)
+                } else {
+                    // Quick Look kum havuzu ("quicklook-preview") alt süreç başlatmayı yasaklar: liste süreç içinde okunur.
+                    listing = try await Task.detached {
+                        try LibArchiveReader.list(archive: url, fallbackName: fallbackName)
+                    }.value
                 }
-
-                let result: ProcessResult
-                do {
-                    let profile = SandboxProfile.forOperation(archive: url, writable: [], protectPersonalData: true)
-                    let sandboxedRunner = CommandRunner(executableURL: engineURL, sandbox: profile)
-                    result = try await sandboxedRunner.run(SevenZipCommand.list(archive: url))
-                } catch {
-                    // Quick Look eklenti ortamında sandbox-exec kısıtlıysa doğrudan 7zz ile çalıştır:
-                    let directRunner = CommandRunner(executableURL: engineURL)
-                    result = try await directRunner.run(SevenZipCommand.list(archive: url))
-                }
-
-                if SevenZipError.needsPassword(result) {
-                    presentEncryptedHeaders(for: url)
-                    handler(nil)
-                    return
-                }
-
-                try SevenZipError.check(result)
-                let listing = ListingParser.parse(result.stdout, fallbackName: ArchiveNaming.streamItemName(for: url))
                 let statistics = ArchiveStatistics(listing: listing)
                 let tree = ArchiveTree.build(from: listing.entries)
                 let isEncrypted = listing.entries.contains { $0.isEncrypted }
@@ -63,7 +54,7 @@ public final class PreviewViewController: NSViewController, QLPreviewingControll
                     isEncrypted: isEncrypted
                 )
                 handler(nil)
-            } catch SevenZipError.wrongPassword {
+            } catch SevenZipError.wrongPassword, LibArchiveReader.ReadError.encryptedHeaders {
                 presentEncryptedHeaders(for: url)
                 handler(nil)
             } catch {
@@ -71,6 +62,17 @@ public final class PreviewViewController: NSViewController, QLPreviewingControll
                 handler(nil)
             }
         }
+    }
+
+    /// 7zz ile listeler; motor bulunamaz ya da başlatılamazsa (kum havuzu engeli) nil döner.
+    private func runEngineList(for url: URL) async -> ProcessResult? {
+        guard let engineURL = EngineLocator.locate(customPath: nil) else { return nil }
+        let profile = SandboxProfile.forOperation(archive: url, writable: [], protectPersonalData: true)
+        if let result = try? await CommandRunner(executableURL: engineURL, sandbox: profile).run(SevenZipCommand.list(archive: url)) {
+            return result
+        }
+        // Quick Look eklenti ortamında sandbox-exec kısıtlıysa doğrudan 7zz ile çalıştır:
+        return try? await CommandRunner(executableURL: engineURL).run(SevenZipCommand.list(archive: url))
     }
 
     // MARK: - Görünüm Sunumu

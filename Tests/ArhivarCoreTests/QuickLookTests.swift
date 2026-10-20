@@ -45,3 +45,89 @@ import Testing
         #expect(SevenZipError.needsPassword(result))
     }
 }
+
+/// Quick Look kum havuzu 7zz'nin başlatılmasını yasaklar; liste yerleşik libarchive ile süreç içinde okunur.
+@Suite(.serialized) struct LibArchiveReaderTests {
+    let workspace: URL
+
+    init() throws {
+        workspace = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ArhivarLibArchive-\(UUID().uuidString)", isDirectory: true)
+        let source = workspace.appendingPathComponent("kaynak/alt", isDirectory: true)
+        try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
+        try "merhaba dünya\n".write(to: workspace.appendingPathComponent("kaynak/not.txt"), atomically: true, encoding: .utf8)
+        try String(repeating: "veri ", count: 200).write(to: source.appendingPathComponent("şirket.txt"), atomically: true, encoding: .utf8)
+    }
+
+    private func run(_ tool: String, _ arguments: [String]) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: tool)
+        process.arguments = arguments
+        process.currentDirectoryURL = workspace
+        try process.run()
+        process.waitUntilExit()
+        #expect(process.terminationStatus == 0)
+    }
+
+    @Test func listsTarGzipWithUnicodeNames() throws {
+        defer { try? FileManager.default.removeItem(at: workspace) }
+        let archive = workspace.appendingPathComponent("test.tar.gz")
+        try run("/usr/bin/tar", ["-czf", archive.path, "kaynak"])
+
+        let listing = try LibArchiveReader.list(archive: archive)
+        #expect(listing.info.type == "tar")
+        let file = try #require(listing.entries.first { $0.path == "kaynak/alt/şirket.txt" })
+        #expect(file.size == 1000)
+        #expect(file.modified != nil)
+        #expect(listing.entries.contains { $0.path == "kaynak/alt" && $0.isDirectory })
+        #expect(ArchiveStatistics(listing: listing).fileCount == 2)
+    }
+
+    @Test func listsZip() throws {
+        defer { try? FileManager.default.removeItem(at: workspace) }
+        let archive = workspace.appendingPathComponent("test.zip")
+        try run("/usr/bin/zip", ["-qr", archive.path, "kaynak"])
+
+        let listing = try LibArchiveReader.list(archive: archive)
+        #expect(listing.info.type == "zip")
+        #expect(listing.entries.contains { $0.path == "kaynak/not.txt" && $0.size == 15 })
+    }
+
+    @Test func listsSingleStreamGzipUnderFallbackName() throws {
+        defer { try? FileManager.default.removeItem(at: workspace) }
+        try run("/usr/bin/gzip", ["-k", "kaynak/not.txt"])
+        let archive = workspace.appendingPathComponent("kaynak/not.txt.gz")
+
+        let listing = try LibArchiveReader.list(archive: archive, fallbackName: "not.txt")
+        #expect(listing.info.type == "gzip")
+        #expect(listing.entries.map(\.path) == ["not.txt"])
+    }
+
+    /// 7z arşivleri depodaki 7zz ile oluşturulur; yoksa atlanır.
+    static let sevenZip = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("Vendor/7-Zip/7zz")
+
+    @Test(.enabled(if: FileManager.default.isExecutableFile(atPath: sevenZip.path)))
+    func listsSevenZipAndDetectsEncryptedHeaders() throws {
+        defer { try? FileManager.default.removeItem(at: workspace) }
+        let plain = workspace.appendingPathComponent("Şirket.7z")
+        try run(Self.sevenZip.path, ["a", "-bso0", plain.path, "kaynak"])
+        let listing = try LibArchiveReader.list(archive: plain)
+        #expect(listing.info.type == "7z")
+        #expect(listing.entries.contains { $0.path == "kaynak/alt/şirket.txt" && $0.size == 1000 })
+
+        let locked = workspace.appendingPathComponent("gizli.7z")
+        try run(Self.sevenZip.path, ["a", "-bso0", "-pGizli-123", "-mhe=on", locked.path, "kaynak"])
+        #expect(throws: LibArchiveReader.ReadError.encryptedHeaders) {
+            try LibArchiveReader.list(archive: locked)
+        }
+    }
+
+    @Test func rejectsNonArchive() throws {
+        defer { try? FileManager.default.removeItem(at: workspace) }
+        #expect(throws: LibArchiveReader.ReadError.self) {
+            try LibArchiveReader.list(archive: workspace.appendingPathComponent("kaynak/not.txt"))
+        }
+    }
+}

@@ -5,6 +5,10 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ## [Unreleased]
 
+### Fixed
+
+- Finder Quick Look previews no longer fail with "7-Zip (7zz) engine not found". Quick Look extensions run under the system `quicklook-preview` sandbox profile, which forbids launching child processes, so the bundled `7zz` can never run there. The extension now falls back to listing archives in-process with macOS's built-in libarchive (`LibArchiveReader`, `CLibArchive` target), including header-encrypted 7z detection and single-stream `.gz`/`.xz`/`.bz2` files.
+
 ## [1.3.1] — 2026-10-20
 
 ### Fixed

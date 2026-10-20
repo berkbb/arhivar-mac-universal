@@ -6,7 +6,9 @@ let package = Package(
     platforms: [.macOS(.v26)],
     targets: [
         // 7zz çalıştırma, çıktı ayrıştırma ve yerelleştirme mantığı (arayüzden bağımsız, test edilebilir).
-        .target(name: "ArhivarCore"),
+        .target(name: "ArhivarCore", dependencies: ["CLibArchive"]),
+        // macOS'un yerleşik libarchive kitaplığı: 7zz çalıştırılamayan Quick Look kum havuzunda arşiv listesi için.
+        .target(name: "CLibArchive", linkerSettings: [.linkedLibrary("archive")]),
         // SwiftUI arayüzü.
         .executableTarget(
             name: "Arhivar",

@@ -11,6 +11,7 @@
 
 | File | Primary Symbols | Responsibilities |
 | :--- | :--- | :--- |
+| `LibArchiveReader.swift` | `LibArchiveReader`, `LibArchiveReader.ReadError` | In-process, read-only archive listing through system libarchive (`CLibArchive` target) for the Quick Look sandbox; raw-stream fallback, encrypted-header detection, `maxEntries` cap |
 | `CommandRunner.swift` | `ProcessResult`, `SevenZipError`, `ProgressParser`, `CommandRunner`, `ProcessBox`, `RunState` | Async subprocess execution, `stdin` pipe feeding, `-bsp1` progress parsing, `SIGTERM` + 2s `SIGKILL` escalation, exit code classification |
 | `ArchiveOptions.swift` | `ArchiveFormat`, `CompressionLevel`, `OverwriteMode`, `SubfolderMode`, `VolumeSize`, `CreateOptions`, `ExtractOptions`, `SevenZipCommand` | Format capabilities, CLI switch generation for `list`, `test`, `extract`, `create`, and two-step `.tar.*` (`tarStage`, `compressTarStage`) |
 | `ArchiveEditing.swift` | `ArchiveCapabilities` (`isEditable`, `supportsEditing`, `isWritable`), `SevenZipCommand.add/delete/rename`, `AddPlan` (`NothingToArchiveError`), `SpecialFiles`, `ItemExtractor` (`SymbolicLinkError`), `ArchiveItemTransfer`, `ArchiveTree` navigation helpers | In-place archive editing (multi-volume edit guard), `0o700` subfolder staging (`AddPlan`, skips FIFOs/sockets, refuses special-only sources), FIFO/socket/device exclusion (`-x!`, walks symlinked folders when links are followed), duplicate basename detection, per-target link containment and placeholder cleanup in item extraction, Finder drag-out (`Transferable`) |
@@ -51,7 +52,7 @@
 | File | Primary Symbols | Responsibilities |
 | :--- | :--- | :--- |
 | `main.swift` | `QuickLookMain`, `NSExtensionMain` | App Extension process entry point invoking `NSExtensionMain()` |
-| `PreviewViewController.swift` | `PreviewViewController`, `QLPreviewingController` | `NSViewController` implementing `preparePreviewOfFile(at:completionHandler:)`, resolving sandboxed `7zz`, parsing archive metadata, and hosting SwiftUI |
+| `PreviewViewController.swift` | `PreviewViewController`, `QLPreviewingController` | `NSViewController` implementing `preparePreviewOfFile(at:completionHandler:)`, listing via `7zz` when it can launch, otherwise in-process via `LibArchiveReader` (the `quicklook-preview` sandbox forbids child processes), and hosting SwiftUI |
 | `ArchiveQuickLookView.swift` | `ArchiveQuickLookView` | Native SwiftUI view displaying archive header, format/encryption badges, statistics banner, capped file table (300 items), and password-lock notices |
 | `Support/QuickLook-Info.plist` | `QLSupportedContentTypes`, `NSExtensionPrincipalClass` | Quick Look extension manifest declaring 13 supported archive UTTypes |
 

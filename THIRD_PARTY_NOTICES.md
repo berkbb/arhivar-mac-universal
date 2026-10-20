@@ -4,6 +4,12 @@ Arhivar's own source code is licensed under the MIT License (see `LICENSE`).
 Arhivar bundles and runs the following third-party software. Its license
 terms are **not** changed by Arhivar's license.
 
+## libarchive (macOS system library)
+
+- Linked dynamically from `/usr/lib/libarchive.2.dylib` (shipped with macOS); not bundled.
+- Used only by the Quick Look extension to list archive contents.
+- Project: https://www.libarchive.org — License: BSD 2-clause.
+
 ## 7-Zip (7zz console program)
 
 - Author: Igor Pavlov — https://www.7-zip.org
