@@ -28,8 +28,9 @@
 6. **Dual Path Representation (`path` vs. `archivePath`):**
    - Use normalized paths (`ListingParser.normalizedPath`: no leading `./`, no duplicate `//`, no trailing `/`) for `ArchiveEntry.path`, `ArchiveNode.id`, breadcrumbs, and UI selection.
    - Always pass the raw `archivePath` (`AppModel.archivePath(for:)`) to `7zz` commands (`x`, `d`, `rn`) so archives with `./`-prefixed entries match accurately.
-7. **Complete Trilingual Localization (`tr`, `en`, `ro`) & Mandatory 1:1 Exact Translation:**
-   - Whichever language is supported or added, **exact 1:1 translation across all supported languages is strictly mandatory without exception**.
+7. **Complete Trilingual Localization (`tr`, `en`, `ro`), Mandatory 1:1 Exact Translation & Dedicated File per Language:**
+   - Whichever language is supported or added, **exact 1:1 translation across all supported languages is strictly mandatory without exception, and each language must have its own dedicated file**.
+   - Every supported language must possess its own independent, dedicated localization file (`Resources/<lang>.lproj/Localizable.strings`). Languages must never be merged into shared monolithic files or omitted.
    - Every user-facing string in `Sources/Arhivar` must be defined in `LKey` (`Sources/ArhivarCore/Localization.swift`) and have matching, fully localized, non-fallback entries in `Resources/tr.lproj/Localizable.strings`, `Resources/en.lproj/Localizable.strings`, and `Resources/ro.lproj/Localizable.strings`.
    - Partial translations, missing keys, untranslated placeholder text, or English fallback copy left inside non-English tables are strictly prohibited. Positional format specifiers (`%1$@`, `%2$ld`, etc.) and argument count must match 1:1 identically across all language tables.
 8. **SwiftUI Hierarchical `Table` Safety:**

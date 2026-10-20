@@ -7,9 +7,10 @@
 
 ---
 
-## 1. Strict Ban on Hardcoded UI Strings & Mandatory 1:1 Exact Translation
+## 1. Strict Ban on Hardcoded UI Strings, Mandatory 1:1 Exact Translation & Dedicated File per Language
 
 - **Mandatory 1:1 Exact Translation (No Language Exceptions):** Whichever language is supported or added (`tr`, `en`, `ro`, or future additions), every single string key must have an authentic, idiomatic, and exact 1:1 translation across all language tables.
+- **Dedicated File per Language:** Each supported language must possess its own separate, dedicated localization file/table (`Resources/<lang>.lproj/Localizable.strings`). Languages must never be mixed into shared monolithic files or omitted, and each file must mirror the complete key set 1:1.
 - **Zero Fallback Tolerance:** Leaving placeholder text, English strings inside non-English tables, or missing keys is strictly prohibited. Every new feature, button, dialog, or menu item must be simultaneously translated into all active languages before merging or releasing.
 - Every user-visible string in `Sources/Arhivar/` must be retrieved via `settings.t(.key)` (or `model.t(.key)`) using a case of `LKey` (`Sources/ArhivarCore/Localization.swift`).
 - Every `LKey` case must exist in all three localization tables:
