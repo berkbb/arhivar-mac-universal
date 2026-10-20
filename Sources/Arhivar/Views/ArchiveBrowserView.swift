@@ -353,9 +353,12 @@ struct ArchiveInfoView: View {
 
 struct ProgressOverlay: View {
     let operation: OperationState
+    /// İşlem bitti; pencere yalnızca en az gösterim süresini dolduruyor (iptal edilecek bir şey yok).
+    var isFinishing = false
     @Environment(AppModel.self) private var model
     @Environment(AppSettings.self) private var settings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var appeared = false
 
     var body: some View {
         ZStack {
@@ -386,11 +389,18 @@ struct ProgressOverlay: View {
                 }
                 Button(settings.t(.buttonCancel), role: .cancel) { model.cancelOperation() }
                     .buttonStyle(.glass)
+                    .disabled(isFinishing)
             }
             .padding(30)
             .glassEffect(.regular, in: .rect(cornerRadius: 26))
+            // Kart hafifçe büyüyerek yerine oturur; arka plan karartması yalnızca solar.
+            .scaleEffect(appeared || reduceMotion ? 1 : 0.92)
+            .opacity(appeared || reduceMotion ? 1 : 0)
         }
         .transition(.opacity)
+        .onAppear {
+            withAnimation(.spring(duration: 0.45, bounce: 0.25)) { appeared = true }
+        }
     }
 
     private var symbol: String {

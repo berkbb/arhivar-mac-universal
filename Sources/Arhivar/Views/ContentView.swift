@@ -4,6 +4,16 @@ import SwiftUI
 struct ContentView: View {
     @Environment(AppModel.self) private var model
     @Environment(AppSettings.self) private var settings
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// İlerleme penceresi bir kez göründüyse en az bu kadar ekranda kalır: hızlı işlemlerde göz kırpar gibi
+    /// açılıp kapanmasın, yumuşakça belirip kaybolsun.
+    static let minimumOverlayDuration: Duration = .milliseconds(700)
+    /// İşlem bittiğinde en az süre dolana kadar gösterilen son durum (ilerleme tamamlanmış olarak).
+    @State private var finishingOperation: OperationState?
+    @State private var lastOperation: OperationState?
+    @State private var overlayShownAt = ContinuousClock.now
+    @State private var lingerTask: Task<Void, Never>?
 
     var body: some View {
         @Bindable var model = model
@@ -11,11 +21,16 @@ struct ContentView: View {
             SidebarView()
                 .navigationSplitViewColumnWidth(min: 200, ideal: 236, max: 320)
         } detail: {
-            if model.listing != nil {
-                ArchiveBrowserView()
-            } else {
-                WelcomeView()
+            ZStack {
+                if model.listing != nil {
+                    ArchiveBrowserView()
+                        .transition(.opacity)
+                } else {
+                    WelcomeView()
+                        .transition(.opacity)
+                }
             }
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: model.listing != nil)
         }
         .navigationTitle(model.archiveURL?.lastPathComponent ?? settings.t(.appName))
         .navigationSubtitle(subtitle)
@@ -25,10 +40,14 @@ struct ContentView: View {
             return !urls.isEmpty
         } isTargeted: { model.isDropTargeted = $0 }
         .overlay {
-            if let operation = model.operation {
-                ProgressOverlay(operation: operation)
+            if let operation = model.operation ?? finishingOperation {
+                ProgressOverlay(operation: operation, isFinishing: model.operation == nil)
+                    // Bitmiş işlemin kalan gösterimi tıklamaları engellemesin.
+                    .allowsHitTesting(model.operation != nil)
             }
         }
+        .onChange(of: model.operation?.id, initial: true) { _, id in operationChanged(id) }
+        .onChange(of: model.operation?.progress) { _, _ in lastOperation = model.operation ?? lastOperation }
         .overlay(alignment: .bottom) {
             if let toast = model.toast {
                 ToastView(toast: toast)
@@ -37,7 +56,7 @@ struct ContentView: View {
             }
         }
         .animation(.spring(duration: 0.35), value: model.toast)
-        .animation(.easeInOut(duration: 0.2), value: model.operation?.id)
+        .animation(.easeInOut(duration: reduceMotion ? 0.15 : 0.35), value: model.operation != nil || finishingOperation != nil)
         .sheet(item: $model.createRequest) { CreateArchiveSheet(request: $0) }
         .sheet(item: $model.passwordRequest) { PasswordSheet(request: $0) }
         .alert(
@@ -55,6 +74,30 @@ struct ContentView: View {
             Text(alert.message)
         }
         .modifier(EditDialogs())
+    }
+
+    /// İşlem başladığında zamanı kaydeder; bittiğinde pencere en az süreyi doldurmadıysa son durumu (ilerleme
+    /// tamamlanmış olarak) kalan süre boyunca gösterir. Model zamanlaması değişmez: yalnızca görünüm bekletilir.
+    private func operationChanged(_ id: OperationState.ID?) {
+        if id != nil {
+            lingerTask?.cancel()
+            lingerTask = nil
+            finishingOperation = nil
+            if lastOperation == nil { overlayShownAt = .now }
+            lastOperation = model.operation
+            return
+        }
+        guard var last = lastOperation else { return }
+        lastOperation = nil
+        let remaining = Self.minimumOverlayDuration - (ContinuousClock.now - overlayShownAt)
+        guard remaining > .zero else { return }
+        if last.progress != nil { last.progress = 1 }
+        finishingOperation = last
+        lingerTask = Task {
+            try? await Task.sleep(for: remaining)
+            guard !Task.isCancelled else { return }
+            finishingOperation = nil
+        }
     }
 
     private var subtitle: String {
