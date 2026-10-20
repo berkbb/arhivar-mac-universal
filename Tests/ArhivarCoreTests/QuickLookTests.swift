@@ -124,6 +124,60 @@ import Testing
         }
     }
 
+    /// Yarıda kesilmiş arşiv (eksik indirme) çökmeden okunamaz hatası verir.
+    @Test func truncatedArchiveThrowsInsteadOfCrashing() throws {
+        defer { try? FileManager.default.removeItem(at: workspace) }
+        let archive = workspace.appendingPathComponent("yarim.tar.gz")
+        try run("/usr/bin/tar", ["-czf", archive.path, "kaynak"])
+        let data = try Data(contentsOf: archive)
+        try data.prefix(data.count / 2).write(to: archive)
+
+        #expect(throws: LibArchiveReader.ReadError.self) {
+            try LibArchiveReader.list(archive: archive)
+        }
+    }
+
+    /// Dosya adları açık, içerikleri parolalı zip: liste okunur ve girdiler şifreli işaretlenir.
+    @Test func passwordProtectedZipListsEncryptedEntries() throws {
+        defer { try? FileManager.default.removeItem(at: workspace) }
+        let archive = workspace.appendingPathComponent("parolali.zip")
+        try run("/usr/bin/zip", ["-qr", "-P", "Gizli-123", archive.path, "kaynak"])
+
+        let listing = try LibArchiveReader.list(archive: archive)
+        let file = try #require(listing.entries.first { $0.path == "kaynak/not.txt" })
+        #expect(file.isEncrypted)
+        #expect(ArchiveStatistics(listing: listing).isEncrypted)
+    }
+
+    /// Sembolik bağlantı girdisi tanınır; "./" ile başlayan yollar normalleştirilir, ham yol korunur.
+    @Test func symbolicLinksAndDotSlashPaths() throws {
+        defer { try? FileManager.default.removeItem(at: workspace) }
+        try FileManager.default.createSymbolicLink(
+            atPath: workspace.appendingPathComponent("kaynak/bag").path, withDestinationPath: "not.txt"
+        )
+        let archive = workspace.appendingPathComponent("bagli.tar")
+        try run("/usr/bin/tar", ["-cf", archive.path, "-C", workspace.appendingPathComponent("kaynak").path, "."])
+
+        let listing = try LibArchiveReader.list(archive: archive)
+        let link = try #require(listing.entries.first { $0.path == "bag" })
+        #expect(link.isSymbolicLink)
+        #expect(link.archivePath == "./bag")
+        #expect(listing.entries.contains { $0.path == "alt/şirket.txt" && !$0.isSymbolicLink })
+    }
+
+    /// Girdi sınırı: liste sınırda kesilir (kötü niyetli arşiv belleği tüketemez).
+    @Test func entryLimitTruncatesListing() throws {
+        defer { try? FileManager.default.removeItem(at: workspace) }
+        for index in 0..<10 {
+            try "\(index)".write(to: workspace.appendingPathComponent("kaynak/dosya\(index).txt"), atomically: true, encoding: .utf8)
+        }
+        let archive = workspace.appendingPathComponent("cok.tar")
+        try run("/usr/bin/tar", ["-cf", archive.path, "kaynak"])
+
+        #expect(try LibArchiveReader.list(archive: archive).entries.count > 10)
+        #expect(try LibArchiveReader.list(archive: archive, maxEntries: 3).entries.count == 3)
+    }
+
     @Test func rejectsNonArchive() throws {
         defer { try? FileManager.default.removeItem(at: workspace) }
         #expect(throws: LibArchiveReader.ReadError.self) {

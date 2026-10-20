@@ -133,3 +133,23 @@ func infoPlistStringsCoverEveryVisibleName(plistPath: String, stringsRoot: Strin
     }
     #expect(Set(keySets.values).count == 1, "InfoPlist.strings anahtarları diller arasında birebir aynı olmalı: \(stringsRoot)")
 }
+
+/// Hızlı Bakış hata ekranı ham İngilizce iletiyi değil, seçili dildeki açıklamayı gösterir.
+@Test(arguments: AppLanguage.supportedCodes)
+func previewErrorMessagesAreLocalized(code: String) throws {
+    let strings = StringTable(tables: Dictionary([(code, try table(code)), ("en", try table("en"))]) { first, _ in first })
+    let localized = try table(code)
+    let notArchive = try #require(localized["errorNotArchive"])
+
+    #expect(strings.previewErrorMessage(for: LibArchiveReader.ReadError.unreadable("Unrecognized archive format"), language: code) == notArchive)
+    #expect(strings.previewErrorMessage(for: SevenZipError.notArchive, language: code) == notArchive)
+    #expect(strings.previewErrorMessage(for: CocoaError(.fileNoSuchFile), language: code) == notArchive)
+    #expect(strings.previewErrorMessage(for: SevenZipError.timedOut, language: code) == localized["errorEngineTimeout"])
+    #expect(strings.previewErrorMessage(for: SevenZipError.cancelled, language: code) == localized["errorCancelled"])
+    #expect(strings.previewErrorMessage(for: SevenZipError.engineNotFound, language: code) == localized["errorEngineNotFound"])
+
+    let failed = strings.previewErrorMessage(for: SevenZipError.failed(code: 2, message: "Headers Error"), language: code)
+    #expect(failed.contains("2"))
+    #expect(!failed.contains("%ld"))
+    #expect(!failed.contains("Headers Error"))
+}

@@ -24,17 +24,18 @@ public enum LibArchiveReader {
     /// Listedeki girdi sayısı için üst sınır: bozuk ya da kötü niyetli arşiv belleği tüketmesin.
     public static let maxEntries = 200_000
 
-    public static func list(archive url: URL, fallbackName: String? = nil) throws -> ArchiveListing {
+    /// - Parameter maxEntries: Okunacak en çok girdi; sınıra ulaşılırsa liste orada kesilir.
+    public static func list(archive url: URL, fallbackName: String? = nil, maxEntries: Int = maxEntries) throws -> ArchiveListing {
         do {
-            return try read(url, raw: false, fallbackName: fallbackName)
+            return try read(url, raw: false, fallbackName: fallbackName, maxEntries: maxEntries)
         } catch ReadError.unreadable(let message) {
             // Tek akışlı sıkıştırılmış dosyalar (.gz, .xz, .bz2, .zst) bir arşiv biçimi taşımaz: ham akış olarak okunur.
-            if let rawListing = try? read(url, raw: true, fallbackName: fallbackName) { return rawListing }
+            if let rawListing = try? read(url, raw: true, fallbackName: fallbackName, maxEntries: maxEntries) { return rawListing }
             throw ReadError.unreadable(message)
         }
     }
 
-    private static func read(_ url: URL, raw: Bool, fallbackName: String?) throws -> ArchiveListing {
+    private static func read(_ url: URL, raw: Bool, fallbackName: String?, maxEntries: Int) throws -> ArchiveListing {
         guard let handle = archive_read_new() else { throw ReadError.unreadable("archive_read_new") }
         defer { archive_read_free(handle) }
         archive_read_support_filter_all(handle)

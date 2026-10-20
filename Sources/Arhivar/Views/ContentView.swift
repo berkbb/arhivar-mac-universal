@@ -6,9 +6,6 @@ struct ContentView: View {
     @Environment(AppSettings.self) private var settings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// İlerleme penceresi bir kez göründüyse en az bu kadar ekranda kalır: hızlı işlemlerde göz kırpar gibi
-    /// açılıp kapanmasın, yumuşakça belirip kaybolsun.
-    static let minimumOverlayDuration: Duration = .milliseconds(700)
     /// İşlem bittiğinde en az süre dolana kadar gösterilen son durum (ilerleme tamamlanmış olarak).
     @State private var finishingOperation: OperationState?
     @State private var lastOperation: OperationState?
@@ -87,12 +84,10 @@ struct ContentView: View {
             lastOperation = model.operation
             return
         }
-        guard var last = lastOperation else { return }
+        guard let last = lastOperation else { return }
         lastOperation = nil
-        let remaining = Self.minimumOverlayDuration - (ContinuousClock.now - overlayShownAt)
-        guard remaining > .zero else { return }
-        if last.progress != nil { last.progress = 1 }
-        finishingOperation = last
+        guard let remaining = OverlayTiming.remaining(shownAt: overlayShownAt, now: .now) else { return }
+        finishingOperation = OverlayTiming.finished(last)
         lingerTask = Task {
             try? await Task.sleep(for: remaining)
             guard !Task.isCancelled else { return }
@@ -238,5 +233,27 @@ private struct EditDialogs: ViewModifier {
         let count = model.addRequest?.sources.count ?? 0
         let name = model.archiveURL?.lastPathComponent ?? ""
         return settings.t(.addConfirmTitle, count, name)
+    }
+}
+
+/// İlerleme penceresinin gösterim süresi hesabı (görünümden ayrı, test edilebilir).
+enum OverlayTiming {
+    /// Pencere bir kez göründüyse en az bu kadar ekranda kalır: hızlı işlemlerde göz kırpar gibi açılıp
+    /// kapanmasın, yumuşakça belirip kaybolsun.
+    static let minimumDuration: Duration = .milliseconds(700)
+
+    /// İşlem bittiğinde pencerenin daha ne kadar gösterileceği; en az süre dolduysa nil (hemen kapanır).
+    static func remaining(
+        shownAt: ContinuousClock.Instant, now: ContinuousClock.Instant, minimum: Duration = minimumDuration
+    ) -> Duration? {
+        let remaining = minimum - (now - shownAt)
+        return remaining > .zero ? remaining : nil
+    }
+
+    /// Kalan süre boyunca gösterilen bitmiş durum: ilerleme çubuğu varsa tamamlanmış (%100) görünür.
+    static func finished(_ operation: OperationState) -> OperationState {
+        var finished = operation
+        if finished.progress != nil { finished.progress = 1 }
+        return finished
     }
 }

@@ -134,3 +134,18 @@ public enum LKey: String, CaseIterable, Sendable {
     case qlEncryptedHeadersTitle, qlEncryptedHeadersMessage, qlErrorTitle
     case unknown
 }
+
+extension StringTable {
+    /// Hızlı Bakış hata ekranının ayrıntı satırı. libarchive ve 7zz iletileri İngilizce gelir; yerine çevrilmiş
+    /// açıklama gösterilir. Tanınmayan her hata "arşiv olarak açılamıyor" sayılır.
+    public func previewErrorMessage(for error: Error, language code: String) -> String {
+        switch error {
+        case SevenZipError.failed(let exitCode, _):
+            String(format: string(.errorFailed, language: code), locale: Locale(identifier: code), Int(exitCode))
+        case SevenZipError.timedOut: string(.errorEngineTimeout, language: code)
+        case SevenZipError.cancelled: string(.errorCancelled, language: code)
+        case SevenZipError.engineNotFound: string(.errorEngineNotFound, language: code)
+        default: string(.errorNotArchive, language: code)
+        }
+    }
+}
