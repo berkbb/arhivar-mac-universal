@@ -273,3 +273,16 @@
 "licenseCopyText" = "Copiază textul";
 "licenseCopied" = "Copiat!";
 "buttonClose" = "Închide";
+"settingsShortcuts" = "Comenzi rapide";
+"shortcutQuickLookSection" = "Comandă rapidă pentru Privire rapidă";
+"shortcutQuickLookTrigger" = "Tastă de previzualizare";
+"shortcutQuickLookBoth" = "Spațiu și ⌘Y";
+"shortcutQuickLookSpaceOnly" = "Doar Spațiu";
+"shortcutQuickLookCmdYOnly" = "Doar ⌘Y";
+"shortcutQuickLookFooter" = "Setează combinația de taste utilizată pentru deschiderea și închiderea previzualizării fișierelor selectate dintr-o arhivă.";
+"shortcutReferenceSection" = "Toate comenzile rapide";
+"shortcutActionExtract" = "Extrage arhiva";
+"shortcutActionExtractSelected" = "Extrage elementele selectate";
+"shortcutActionTest" = "Testează arhiva";
+"shortcutActionOpen" = "Deschide / Intră în dosar";
+"shortcutActionParent" = "Dosar părinte";

@@ -52,6 +52,39 @@ enum ExtractLocation: String, CaseIterable, Identifiable {
     }
 }
 
+/// Hızlı Bakış kısayol tetikleyicisi tercihi.
+enum QuickLookShortcut: String, CaseIterable, Identifiable {
+    case spaceAndCmdY
+    case spaceOnly
+    case cmdYOnly
+
+    var id: String { rawValue }
+
+    var titleKey: LKey {
+        switch self {
+        case .spaceAndCmdY: .shortcutQuickLookBoth
+        case .spaceOnly: .shortcutQuickLookSpaceOnly
+        case .cmdYOnly: .shortcutQuickLookCmdYOnly
+        }
+    }
+
+    var allowsSpace: Bool {
+        self == .spaceAndCmdY || self == .spaceOnly
+    }
+
+    var allowsCmdY: Bool {
+        self == .spaceAndCmdY || self == .cmdYOnly
+    }
+
+    var displayBadge: String {
+        switch self {
+        case .spaceAndCmdY: "Space / ⌘Y"
+        case .spaceOnly: "Space"
+        case .cmdYOnly: "⌘Y"
+        }
+    }
+}
+
 /// Kullanıcı tercihleri (UserDefaults) ve yerelleştirilmiş metinler için tek kaynak.
 @Observable
 final class AppSettings {
@@ -78,10 +111,11 @@ final class AppSettings {
         static let sandboxEngine = "sandboxEngine"
         /// AppModel'in kaydettiği görünüm tercihi; tümünü sıfırlarken o da silinir.
         static let browserMode = "browserMode"
+        static let quickLookShortcut = "quickLookShortcut"
         static let all = [
             language, appearance, extractLocation, customExtractFolder, extractIntoSubfolder, subfolderMode, revealAfterOperation,
             overwriteMode, defaultFormat, defaultLevel, multithreaded, excludeMacMetadata, storeSymlinks,
-            customEnginePath, checkUpdatesAtLaunch, updateConsentAsked, sandboxEngine, browserMode,
+            customEnginePath, checkUpdatesAtLaunch, updateConsentAsked, sandboxEngine, browserMode, quickLookShortcut,
         ]
     }
 
@@ -120,6 +154,8 @@ final class AppSettings {
     var updateConsentAsked: Bool { didSet { defaults.set(updateConsentAsked, forKey: Key.updateConsentAsked) } }
     /// 7zz'yi kum havuzunda (sandbox-exec) çalıştır; varsayılan açık.
     var sandboxEngine: Bool { didSet { defaults.set(sandboxEngine, forKey: Key.sandboxEngine) } }
+    /// Hızlı Bakış kısayol tercihi (Boşluk ve ⌘Y, Yalnızca Boşluk, Yalnızca ⌘Y).
+    var quickLookShortcut: QuickLookShortcut { didSet { defaults.set(quickLookShortcut.rawValue, forKey: Key.quickLookShortcut) } }
 
     init(defaults: UserDefaults = .standard, bundle: Bundle = .main) {
         self.defaults = defaults
@@ -140,6 +176,7 @@ final class AppSettings {
         checkUpdatesAtLaunch = defaults.object(forKey: Key.checkUpdatesAtLaunch) as? Bool ?? false
         updateConsentAsked = defaults.object(forKey: Key.updateConsentAsked) as? Bool ?? false
         sandboxEngine = defaults.object(forKey: Key.sandboxEngine) as? Bool ?? true
+        quickLookShortcut = QuickLookShortcut(rawValue: defaults.string(forKey: Key.quickLookShortcut) ?? "") ?? .spaceAndCmdY
     }
 
     /// Eski "extractIntoSubfolder" (Bool) tercihini yeni kurala çevirir: kapalı → hiçbir zaman, açık ya da yok → akıllı.
@@ -165,6 +202,7 @@ final class AppSettings {
         checkUpdatesAtLaunch = false
         updateConsentAsked = false
         sandboxEngine = true
+        quickLookShortcut = .spaceAndCmdY
         // Özellik gözlemcileri değerleri yeniden yazdı; ilk kurulumdaki gibi hiçbir tercih kalmasın.
         // "AppleLanguages" en sonda silinir: dil atanırken yeniden yazılıyordu.
         Key.all.forEach(defaults.removeObject(forKey:))

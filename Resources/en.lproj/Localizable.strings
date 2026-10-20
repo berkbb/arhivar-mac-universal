@@ -273,3 +273,16 @@
 "licenseCopyText" = "Copy Text";
 "licenseCopied" = "Copied!";
 "buttonClose" = "Close";
+"settingsShortcuts" = "Shortcuts";
+"shortcutQuickLookSection" = "Quick Look Shortcut";
+"shortcutQuickLookTrigger" = "Preview Key";
+"shortcutQuickLookBoth" = "Space and ⌘Y";
+"shortcutQuickLookSpaceOnly" = "Space Only";
+"shortcutQuickLookCmdYOnly" = "⌘Y Only";
+"shortcutQuickLookFooter" = "Sets the key combination used to open and close previews for selected files inside an archive.";
+"shortcutReferenceSection" = "All Keyboard Shortcuts";
+"shortcutActionExtract" = "Extract Archive";
+"shortcutActionExtractSelected" = "Extract Selected";
+"shortcutActionTest" = "Test Archive";
+"shortcutActionOpen" = "Open / Enter Folder";
+"shortcutActionParent" = "Parent Folder";

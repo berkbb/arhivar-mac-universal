@@ -273,3 +273,16 @@
 "licenseCopyText" = "Metni Kopyala";
 "licenseCopied" = "Kopyalandı!";
 "buttonClose" = "Kapat";
+"settingsShortcuts" = "Kısayollar";
+"shortcutQuickLookSection" = "Hızlı Bakış Kısayolu";
+"shortcutQuickLookTrigger" = "Önizleme Tuşu";
+"shortcutQuickLookBoth" = "Boşluk ve ⌘Y";
+"shortcutQuickLookSpaceOnly" = "Yalnızca Boşluk";
+"shortcutQuickLookCmdYOnly" = "Yalnızca ⌘Y";
+"shortcutQuickLookFooter" = "Arşiv içindeki seçili dosyanın önizlemesini açıp kapatmak için kullanılacak tuş kombinasyonunu belirler.";
+"shortcutReferenceSection" = "Tüm Klavye Kısayolları";
+"shortcutActionExtract" = "Arşivi Çıkar";
+"shortcutActionExtractSelected" = "Seçilenleri Çıkar";
+"shortcutActionTest" = "Arşivi Sına";
+"shortcutActionOpen" = "Aç / Klasöre Gir";
+"shortcutActionParent" = "Üst Klasöre Dön";

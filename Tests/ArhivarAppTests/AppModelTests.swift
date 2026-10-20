@@ -609,14 +609,38 @@ struct AppModelTests {
         #expect(stored()["AppleLanguages"] == nil)
         #expect(stored()["browserMode"] == nil)
         #expect(stored()["language"] == nil)
+        #expect(stored()["quickLookShortcut"] == nil)
         #expect(fixture.settings.language == .tr)
         #expect(fixture.settings.subfolderMode == .smart)
+        #expect(fixture.settings.quickLookShortcut == .spaceAndCmdY)
         #expect(fixture.settings.storeSymlinks)
 
         fixture.defaults.set(false, forKey: "extractIntoSubfolder")
         #expect(AppSettings(defaults: fixture.defaults, bundle: .main).subfolderMode == .never)
         fixture.defaults.set(true, forKey: "extractIntoSubfolder")
         #expect(AppSettings(defaults: fixture.defaults, bundle: .main).subfolderMode == .smart)
+    }
+
+    /// Hızlı Bakış kısayol ayarı (Boşluk ve ⌘Y, Yalnızca Boşluk, Yalnızca ⌘Y) tetikleyicileri doğru kısıtlar.
+    @Test func quickLookShortcutPreferencesConfigureTriggers() {
+        let fixture = try! Fixture()
+        defer { fixture.cleanUp() }
+        let settings = fixture.settings
+
+        #expect(settings.quickLookShortcut == .spaceAndCmdY)
+        #expect(settings.quickLookShortcut.allowsSpace)
+        #expect(settings.quickLookShortcut.allowsCmdY)
+        #expect(settings.quickLookShortcut.displayBadge == "Space / ⌘Y")
+
+        settings.quickLookShortcut = .spaceOnly
+        #expect(settings.quickLookShortcut.allowsSpace)
+        #expect(!settings.quickLookShortcut.allowsCmdY)
+        #expect(settings.quickLookShortcut.displayBadge == "Space")
+
+        settings.quickLookShortcut = .cmdYOnly
+        #expect(!settings.quickLookShortcut.allowsSpace)
+        #expect(settings.quickLookShortcut.allowsCmdY)
+        #expect(settings.quickLookShortcut.displayBadge == "⌘Y")
     }
 
     /// P1-8: "./" önekli tar'da "." klasörü görünmez; seçili öğe ham yoluyla çıkarılır.

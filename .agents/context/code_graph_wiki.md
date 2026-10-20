@@ -33,14 +33,14 @@
 | :--- | :--- | :--- |
 | `ArhivarApp.swift` | `ArhivarApp`, `AppDelegate`, `AppCommands` | SwiftUI scenes (`main`, `about`, `Settings`), menu bar shortcuts (`⌘C`, `⌘V`, `⌘A`, `⌘↓`, `⌘↑`, `⌘I`, `⌘E`), `NSServices` registration |
 | `AppModel.swift` | `AppModel`, `ArchiveContext`, `PendingAction`, `EngineStatus`, `UpdateState`, `AppUpdateState` | Central `@Observable` state machine, async `7zz` workflows, off-main tree building, debounced async search (`searchTask`, `isSearching`), nested archive stack (`archiveStack` with cached trees), password retry queue, Finder service queue (`serviceQueue`) |
-| `AppSettings.swift` | `AppSettings`, `AppAppearance`, `ExtractLocation` | `UserDefaults`-backed preferences, legacy `extractIntoSubfolder` migration, locale-aware byte/date/percent formatting |
+| `AppSettings.swift` | `AppSettings`, `AppAppearance`, `ExtractLocation`, `QuickLookShortcut` | `UserDefaults`-backed preferences, legacy `extractIntoSubfolder` migration, locale-aware byte/date/percent formatting, customizable Quick Look shortcuts (`spaceAndCmdY`, `spaceOnly`, `cmdYOnly`) |
 | `FinderServices.swift` | `FinderServices` | macOS `NSServices` handler for `extractHere`, `openArchive`, and `compress` |
 | `QuickLookCoordinator.swift` | `QuickLookCoordinator` | Native AppKit `QLPreviewPanel.shared()` singleton coordinator replacing SwiftUI `.quickLookPreview` to prevent rapid toggle crash |
 | `Views/ContentView.swift` | `ContentView`, `InfoToolbarButton`, `EditDialogs` | `NavigationSplitView` shell, toolbar, drop target, alerts, sheets, and edit confirmation dialogs |
 | `Views/ArchiveBrowserView.swift` | `ArchiveBrowserView`, `NameCell`, `PathBar`, `StatusBarView`, `ArchiveInfoView`, `ProgressOverlay`, `ToastView`, `FileIcons` | Hierarchical `Table`, breadcrumb path bar with nested archive crumbs and folder drop targets, status bar, info popover, bounded icon cache |
 | `Views/CreateArchiveSheet.swift` | `CreateArchiveSheet`, `PasswordSheet` | New Archive modal form, duplicate source basename disambiguation, validation messages, password unlock sheet |
 | `Views/WelcomeView.swift` | `WelcomeView`, `EngineStatusView`, `UpdateBanner` | Home drop zone, `7zz` engine status, and update banners for both Arhivar and 7-Zip |
-| `Views/SettingsView.swift` | `SettingsView`, `GeneralSettingsView`, `CompressionSettingsView`, `AdvancedSettingsView` | Preferences UI (language with restart recommendation alert and menubar notice, appearance, extraction subfolder/overwrite rules, compression defaults, custom engine, sandbox toggle, reset) |
+| `Views/SettingsView.swift` | `SettingsView`, `GeneralSettingsView`, `ShortcutsSettingsView`, `CompressionSettingsView`, `AdvancedSettingsView` | Preferences UI (language with restart recommendation alert and menubar notice, appearance, shortcuts configuration, extraction subfolder/overwrite rules, compression defaults, custom engine, sandbox toggle, reset) |
 | `Views/SidebarView.swift` | `SidebarView` | Home navigation and recent archives list |
 | `Views/AboutView.swift` | `AboutView` | Version info, credits, license/manual/repository links |
 

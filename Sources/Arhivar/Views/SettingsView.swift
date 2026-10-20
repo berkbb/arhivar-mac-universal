@@ -10,6 +10,9 @@ struct SettingsView: View {
             Tab(settings.t(.settingsGeneral), systemImage: "gearshape") {
                 GeneralSettingsView()
             }
+            Tab(settings.t(.settingsShortcuts), systemImage: "command") {
+                ShortcutsSettingsView()
+            }
             Tab(settings.t(.settingsCompression), systemImage: "archivebox") {
                 CompressionSettingsView()
             }
@@ -304,6 +307,58 @@ private struct AdvancedSettingsView: View {
         if panel.runModal() == .OK, let url = panel.url {
             settings.customEnginePath = url.path
             Task { await model.refreshEngine() }
+        }
+    }
+}
+
+private struct ShortcutsSettingsView: View {
+    @Environment(AppSettings.self) private var settings
+
+    var body: some View {
+        @Bindable var settings = settings
+        Form {
+            Section {
+                Picker(settings.t(.shortcutQuickLookTrigger), selection: $settings.quickLookShortcut) {
+                    ForEach(QuickLookShortcut.allCases) { shortcut in
+                        Text(settings.t(shortcut.titleKey)).tag(shortcut)
+                    }
+                }
+            } header: {
+                Text(settings.t(.shortcutQuickLookSection))
+            } footer: {
+                Text(settings.t(.shortcutQuickLookFooter))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                shortcutRow(title: settings.t(.contextQuickLook), shortcut: settings.quickLookShortcut.displayBadge)
+                shortcutRow(title: settings.t(.shortcutActionExtract), shortcut: "⌘E")
+                shortcutRow(title: settings.t(.shortcutActionExtractSelected), shortcut: "⇧⌘E")
+                shortcutRow(title: settings.t(.shortcutActionTest), shortcut: "⌘T")
+                shortcutRow(title: settings.t(.shortcutActionOpen), shortcut: "⌘↓")
+                shortcutRow(title: settings.t(.shortcutActionParent), shortcut: "⌘↑")
+                shortcutRow(title: settings.t(.contextCopy), shortcut: "⌘C")
+                shortcutRow(title: settings.t(.editPaste), shortcut: "⌘V")
+                shortcutRow(title: settings.t(.editSelectAll), shortcut: "⌘A")
+                shortcutRow(title: settings.t(.toolbarInfo), shortcut: "⌘I")
+            } header: {
+                Text(settings.t(.shortcutReferenceSection))
+            }
+        }
+        .formStyle(.grouped)
+        .padding()
+    }
+
+    private func shortcutRow(title: String, shortcut: String) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Text(shortcut)
+                .font(.system(.body, design: .monospaced))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
         }
     }
 }

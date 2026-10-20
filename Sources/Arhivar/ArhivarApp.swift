@@ -58,6 +58,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return event
             }
 
+            // Tercih Boşluk tuşuna izin vermiyorsa tuşu işletme
+            guard AppSettings.shared.quickLookShortcut.allowsSpace else {
+                return event
+            }
+
             // Metin düzenleniyorsa (arama, ad değiştirme, parola vb.) boşluk tuşu metne gitmeli
             if AppModel.isEditingText {
                 return event
@@ -184,9 +189,14 @@ struct AppCommands: Commands {
             Button(settings.t(.menuTestArchive)) { model.testArchive() }
                 .keyboardShortcut("t")
                 .disabled(!model.canOperate)
-            Button(settings.t(.contextQuickLook)) { model.toggleQuickLook() }
-                .keyboardShortcut("y")
-                .disabled(!model.canOperate || model.selection.count != 1 || model.selectionIsSymbolicLink)
+            if settings.quickLookShortcut.allowsCmdY {
+                Button(settings.t(.contextQuickLook)) { model.toggleQuickLook() }
+                    .keyboardShortcut("y")
+                    .disabled(!model.canOperate || model.selection.count != 1 || model.selectionIsSymbolicLink)
+            } else {
+                Button(settings.t(.contextQuickLook)) { model.toggleQuickLook() }
+                    .disabled(!model.canOperate || model.selection.count != 1 || model.selectionIsSymbolicLink)
+            }
             // Finder'daki gibi: ⌘↓ seçili klasöre girer ya da dosyayı açar (arşivse içine girer).
             Button(settings.t(.contextOpen)) { model.primaryAction(model.selection) }
                 .keyboardShortcut(.downArrow, modifiers: .command)

@@ -99,8 +99,10 @@ public enum LKey: String, CaseIterable, Sendable {
     case passwordTitle, passwordMessage, passwordWrong
     case errorTitle, warningTitle, errorEngineNotFound, errorEngineTimeout, errorCancelled
     case errorWrongPassword, errorNotArchive, errorFailed
-    case settingsGeneral, settingsCompression, settingsAdvanced, settingsLanguage, settingsLanguageNote, languageSystem
+    case settingsGeneral, settingsCompression, settingsAdvanced, settingsShortcuts, settingsLanguage, settingsLanguageNote, languageSystem
     case restartWarningTitle, restartMenuBarNotice
+    case shortcutQuickLookSection, shortcutQuickLookTrigger, shortcutQuickLookBoth, shortcutQuickLookSpaceOnly, shortcutQuickLookCmdYOnly, shortcutQuickLookFooter
+    case shortcutReferenceSection, shortcutActionExtract, shortcutActionExtractSelected, shortcutActionTest, shortcutActionOpen, shortcutActionParent
     case settingsAppearance, appearanceSystem, appearanceLight, appearanceDark
     case settingsExtraction, settingsExtractTo, extractToAsk, extractToNextTo, extractToCustom, settingsCustomFolder
     case settingsSubfolder, settingsReveal, settingsOverwrite, overwriteReplace, overwriteSkip, overwriteRename
