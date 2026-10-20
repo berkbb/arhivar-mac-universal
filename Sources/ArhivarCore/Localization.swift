@@ -130,5 +130,7 @@ public enum LKey: String, CaseIterable, Sendable {
     case licenseCopyText, licenseCopied, buttonClose
     case contextCopy, toastCopied, contextBrowse, navParentArchive, progressCopying
     case contextChecksums, checksumsTitle, buttonCopy, infoComment, infoBlocks, infoVolumes, progressChecksums
+    case qlTitle, qlFooterHint, qlFiles, qlFolders, qlUnpacked, qlMoreItems
+    case qlEncryptedHeadersTitle, qlEncryptedHeadersMessage, qlErrorTitle
     case unknown
 }

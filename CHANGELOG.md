@@ -8,6 +8,7 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 ### Fixed
 
 - Finder Quick Look previews no longer fail with "7-Zip (7zz) engine not found". Quick Look extensions run under the system `quicklook-preview` sandbox profile, which forbids launching child processes, so the bundled `7zz` can never run there. The extension now falls back to listing archives in-process with macOS's built-in libarchive (`LibArchiveReader`, `CLibArchive` target), including header-encrypted 7z detection and single-stream `.gz`/`.xz`/`.bz2` files.
+- The Finder Quick Look preview is now fully localized (Turkish, English, Romanian) instead of showing hard-coded Turkish text. New `ql*` keys were added 1:1 to all three tables, and the tables are copied into the extension bundle. The extension follows the macOS preferred language because its sandbox cannot read the app's language setting; sizes, dates and percentages use the same locale.
 
 ## [1.3.1] — 2026-10-20
 

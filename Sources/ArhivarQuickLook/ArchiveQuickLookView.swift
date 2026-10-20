@@ -14,6 +14,8 @@ public struct ArchiveQuickLookView: View {
 
     public static let maxDisplayEntries = 300
 
+    private let l10n = QuickLookStrings.shared
+
     public init(
         archiveURL: URL,
         listing: ArchiveListing?,
@@ -78,7 +80,7 @@ public struct ArchiveQuickLookView: View {
                     }
 
                     if isEncrypted || headersEncrypted {
-                        Label("Şifreli", systemImage: "lock.fill")
+                        Label(l10n.t(.statusEncrypted), systemImage: "lock.fill")
                             .font(.caption2.bold())
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -89,15 +91,19 @@ public struct ArchiveQuickLookView: View {
 
                 if let stats = statistics {
                     HStack(spacing: 12) {
-                        Text("\(stats.fileCount) dosya" + (stats.folderCount > 0 ? ", \(stats.folderCount) klasör" : ""))
+                        Text(l10n.t(.qlFiles, stats.fileCount))
+                        if stats.folderCount > 0 {
+                            Text("•")
+                            Text(l10n.t(.qlFolders, stats.folderCount))
+                        }
                         Text("•")
-                        Text("Açık: \(formatBytes(stats.totalSize))")
+                        Text(l10n.t(.qlUnpacked, l10n.bytes(stats.totalSize)))
                         if stats.packedSize > 0 {
                             Text("•")
-                            Text("Sıkıştırılmış: \(formatBytes(stats.packedSize))")
+                            Text(l10n.t(.statusPacked, l10n.bytes(stats.packedSize)))
                             if let ratio = stats.ratio {
-                                Text("(%\(Int((ratio * 100).rounded())))")
-                                    .foregroundStyle(.secondary)
+                                Text("•")
+                                Text(l10n.t(.statusRatio, l10n.percent(ratio)))
                             }
                         }
                     }
@@ -128,7 +134,7 @@ public struct ArchiveQuickLookView: View {
                 if flattenedNodes.count > Self.maxDisplayEntries {
                     HStack {
                         Spacer()
-                        Text("… ve \(flattenedNodes.count - Self.maxDisplayEntries) öğe daha. Tümünü görmek için Arhivar ile açın.")
+                        Text(l10n.t(.qlMoreItems, flattenedNodes.count - Self.maxDisplayEntries))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .padding(.vertical, 10)
@@ -153,13 +159,13 @@ public struct ArchiveQuickLookView: View {
             Spacer()
 
             if let date = item.node.modified {
-                Text(formatDate(date))
+                Text(l10n.date(date))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(width: 130, alignment: .trailing)
             }
 
-            Text(item.node.isDirectory ? "—" : formatBytes(item.node.size))
+            Text(item.node.isDirectory ? "—" : l10n.bytes(item.node.size))
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .frame(width: 80, alignment: .trailing)
@@ -172,13 +178,13 @@ public struct ArchiveQuickLookView: View {
 
     private var footerBar: some View {
         HStack {
-            Text("Arhivar Hızlı Bakış")
+            Text(l10n.t(.qlTitle))
                 .font(.caption)
                 .foregroundStyle(.tertiary)
 
             Spacer()
 
-            Text("Açmak için çift tıklayın veya Arhivar'ı kullanın")
+            Text(l10n.t(.qlFooterHint))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -196,10 +202,10 @@ public struct ArchiveQuickLookView: View {
                 .font(.system(size: 48))
                 .foregroundStyle(.orange)
 
-            Text("Parola Korumalı Arşiv")
+            Text(l10n.t(.qlEncryptedHeadersTitle))
                 .font(.title3.bold())
 
-            Text("Bu arşivin dosya listesi parola ile şifrelenmiştir.\nİçeriği görüntülemek için arşivi Arhivar ile açın.")
+            Text(l10n.t(.qlEncryptedHeadersMessage))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -215,7 +221,7 @@ public struct ArchiveQuickLookView: View {
                 .font(.system(size: 44))
                 .foregroundStyle(.yellow)
 
-            Text("Arşiv Okunamadı")
+            Text(l10n.t(.qlErrorTitle))
                 .font(.headline)
 
             Text(message)
@@ -233,7 +239,7 @@ public struct ArchiveQuickLookView: View {
             Image(systemName: "tray")
                 .font(.system(size: 40))
                 .foregroundStyle(.secondary)
-            Text("Arşiv boş")
+            Text(l10n.t(.emptyArchive))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             Spacer()
@@ -246,17 +252,6 @@ public struct ArchiveQuickLookView: View {
     private var formatSuffix: String? {
         let ext = archiveURL.pathExtension.lowercased()
         return ext.isEmpty ? nil : ext
-    }
-
-    private func formatBytes(_ bytes: Int64) -> String {
-        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
-    }
-
-    private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .short
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
     }
 
     private func iconName(for node: ArchiveNode) -> String {

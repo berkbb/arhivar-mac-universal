@@ -296,3 +296,14 @@
 "shortcutActionNewArchive" = "Arhivă nouă";
 "shortcutActionOpenArchive" = "Deschide o arhivă";
 "shortcutActionInfo" = "Afișează informații";
+
+/* Quick Look */
+"qlTitle" = "Previzualizare rapidă Arhivar";
+"qlFooterHint" = "Faceți dublu clic pentru a deschide sau folosiți Arhivar";
+"qlFiles" = "Fișiere: %ld";
+"qlFolders" = "Dosare: %ld";
+"qlUnpacked" = "Dezarhivat: %@";
+"qlMoreItems" = "… și încă %ld elemente. Deschideți în Arhivar pentru a le vedea pe toate.";
+"qlEncryptedHeadersTitle" = "Arhivă protejată prin parolă";
+"qlEncryptedHeadersMessage" = "Lista de fișiere a acestei arhive este criptată cu o parolă.\nDeschideți arhiva în Arhivar pentru a-i vedea conținutul.";
+"qlErrorTitle" = "Arhiva nu a putut fi citită";

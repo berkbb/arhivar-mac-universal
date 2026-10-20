@@ -296,3 +296,14 @@
 "shortcutActionNewArchive" = "Yeni Arşiv";
 "shortcutActionOpenArchive" = "Arşiv Aç";
 "shortcutActionInfo" = "Bilgi Göster";
+
+/* Quick Look */
+"qlTitle" = "Arhivar Hızlı Bakış";
+"qlFooterHint" = "Açmak için çift tıklayın veya Arhivar'ı kullanın";
+"qlFiles" = "Dosya: %ld";
+"qlFolders" = "Klasör: %ld";
+"qlUnpacked" = "Açık: %@";
+"qlMoreItems" = "… ve %ld öğe daha. Tümünü görmek için Arhivar ile açın.";
+"qlEncryptedHeadersTitle" = "Parola Korumalı Arşiv";
+"qlEncryptedHeadersMessage" = "Bu arşivin dosya listesi parola ile şifrelenmiştir.\nİçeriği görüntülemek için arşivi Arhivar ile açın.";
+"qlErrorTitle" = "Arşiv Okunamadı";

@@ -72,6 +72,8 @@ if [ -f "$BIN_DIR/ArhivarQuickLook" ]; then
   mkdir -p "$QL_APPEX/Contents/MacOS" "$QL_APPEX/Contents/Resources"
   cp "$BIN_DIR/ArhivarQuickLook" "$QL_APPEX/Contents/MacOS/ArhivarQuickLook"
   cp "$ROOT/Support/QuickLook-Info.plist" "$QL_APPEX/Contents/Info.plist"
+  # Eklenti kendi paketinden okur (kum havuzu): arayüz metin tabloları da içine kopyalanır.
+  cp -R "$ROOT/Resources/"*.lproj "$QL_APPEX/Contents/Resources/"
   codesign "${SIGN_ARGS[@]}" --entitlements "$ROOT/Support/QuickLook.entitlements" "$QL_APPEX"
 fi
 

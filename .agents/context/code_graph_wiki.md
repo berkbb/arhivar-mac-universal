@@ -53,6 +53,7 @@
 | :--- | :--- | :--- |
 | `main.swift` | `QuickLookMain`, `NSExtensionMain` | App Extension process entry point invoking `NSExtensionMain()` |
 | `PreviewViewController.swift` | `PreviewViewController`, `QLPreviewingController` | `NSViewController` implementing `preparePreviewOfFile(at:completionHandler:)`, listing via `7zz` when it can launch, otherwise in-process via `LibArchiveReader` (the `quicklook-preview` sandbox forbids child processes), and hosting SwiftUI |
+| `QuickLookStrings.swift` | `QuickLookStrings` | Localized strings (`StringTable` from the appex's own `.lproj` tables), system-language resolution and locale-aware byte/date/percent formatting for the sandboxed extension |
 | `ArchiveQuickLookView.swift` | `ArchiveQuickLookView` | Native SwiftUI view displaying archive header, format/encryption badges, statistics banner, capped file table (300 items), and password-lock notices |
 | `Support/QuickLook-Info.plist` | `QLSupportedContentTypes`, `NSExtensionPrincipalClass` | Quick Look extension manifest declaring 13 supported archive UTTypes |
 

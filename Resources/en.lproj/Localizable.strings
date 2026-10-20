@@ -296,3 +296,14 @@
 "shortcutActionNewArchive" = "New Archive";
 "shortcutActionOpenArchive" = "Open Archive";
 "shortcutActionInfo" = "Show Info";
+
+/* Quick Look */
+"qlTitle" = "Arhivar Quick Look";
+"qlFooterHint" = "Double-click to open or use Arhivar";
+"qlFiles" = "Files: %ld";
+"qlFolders" = "Folders: %ld";
+"qlUnpacked" = "Unpacked: %@";
+"qlMoreItems" = "… and %ld more items. Open in Arhivar to see them all.";
+"qlEncryptedHeadersTitle" = "Password-Protected Archive";
+"qlEncryptedHeadersMessage" = "This archive's file list is encrypted with a password.\nOpen the archive in Arhivar to view its contents.";
+"qlErrorTitle" = "Archive Could Not Be Read";
