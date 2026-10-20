@@ -35,6 +35,12 @@
    - Partial translations, missing keys, untranslated placeholder text, or English fallback copy left inside non-English tables are strictly prohibited. Positional format specifiers (`%1$@`, `%2$ld`, etc.) and argument count must match 1:1 identically across all language tables.
 8. **SwiftUI Hierarchical `Table` Safety:**
    - Cells inside a hierarchical `Table` (`ArchiveBrowserView.NameCell`) must **never** read `@Observable` objects (`AppModel`, `AppSettings`) via `@Environment`. Pass them as explicit properties to prevent `"No Observable object of type AppModel found"` crashes when SwiftUI re-inserts rows upon folder navigation.
+9. **OWASP Agentic Security (ASI) & Subprocess Shielding:**
+   - Adhere to enterprise agentic safeguards against Agent Goal Hijacking (ASI01), Untrusted Inter-Agent Delegation (ASI02), Tool Poisoning & Shadow Tool Execution (ASI03), and Sandbox Escapes (ASI04). All `7zz` subprocess invocations run in `/usr/bin/sandbox-exec` with strict network blocking (`(deny network*)`), read-isolation for sensitive directories, `--` argument injection shielding, and non-blocking FIFO/socket exclusion.
+10. **Linux Foundation AAIF, Apple AIAP & HF Actions-as-Code Alignment:**
+    - Adhere to open Multi-Round-Trip Request (MRTR) stateless boundaries, macOS native App Intents and system services interoperability (`NSServices` in `FinderServices.swift`), and deterministic code-action execution.
+11. **Cryptographic Release Verification & Artifact Provenance:**
+    - Every release `.dmg` bundle must carry a verifiable Ed25519 signature (`.dmg.sig`) generated from a secure macOS login Keychain identity (`com.babadogantech.arhivar.update-signing`) and matching SHA-256 checksums (`SHA256SUMS.txt`), preventing release tampering.
 
 ---
 

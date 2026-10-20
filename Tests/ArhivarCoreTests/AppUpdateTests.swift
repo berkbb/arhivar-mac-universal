@@ -88,3 +88,17 @@ private func releaseJSON(tag: String, draft: Bool = false, prerelease: Bool = fa
     #expect(try !UpdateSignature.isValid(fileURL: tmp, signatureBase64: sig, publicKeyBase64: otherPub))
 }
 
+@Test func embeddedUpdatePublicKeyIsValid() throws {
+    let infoPlistURL = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("Support/Info.plist")
+    let data = try Data(contentsOf: infoPlistURL)
+    let plist = try PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any]
+    let base64Key = plist?["ArhivarUpdatePublicEDKey"] as? String
+    let unwrappedKey = try #require(base64Key)
+    let keyData = try #require(Data(base64Encoded: unwrappedKey))
+    #expect(keyData.count == 32)
+    _ = try Curve25519.Signing.PublicKey(rawRepresentation: keyData)
+}
+
+

@@ -90,6 +90,16 @@ func formatSpecifiersMatchEnglish(code: String) throws {
     #expect(AppLanguage.tr.resolvedCode(preferredLanguages: ["en-US"]) == "tr")
 }
 
+@Test func eachSupportedLanguageHasDedicatedFile() throws {
+    for code in AppLanguage.supportedCodes {
+        let fileURL = resources.appendingPathComponent("\(code).lproj/Localizable.strings")
+        var isDir: ObjCBool = false
+        #expect(FileManager.default.fileExists(atPath: fileURL.path, isDirectory: &isDir) && !isDir.boolValue, "Her dil kendi bağımsız Localizable.strings dosyasına sahip olmalıdır: \(code)")
+        let data = try Data(contentsOf: fileURL)
+        #expect(!data.isEmpty, "\(code).lproj/Localizable.strings dosyası boş olamaz")
+    }
+}
+
 @Test func stringTableFallsBackToEnglish() {
     let strings = StringTable(tables: ["en": ["appName": "Arhivar", "yes": "Yes"], "tr": ["yes": "Evet"]])
     #expect(strings.string(.yes, language: "tr") == "Evet")
