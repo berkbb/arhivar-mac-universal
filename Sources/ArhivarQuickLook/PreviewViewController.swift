@@ -58,9 +58,20 @@ public final class PreviewViewController: NSViewController, QLPreviewingControll
                 presentEncryptedHeaders(for: url)
                 handler(nil)
             } catch {
-                presentError(error.localizedDescription, for: url)
+                presentError(Self.message(for: error), for: url)
                 handler(nil)
             }
+        }
+    }
+
+    /// Hata ekranının ayrıntı satırı. libarchive ve 7zz iletileri İngilizce gelir; yerine çevrilmiş açıklama gösterilir.
+    static func message(for error: Error, l10n: QuickLookStrings = .shared) -> String {
+        switch error {
+        case SevenZipError.failed(let code, _): l10n.t(.errorFailed, Int(code))
+        case SevenZipError.timedOut: l10n.t(.errorEngineTimeout)
+        case SevenZipError.cancelled: l10n.t(.errorCancelled)
+        case SevenZipError.engineNotFound: l10n.t(.errorEngineNotFound)
+        default: l10n.t(.errorNotArchive)
         }
     }
 
