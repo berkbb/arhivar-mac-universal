@@ -5,6 +5,15 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-10-20
+
+### Added
+
+- Native macOS Ed25519 cryptographic release signing (`Scripts/update_signing.swift`, `UpdateSignature`) with macOS Keychain storage (`com.babadogantech.arhivar.update-signing`) and embedded public key in `Support/Info.plist` (`ArhivarUpdatePublicEDKey`). Every `.dmg` distribution bundle is accompanied by `.dmg.sig` and SHA-256 checksum verification (`SHA256SUMS.txt`, `Arhivar-1.3.0.sha256`).
+- Mandatory 1:1 exact multilingual translation architecture across all supported languages (`tr`, `en`, `ro`) with dedicated independent localization files (`Resources/<lang>.lproj/Localizable.strings`) and automated unit test validation (`eachSupportedLanguageHasDedicatedFile`).
+- SOTA 2026 AI Agent Governance expansion to 42 enterprise standards in `.agents/rules/` including Linux Foundation AAIF, Apple App Intents AIAP, OWASP Agentic Security ASI, and Hugging Face Actions-as-Code CodeAgent.
+- Embedded release signing public key integrity verification in `AppUpdateTests.swift` (`embeddedUpdatePublicKeyIsValid`). Total automated test count increased to 287 tests.
+
 ## [1.2.0] — 2026-10-20
 
 ### Added
