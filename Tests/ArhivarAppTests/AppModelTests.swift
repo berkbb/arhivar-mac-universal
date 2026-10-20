@@ -975,6 +975,31 @@ struct AppModelTests {
         #expect(model.quickLookURL == nil)
     }
 
+    /// Hızlı Bakış açıkken ok tuşlarıyla başka bir dosyaya geçildiğinde önizleme yeni dosyaya geçer.
+    @Test func quickLookSwitchesPreviewOnSelectionChange() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let archive = try await fixture.makeArchive("switch.7z", format: .sevenZip)
+        let model = fixture.model
+        model.openArchive(archive)
+        await fixture.settle()
+
+        model.selection = ["kaynak/not.txt"]
+        model.toggleQuickLook()
+        await fixture.settle()
+        #expect(model.quickLookURL?.lastPathComponent == "not.txt")
+
+        // Ok tuşuyla alt klasördeki b.txt dosyasına geçildiğinde
+        model.selection = ["kaynak/alt/b.txt"]
+        await fixture.settle()
+        #expect(model.quickLookURL?.lastPathComponent == "b.txt")
+
+        // Boşluk basıldığında kapanır
+        model.toggleQuickLook()
+        #expect(model.quickLookURL == nil)
+    }
+
     /// P1-7: aynı klasördeki bir öğenin adına (büyük/küçük harf duyarsız) yeniden adlandırılmaz.
     @Test func renameRejectsSiblingNames() async throws {
         let fixture = try Fixture()

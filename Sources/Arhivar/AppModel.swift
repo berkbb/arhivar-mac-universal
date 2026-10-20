@@ -157,7 +157,19 @@ final class AppModel {
         }
     }
     var sortOrder: [KeyPathComparator<ArchiveNode>] = [ArchiveTree.nameComparator] { didSet { rebuildDisplay() } }
-    var selection: Set<ArchiveNode.ID> = []
+    var selection: Set<ArchiveNode.ID> = [] {
+        didSet {
+            guard selection != oldValue else { return }
+            if quickLookURL != nil,
+               selection.count == 1,
+               let single = selection.first,
+               let node = node(single),
+               !node.isDirectory,
+               !isSymbolicLink(single) {
+                toggleQuickLook(single)
+            }
+        }
+    }
 
     private(set) var recentArchives: [URL] = []
     private(set) var operation: OperationState?

@@ -41,11 +41,50 @@ struct ArhivarApp: App {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let services = FinderServices()
+    private var keyMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Finder sağ tık menüsündeki "Hızlı Eylemler / Servisler" öğeleri.
         NSApp.servicesProvider = services
         NSUpdateDynamicServices()
+        setupSpaceKeyMonitor()
+    }
+
+    private func setupSpaceKeyMonitor() {
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            // Space tuşu: tuş kodu 49, hiçbir değiştirici tuş (Cmd, Shift, Ctrl, Option) basılı olmamalı
+            let modifiers = event.modifierFlags.intersection([.command, .shift, .control, .option])
+            guard event.keyCode == 49, modifiers.isEmpty else {
+                return event
+            }
+
+            // Metin düzenleniyorsa (arama, ad değiştirme, parola vb.) boşluk tuşu metne gitmeli
+            if AppModel.isEditingText {
+                return event
+            }
+
+            let model = AppModel.shared
+
+            // Hızlı Bakış açıksa Space tuşu önizlemeyi kapatır
+            if model.quickLookURL != nil {
+                model.toggleQuickLook()
+                return nil
+            }
+
+            // Arşiv açıkken tek bir dosya seçiliyse Hızlı Bakış ile önizlenir
+            guard model.listing != nil,
+                  model.canOperate,
+                  model.selection.count == 1,
+                  !model.selectionIsSymbolicLink,
+                  let single = model.selection.first,
+                  let node = model.node(single),
+                  !node.isDirectory else {
+                return event
+            }
+
+            model.toggleQuickLook(single)
+            return nil
+        }
     }
 
     nonisolated override func acceptsPreviewPanelControl(_ panel: QLPreviewPanel!) -> Bool {
