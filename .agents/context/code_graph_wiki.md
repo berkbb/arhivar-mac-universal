@@ -22,7 +22,7 @@
 | `OpenSafety.swift` | `OpenSafety` (`executableKind`, `hasDeceptiveCharacters`, `visibleName`) | Executable/script UTI & permission detection, Unicode bidirectional/invisible filler spoof detection |
 | `Checksums.swift` | `Checksum`, `SevenZipCommand.hash(file:)`, `ChecksumParser` | `7zz h` CRC32, SHA-256, and BLAKE2sp command builder and output parser |
 | `Engine.swift` | `EngineLocator`, `EngineUpdateResult`, `EngineUpdater`, `ArchiveNaming` | Discovering and version-ranking `7zz` binaries, wrapping `update-7zip.sh`, split volume resolution (`firstVolume`, incl. old-style RAR `.r00`…`.r99` and split ZIP `.z01`…`.z99`), archive base/suggested naming (strips `.part01` multi-part suffixes) |
-| `AppUpdate.swift` | `AppRelease`, `AppUpdateChecker` | GitHub Releases API parser and semantic version comparison for Arhivar self-update checks |
+| `AppUpdate.swift` | `AppRelease`, `AppUpdateChecker`, `UpdateSignature`, `UpdateChecksums` | GitHub Releases API parser, semantic version comparison, Ed25519 signature verification (`CryptoKit`), and SHA-256 checksum validation for Arhivar self-update releases |
 | `Localization.swift` | `AppLanguage`, `StringTable`, `LKey` | Runtime-switchable localization engine and exhaustive key enumeration (`tr`, `en`, `ro`) |
 
 ---
@@ -62,7 +62,8 @@
 | :--- | :--- | :--- |
 | `Scripts/make_icon.swift` | `drawIcon`, `Resources/AppIcon.icns` | Programmatic CoreGraphics generator for the macOS app icon (16px to 1024px) |
 | `Scripts/make_document_icons.swift` | `Family`, `zipper`, `box`, `books`, `layers`, `disc`, `drawDocument`, `Resources/DocumentIcons/{zip,7z,rar,tar,disk,archive}.icns` | Programmatic CoreGraphics generator for the six Finder document icon families (up to 512px, ~1.7 MB total, zero SF Symbols) |
-| `Support/Info.plist` | `CFBundleDocumentTypes`, `NSServices`, `UTImportedTypeDeclarations` | Declares six document icon families (`LSHandlerRank = Alternate`), Finder context-menu services, and 14 custom archive UTIs |
+| `Scripts/update_signing.swift` | `KeychainService`, `signFile`, `verifySignature` | Ed25519 signing key generation, login Keychain storage (`com.babadogantech.arhivar.update-signing`), and `.dmg.sig` creation |
+| `Support/Info.plist` | `CFBundleDocumentTypes`, `NSServices`, `UTImportedTypeDeclarations`, `ArhivarUpdatePublicEDKey` | Declares six document icon families (`LSHandlerRank = Alternate`), Finder context-menu services, 14 custom archive UTIs, and Ed25519 release verification public key |
 
 ---
 

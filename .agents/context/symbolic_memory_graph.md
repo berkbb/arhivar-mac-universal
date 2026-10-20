@@ -20,6 +20,7 @@
 | `N_QUARANTINE` | `Quarantine` | `Sources/ArhivarCore/Quarantine.swift` | `com.apple.quarantine` sanitizer and recursive propagator |
 | `N_SAFETY` | `OpenSafety` | `Sources/ArhivarCore/OpenSafety.swift` | Risky UTI / execute-bit detector and Unicode spoof sanitizer |
 | `N_STACK` | `AppModel.archiveStack` | `Sources/Arhivar/AppModel.swift` | LIFO stack of `ArchiveContext` frames for nested archive browsing |
+| `N_UPDATE_SIG` | `UpdateSignature` / `UpdateChecksums` | `Sources/ArhivarCore/AppUpdate.swift` | Ed25519 release signature and SHA-256 release checksum verifier |
 
 ---
 

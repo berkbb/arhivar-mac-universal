@@ -20,6 +20,15 @@
 
 ## Done
 
+### Release 1.2.0 & Packaging Integrity Standards (2026-10-20)
+
+#### S00. ✅ [P1] Release 1.2.0, Ed25519 Cryptographic Release Signing & Multilingual Governance
+- **Status:** ✅ Done:
+  - **Ed25519 Release Signing & Checksums:** Implemented `Scripts/update_signing.swift` and `AppUpdate.swift` (`UpdateSignature`, `UpdateChecksums`) with Keychain-stored private key (`com.babadogantech.arhivar.update-signing`) and embedded public key in `Support/Info.plist`. Automated generation of `Arhivar-1.2.0.dmg.sig` and `SHA256SUMS.txt`.
+  - **1:1 Multilingual Governance:** Mandated strict 1:1 translation parity across all supported languages (`tr`, `en`, `ro`) with dedicated files per language (`Resources/<lang>.lproj/Localizable.strings`) and strict localization CI validation.
+  - **SOTA 2026 Core AI Standards:** Expanded AI agent standard governance from 38 to 42 enterprise standards, integrating Linux Foundation AAIF, Apple AIAP, OWASP Agentic Security, and Hugging Face Actions-as-Code.
+- **Locations:** `Scripts/update_signing.swift`, `Sources/ArhivarCore/AppUpdate.swift`, `Support/Info.plist`, `CHANGELOG.md`, `.agents/rules/`
+
 ### 11-Discipline Chaos & Security Matrix Strengthening (2026-10-20)
 
 #### S0. ✅ [P1] Strengthen the 11-Discipline Chaos & Security Matrix (`ChaosAndSecurityMatrixTests.swift`)

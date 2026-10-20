@@ -66,3 +66,14 @@ All arguments passed to `7zz` include `-sccUTF-8` and place file/archive paths a
   - `CFBundleDocumentTypes` groups all supported archive UTIs into six distinct families (`zip`, `7z`, `rar`, `tar`, `disk`, `archive`), each with its own `CFBundleTypeIconFile` and `LSHandlerRank = Alternate` (so Arhivar never takes over default file associations unless the user explicitly selects Arhivar in Finder's Get Info › Open with › Change All).
   - Icons are drawn purely in CoreGraphics by `Scripts/make_document_icons.swift` (no SF Symbols, up to 512 px to keep all six `.icns` files around ~1.7 MB total).
   - `DocumentIconTests` enforces that every family has its `.icns` file, every entry has `LSHandlerRank == "Alternate"`, no UTI belongs to more than one family, and all `UTImportedTypeDeclarations` and `NSServices` archive UTIs are mapped to a family.
+
+---
+
+## 5. Release Packaging & Cryptographic Integrity (`Scripts/update_signing.swift` & `AppUpdate.swift`)
+
+- **Ed25519 Cryptographic Release Signing:**
+  - Distribution `.dmg` packages are signed with an Ed25519 private key securely stored in macOS login keychain (`keychainService = "com.babadogantech.arhivar.update-signing"`).
+  - The public key is bundled inside `Support/Info.plist` under `ArhivarUpdatePublicEDKey`.
+  - Releases generate `Arhivar-<version>.dmg.sig` (base64 raw 64-byte Ed25519 signature) and `SHA256SUMS.txt` / `Arhivar-<version>.sha256`.
+  - `UpdateSignature` and `UpdateChecksums` in `AppUpdate.swift` verify the release using Apple's `CryptoKit.Curve25519.Signing.PublicKey` and `CryptoKit.SHA256`.
+

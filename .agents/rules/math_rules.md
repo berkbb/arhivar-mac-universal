@@ -2,7 +2,7 @@
 
 - **Source:** Project Domain Invariants (`ArhivarCore`)
 - **Version:** 1.0.2
-- **Last Review Date:** 2026-10-17
+- **Last Review Date:** 2026-10-20
 - **Change Summary:** Codified saturating `Int64` size summation, disk space reserve formulas, and civil date conversion invariants.
 
 ---

@@ -2,7 +2,7 @@
 
 - **Source:** Meta FAIR (2025-2026)
 - **Version / Publication Date:** 2026.04
-- **Last Review Date:** 2026-10-17
+- **Last Review Date:** 2026-10-20
 - **Change Summary:** Adopted for `arhivar-mac-universal` governance.
 
 ---

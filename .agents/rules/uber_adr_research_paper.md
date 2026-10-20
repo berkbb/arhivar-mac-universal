@@ -2,7 +2,7 @@
 
 - **Source:** Uber MLSys 2026 Industry Track (arXiv:2605.17380)
 - **Version / Publication Date:** 2026.04
-- **Last Review Date:** 2026-10-17
+- **Last Review Date:** 2026-10-20
 - **Change Summary:** Adopted for `arhivar-mac-universal` governance.
 
 ---
