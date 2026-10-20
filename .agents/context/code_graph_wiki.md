@@ -45,6 +45,17 @@
 
 ---
 
+### Target: `ArhivarQuickLook` (`Sources/ArhivarQuickLook/`)
+
+| File | Primary Symbols | Responsibilities |
+| :--- | :--- | :--- |
+| `main.swift` | `QuickLookMain`, `NSExtensionMain` | App Extension process entry point invoking `NSExtensionMain()` |
+| `PreviewViewController.swift` | `PreviewViewController`, `QLPreviewingController` | `NSViewController` implementing `preparePreviewOfFile(at:completionHandler:)`, resolving sandboxed `7zz`, parsing archive metadata, and hosting SwiftUI |
+| `ArchiveQuickLookView.swift` | `ArchiveQuickLookView` | Native SwiftUI view displaying archive header, format/encryption badges, statistics banner, capped file table (300 items), and password-lock notices |
+| `Support/QuickLook-Info.plist` | `QLSupportedContentTypes`, `NSExtensionPrincipalClass` | Quick Look extension manifest declaring 13 supported archive UTTypes |
+
+---
+
 ### Build Scripts & Bundle Resources (`Scripts/`, `Support/`, `Resources/`)
 
 | File | Primary Symbols / Artifacts | Responsibilities |

@@ -66,6 +66,15 @@ else
   exit 1
 fi
 
+if [ -f "$BIN_DIR/ArhivarQuickLook" ]; then
+  echo "▸ Quick Look eklentisi paketleniyor: ArhivarQuickLook.appex"
+  QL_APPEX="$APP/Contents/PlugIns/ArhivarQuickLook.appex"
+  mkdir -p "$QL_APPEX/Contents/MacOS" "$QL_APPEX/Contents/Resources"
+  cp "$BIN_DIR/ArhivarQuickLook" "$QL_APPEX/Contents/MacOS/ArhivarQuickLook"
+  cp "$ROOT/Support/QuickLook-Info.plist" "$QL_APPEX/Contents/Info.plist"
+  codesign "${SIGN_ARGS[@]}" "$QL_APPEX"
+fi
+
 if [ "$SIGN_IDENTITY" = "-" ]; then echo "▸ Ad-hoc imzalanıyor…"; else echo "▸ İmzalanıyor: $SIGN_IDENTITY"; fi
 codesign "${SIGN_ARGS[@]}" "$APP"
 echo "▸ Mimariler: $(lipo -archs "$APP/Contents/MacOS/Arhivar")"

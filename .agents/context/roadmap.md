@@ -203,6 +203,10 @@ A workflow of 68 agents (recon per discipline → adversarial verification of ev
 #### S37. ✅ [P2] Off-Main Tree Building, Cached Nested Context, and Debounced Async Search
 - **Status:** ✅ Done — In archives with 500k+ entries, `ArchiveTree.build` and `index` are now offloaded to `Task.detached` within `fetchListing`, delivering pre-computed trees directly to `apply` with zero main-thread stall. Returning from nested archives (`returnToArchive`) directly restores the cached `tree` and `nodeIndex` from `ArchiveContext` in $O(1)$ time. Searching in large archives ($\ge 1000$ nodes) uses a 60ms-debounced, cancellable background task (`searchTask`), setting `isSearching = true` to display an overlay `ProgressView` without blocking `@MainActor`. Test `asyncSearchForLargeArchiveRunsInBackgroundAndUpdatesDisplay` (app).
 - **Location:** `Sources/Arhivar/AppModel.swift`, `Sources/Arhivar/Views/ArchiveBrowserView.swift`, `Tests/ArhivarAppTests/AppModelTests.swift`
+
+#### S38. ✅ [P2] Native macOS Quick Look Preview Extension (`ArhivarQuickLook.appex`)
+- **Status:** ✅ Done — Added a full-featured macOS Quick Look Preview App Extension (`com.apple.quicklook.preview`) enabling instant Spacebar preview of archive files (`.zip`, `.7z`, `.rar`, `.tar`, `.gz`, `.bz2`, `.xz`, `.iso`) directly in Finder without launching the main application. Built using native SwiftUI (`ArchiveQuickLookView.swift`), `QLPreviewingController` (`PreviewViewController.swift`), sandboxed listing via `ArhivarCore`, password lock detection badges, and statistics banners. Packaged into `Arhivar.app/Contents/PlugIns/ArhivarQuickLook.appex` via `build_app.sh`. Suite `QuickLookTests` added. Total tests: 280.
+- **Location:** `Sources/ArhivarQuickLook/`, `Support/QuickLook-Info.plist`, `Scripts/build_app.sh`, `Tests/ArhivarCoreTests/QuickLookTests.swift`
 ---
 
 

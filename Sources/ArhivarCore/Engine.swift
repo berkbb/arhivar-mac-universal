@@ -10,11 +10,19 @@ public enum EngineLocator {
             .appendingPathComponent("Library/Application Support/Arhivar/engine", isDirectory: true)
     }
 
-    /// Sıra: kullanıcının seçtiği → uygulamayla gelen → yedek klasör → Homebrew.
+    /// Sıra: kullanıcının seçtiği → uygulamayla gelen → üst uygulamayla gelen (eklenti ise) → yedek klasör → Homebrew.
     public static func candidates(customPath: String?, managedDirectory: URL = managedEngineDirectory, bundle: Bundle = .main) -> [URL] {
         var result: [URL] = []
         if let customPath, !customPath.isEmpty { result.append(URL(fileURLWithPath: customPath)) }
         if let bundled = bundle.url(forAuxiliaryExecutable: "7zz") { result.append(bundled) }
+        // Eklenti içinden çalışıyorsa (Arhivar.app/Contents/PlugIns/ArhivarQuickLook.appex) üst paketin 7zz motoru:
+        let parentApp = bundle.bundleURL.deletingLastPathComponent().deletingLastPathComponent()
+        if parentApp.pathExtension == "app" || parentApp.lastPathComponent == "Contents" {
+            let appBundleURL = parentApp.lastPathComponent == "Contents" ? parentApp.deletingLastPathComponent() : parentApp
+            if let parentBundle = Bundle(url: appBundleURL), let parentBundled = parentBundle.url(forAuxiliaryExecutable: "7zz") {
+                result.append(parentBundled)
+            }
+        }
         result.append(managedDirectory.appendingPathComponent("7zz"))
         result += homebrewPaths.map { URL(fileURLWithPath: $0) }
         return result

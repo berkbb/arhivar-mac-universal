@@ -13,6 +13,12 @@ let package = Package(
             dependencies: ["ArhivarCore"],
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
+        // Finder Quick Look (Hızlı Bakış) önizleme eklentisi.
+        .executableTarget(
+            name: "ArhivarQuickLook",
+            dependencies: ["ArhivarCore"],
+            swiftSettings: [.defaultIsolation(MainActor.self)]
+        ),
         .testTarget(name: "ArhivarCoreTests", dependencies: ["ArhivarCore"]),
         // Uygulama modeli (AppModel) akışları; gerçek 7zz ile çalışır.
         .testTarget(name: "ArhivarAppTests", dependencies: ["Arhivar", "ArhivarCore"]),
