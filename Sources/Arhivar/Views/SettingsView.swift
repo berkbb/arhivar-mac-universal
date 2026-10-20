@@ -338,18 +338,6 @@ private struct ShortcutsSettingsView: View {
                 ForEach(ShortcutAction.allCases) { action in
                     customShortcutRow(for: action)
                 }
-                if !allShortcutsAreDefault {
-                    HStack {
-                        Spacer()
-                        Button(settings.t(.shortcutResetAll)) {
-                            stopRecording()
-                            settings.resetAllShortcuts()
-                        }
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    }
-                    .padding(.top, 4)
-                }
             } header: {
                 Text(settings.t(.shortcutCustomSection))
             } footer: {
@@ -373,16 +361,20 @@ private struct ShortcutsSettingsView: View {
             } header: {
                 Text(settings.t(.shortcutReferenceSection))
             }
+
+            Section {
+                Button(settings.t(.shortcutResetAll)) {
+                    stopRecording()
+                    settings.resetAllShortcuts()
+                }
+                .disabled(settings.isAllShortcutsDefault)
+            }
         }
         .formStyle(.grouped)
         .padding()
         .onDisappear {
             stopRecording()
         }
-    }
-
-    private var allShortcutsAreDefault: Bool {
-        ShortcutAction.allCases.allSatisfy { settings.isDefaultShortcut(for: $0) }
     }
 
     private func customShortcutRow(for action: ShortcutAction) -> some View {

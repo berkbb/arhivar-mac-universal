@@ -1696,20 +1696,29 @@ struct AppModelTests {
         #expect(settings.shortcut(for: .extract) == ShortcutAction.extract.defaultShortcut)
         #expect(settings.isDefaultShortcut(for: .extract))
 
-        // 5. Birden fazla kısayol değiştirip tümünü sıfırlama
+        // 5. Birden fazla kısayol ve Hızlı Bakış değiştirip tümünü sıfırlama
+        #expect(settings.isAllShortcutsDefault)
         settings.setShortcut(KeyboardShortcutData(key: "U", command: true), for: .test)
         settings.setShortcut(KeyboardShortcutData(key: "K", command: true), for: .info)
+        settings.quickLookShortcut = .cmdYOnly
         #expect(!settings.isDefaultShortcut(for: .test))
         #expect(!settings.isDefaultShortcut(for: .info))
+        #expect(!settings.isAllShortcutsDefault)
 
         settings.resetAllShortcuts()
         #expect(settings.isDefaultShortcut(for: .test))
         #expect(settings.isDefaultShortcut(for: .info))
+        #expect(settings.quickLookShortcut == .spaceAndCmdY)
+        #expect(settings.isAllShortcutsDefault)
         #expect(settings.shortcut(for: .test) == ShortcutAction.test.defaultShortcut)
 
         // 6. resetAll() çağrıldığında da kısayollar sıfırlanmalı
         settings.setShortcut(KeyboardShortcutData(key: "U", command: true), for: .test)
+        settings.quickLookShortcut = .spaceOnly
+        #expect(!settings.isAllShortcutsDefault)
         settings.resetAll()
         #expect(settings.isDefaultShortcut(for: .test))
+        #expect(settings.quickLookShortcut == .spaceAndCmdY)
+        #expect(settings.isAllShortcutsDefault)
     }
 }

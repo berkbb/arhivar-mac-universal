@@ -289,7 +289,7 @@
 "shortcutCustomSection" = "Comenzi rapide personalizabile";
 "shortcutRecordPrompt" = "Apăsați tastele…";
 "shortcutResetDefault" = "Revocare la valori implicite";
-"shortcutResetAll" = "Resetați toate comenzile rapide";
+"shortcutResetAll" = "Revocare totală la valori implicite";
 "shortcutRecordHelp" = "Faceți clic pe o insignă de comandă rapidă și apăsați o nouă combinație de taste. Apăsați Esc pentru a anula.";
 "shortcutModifierRequired" = "Comanda rapidă trebuie să conțină cel puțin o tastă modificatoare (⌘, ⌥, ⌃).";
 "shortcutConflictWarning" = "Această comandă rapidă este deja utilizată de „%@”.";

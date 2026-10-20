@@ -289,7 +289,7 @@
 "shortcutCustomSection" = "Customizable Shortcuts";
 "shortcutRecordPrompt" = "Press keys…";
 "shortcutResetDefault" = "Reset to Default";
-"shortcutResetAll" = "Reset All Shortcuts";
+"shortcutResetAll" = "Reset All to Defaults";
 "shortcutRecordHelp" = "Click a shortcut badge and press a new key combination. Press Esc to cancel.";
 "shortcutModifierRequired" = "Shortcuts must include at least one modifier key (⌘, ⌥, ⌃).";
 "shortcutConflictWarning" = "This shortcut is already used by \"%@\".";

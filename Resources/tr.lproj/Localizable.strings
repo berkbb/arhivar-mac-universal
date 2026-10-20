@@ -289,7 +289,7 @@
 "shortcutCustomSection" = "Özelleştirilebilir Kısayollar";
 "shortcutRecordPrompt" = "Tuşa basın…";
 "shortcutResetDefault" = "Varsayılana Dön";
-"shortcutResetAll" = "Tüm Kısayolları Sıfırla";
+"shortcutResetAll" = "Tümünü Varsayılanlara Döndür";
 "shortcutRecordHelp" = "Değiştirmek için kısayol kutucuğuna tıklayın ve yeni bir tuş bileşimi basın. İptal etmek için Esc tuşuna basın.";
 "shortcutModifierRequired" = "Kısayol en az bir niteleyici tuş (⌘, ⌥, ⌃) içermelidir.";
 "shortcutConflictWarning" = "Bu kısayol zaten \"%@\" eylemi için kullanılıyor.";

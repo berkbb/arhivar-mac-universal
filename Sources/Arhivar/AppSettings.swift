@@ -364,7 +364,13 @@ final class AppSettings {
     }
 
     func resetAllShortcuts() {
+        quickLookShortcut = .spaceAndCmdY
         customShortcuts = [:]
+    }
+
+    var isAllShortcutsDefault: Bool {
+        quickLookShortcut == .spaceAndCmdY &&
+        ShortcutAction.allCases.allSatisfy { isDefaultShortcut(for: $0) }
     }
 
     func isDefaultShortcut(for action: ShortcutAction) -> Bool {
