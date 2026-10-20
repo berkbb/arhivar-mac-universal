@@ -20,5 +20,10 @@ NEW_BUILD=$((OLD_BUILD + 1))
 
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$PLIST"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $NEW_BUILD" "$PLIST"
+QL_PLIST="$ROOT/Support/QuickLook-Info.plist"
+if [ -f "$QL_PLIST" ]; then
+  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$QL_PLIST"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $NEW_BUILD" "$QL_PLIST"
+fi
 echo "Sürüm: $OLD_VERSION ($OLD_BUILD) → $VERSION ($NEW_BUILD)"
 echo "CHANGELOG.md içinde '## [$VERSION]' başlığını eklemeyi unutmayın."

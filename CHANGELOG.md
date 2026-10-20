@@ -5,6 +5,18 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ## [Unreleased]
 
+## [1.3.1] — 2026-10-20
+
+### Fixed
+
+- Fixed fatal `EXC_BREAKPOINT` (`SIGTRAP`) crash in Apple's private `_QuickLook_SwiftUI` framework during rapid sequential `Cmd+Y` or `Space` preview toggles by replacing SwiftUI's `.quickLookPreview` modifier with a native AppKit `QuickLookCoordinator` (`QLPreviewPanel.shared()`, `QLPreviewPanelDataSource`, `QLPreviewPanelDelegate`).
+- Integrated AppKit responder chain lifecycle management (`acceptsPreviewPanelControl`, `beginPreviewPanelControl`, `endPreviewPanelControl`) on `AppDelegate` with keyboard dismissal for Space (49) and Esc (53).
+- Added regression test `quickLookRapidTogglesDoNotCrash` in `AppModelTests.swift` with headless test environment isolation (`isTesting`).
+
+### Added
+
+- macOS restart recommendation alert and interface notice in Settings (`restartWarningTitle`, `restartMenuBarNotice`) across Turkish, English, and Romanian localization tables, notifying users that restarting the application is recommended after language switching to reload Cocoa system dialogs and menu bars.
+
 ## [1.3.0] — 2026-10-20
 
 ### Added
