@@ -48,15 +48,19 @@ struct BrowserViewTests {
         for name in ["Dekont1.pdf", "EAR2026.pdf", "Ekran Resmi.png"] {
             let file = folder.appendingPathComponent(name)
             try Data(name.utf8).write(to: file)
-            var info = [UInt8](repeating: 0, count: 32)
-            _ = setxattr(file.path, "com.apple.FinderInfo", &info, 32, 0, 0)
         }
+        let macFolder = workspace.appendingPathComponent("__MACOSX", isDirectory: true)
+            .appendingPathComponent("Şirket", isDirectory: true)
+        try FileManager.default.createDirectory(at: macFolder, withIntermediateDirectories: true)
+        try Data("._Dekont1".utf8).write(to: macFolder.appendingPathComponent("._Dekont1.pdf"))
+
         let zip = workspace.appendingPathComponent("Şirket.zip")
-        let ditto = Process()
-        ditto.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
-        ditto.arguments = ["-c", "-k", "--sequesterRsrc", "--keepParent", folder.path, zip.path]
-        try ditto.run()
-        ditto.waitUntilExit()
+        let proc = Process()
+        proc.executableURL = engineURL
+        proc.currentDirectoryURL = workspace
+        proc.arguments = ["a", "Şirket.zip", "Şirket", "__MACOSX", "-tzip", "-mx1", "-y"]
+        try proc.run()
+        proc.waitUntilExit()
         return zip
     }
 
