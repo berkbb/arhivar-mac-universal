@@ -1518,4 +1518,20 @@ struct AppModelTests {
         model.closeArchive()
         #expect(model.passwordRequest == nil && model.archiveURL == nil)
     }
+
+    /// sandboxEngine ayarı açıkken AppModel.confined kum havuzunu bağlar; kapalıyken yalın runner döndürür.
+    @Test func confinedWiresSandboxProfileWhenSettingIsOn() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        let runner = CommandRunner(executableURL: URL(fileURLWithPath: "/bin/cat"))
+        let archive = fixture.workspace.appendingPathComponent("test.7z")
+
+        fixture.model.settings.sandboxEngine = true
+        let sandboxed = fixture.model.confined(runner, archive: archive)
+        #expect(sandboxed.sandbox != nil)
+
+        fixture.model.settings.sandboxEngine = false
+        let plain = fixture.model.confined(runner, archive: archive)
+        #expect(plain.sandbox == nil)
+    }
 }

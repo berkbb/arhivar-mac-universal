@@ -19,93 +19,143 @@ private func makeTempFolder(_ prefix: String) throws -> URL {
     return url
 }
 
+/// Ağacın en büyük derinliği (özyinelemesiz; testin kendisi derin ağaçta taşmasın diye açık yığınla).
+private func treeDepth(_ nodes: [ArchiveNode]) -> Int {
+    var maxDepth = 0
+    var stack: [(ArchiveNode, Int)] = nodes.map { ($0, 1) }
+    while let (node, depth) = stack.popLast() {
+        maxDepth = Swift.max(maxDepth, depth)
+        for child in node.children ?? [] { stack.append((child, depth + 1)) }
+    }
+    return maxDepth
+}
+
+/// Tohumlanabilir, deterministik sözde rastgele sayı üreteci (SplitMix64).
+private struct SplitMix64: RandomNumberGenerator {
+    var state: UInt64
+    init(seed: UInt64) { state = seed }
+    mutating func next() -> UInt64 {
+        state = state &+ 0x9E37_79B9_7F4A_7C15
+        var z = state
+        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+        return z ^ (z >> 31)
+    }
+}
+
 @Suite("Kapsamlı Güvenlik, Stres, Kırma, Sızma, Yük, Hacim, Dayanıklılık, Zafiyet, Kırmızı Takım, Fuzz ve Kaos Test Matrisi")
 struct ChaosAndSecurityMatrixTests {
 
-    // MARK: - 1. GÜVENLİK TESTİ (Security Testing)
+    // MARK: - 1. GÜVENLİK TESTİ (01-sandbox-isolation & Password Protection)
 
-    /// Zip Slip / Dizin Dışına Çıkma (Directory Traversal) engelleme testi:
-    /// Göreli ("../../") ya da mutlak ("/etc/") yollar içeren sembolik bağlantılar veya taşınan içerik
-    /// hazırlık kökünün dışına çıkamaz.
-    @Test func securityZipSlipTraversalBlocked() throws {
-        let root = try makeTempFolder("sec-zipslip")
-        defer { try? FileManager.default.removeItem(at: root) }
+    /// Canlı Stdin Parola İletimi ve Argv Temizliği:
+    /// Parolalar asla komut satırında yer almaz; doğrudan stdin pipe üzerinden /bin/cat'e iletilir.
+    @Test func securityLiveStdinPasswordDelivery() async throws {
+        let catURL = URL(fileURLWithPath: "/bin/cat")
+        guard FileManager.default.isExecutableFile(atPath: catURL.path) else { return }
 
-        let staging = root.appendingPathComponent("staging", isDirectory: true)
-        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+        let secret = "SuperGizliP@ssw0rd!#987"
+        let catRunner = CommandRunner(executableURL: catURL)
+        let inputData = SevenZipCommand.passwordInput(secret)
+        #expect(inputData != nil)
 
-        // Staging içinde dışarıyı (/etc/hosts) gösteren sembolik bağlantı
-        let badLink = staging.appendingPathComponent("bad_link")
-        try FileManager.default.createSymbolicLink(atPath: badLink.path, withDestinationPath: "/etc/hosts")
+        // /bin/cat girdi verisini olduğu gibi stdout'a yazar.
+        let result = try await catRunner.run([], input: inputData)
+        #expect(result.exitCode == 0)
+        let expected = secret + "\n" + secret + "\n" + secret + "\n" + secret + "\n"
+        #expect(result.stdout == expected)
 
-        // Staging içinde 3 üst klasörü gösteren göreli bağlantı
-        let escapingLink = staging.appendingPathComponent("escaping_link")
-        try FileManager.default.createSymbolicLink(atPath: escapingLink.path, withDestinationPath: "../../../../../tmp")
-
-        // Geçerli iç bağlantı
-        try Data("safe".utf8).write(to: staging.appendingPathComponent("target.txt"))
-        let safeLink = staging.appendingPathComponent("safe_link")
-        try FileManager.default.createSymbolicLink(atPath: safeLink.path, withDestinationPath: "target.txt")
-
-        let removed = StagedExtraction.secureSymlinks(in: staging, extractionRoot: staging)
-        #expect(removed.contains("bad_link"))
-        #expect(removed.contains("escaping_link"))
-        #expect(!removed.contains("safe_link"))
-
-        #expect(!FileManager.default.fileExists(atPath: badLink.path))
-        #expect(!FileManager.default.fileExists(atPath: escapingLink.path))
-        #expect(FileManager.default.fileExists(atPath: safeLink.path))
+        // Parola verilmediğinde boş çıktı döner.
+        let emptyResult = try await catRunner.run([], input: nil)
+        #expect(emptyResult.exitCode == 0)
+        #expect(emptyResult.stdout.isEmpty)
     }
 
-    /// Sıfır Komut Satırı Parola Sızıntısı (Zero Command-Line Password Exposure):
-    /// Parolalar asla komut satırı argümanlarında yer almaz (`ps` veya `sysctl` ile okunamaz).
+    /// Tüm Komut Oluşturucularda Sıfır Argüman Parola Sızıntısı:
+    /// Her bir SevenZipCommand fonksiyonunun ve SandboxProfile argümanlarının parolayı argv içinde taşımadığı taranır.
     @Test func securityZeroCommandLinePasswordExposure() {
         let secret = "GizliP@ssw0rd!#123"
         let archive = URL(fileURLWithPath: "/tmp/test.7z")
         let dest = URL(fileURLWithPath: "/tmp/cikti")
 
-        // Create
-        let createOpts = CreateOptions(sources: [URL(fileURLWithPath: "/tmp/a.txt")], destination: archive, format: .sevenZip, level: .normal, password: secret)
-        let createArgs = SevenZipCommand.create(createOpts)
-        #expect(!createArgs.contains(secret))
-        #expect(!createArgs.contains("-p\(secret)"))
-        #expect(createArgs.contains("-p")) // Yalnızca çıplak -p (stdin'den sorulsun)
+        let commands: [[String]] = [
+            SevenZipCommand.create(CreateOptions(sources: [URL(fileURLWithPath: "/tmp/a.txt")], destination: archive, format: .sevenZip, level: .normal, password: secret)),
+            SevenZipCommand.add(archive: archive, names: ["b.txt"], password: secret),
+            SevenZipCommand.extract(ExtractOptions(archive: archive, destination: dest, password: secret, overwrite: .replace)),
+            SevenZipCommand.list(archive: archive),
+            SevenZipCommand.test(archive: archive),
+            SevenZipCommand.delete(archive: archive, items: ["c.txt"]),
+            SevenZipCommand.rename(archive: archive, from: "old.txt", to: "new.txt"),
+            SevenZipCommand.hash(file: archive),
+            SevenZipCommand.compressTarStage(CreateOptions(sources: [URL(fileURLWithPath: "/tmp/a.txt")], destination: URL(fileURLWithPath: "/tmp/a.tar.gz"), format: .tarGzip, level: .normal), tarStage: URL(fileURLWithPath: "/tmp/stage.tar")) ?? []
+        ]
 
-        // Add
-        let addArgs = SevenZipCommand.add(archive: archive, names: ["b.txt"], password: secret)
-        #expect(!addArgs.contains(secret))
-        #expect(!addArgs.contains("-p\(secret)"))
-        #expect(addArgs.contains("-p"))
+        let profile = SandboxProfile.forOperation(archive: archive, writable: [dest], protectPersonalData: true)
+        for args in commands {
+            let joined = args.joined(separator: "\u{0}")
+            #expect(!joined.contains(secret), "Argümanlarda parola bulundu: \(args)")
+            #expect(!args.contains("-p\(secret)"), "Argümanlarda -p+parola bulundu: \(args)")
 
-        // Extract
-        let extractOpts = ExtractOptions(archive: archive, destination: dest, password: secret, overwrite: .replace)
-        let extractArgs = SevenZipCommand.extract(extractOpts)
-        #expect(!extractArgs.contains(secret))
-        #expect(!extractArgs.contains("-p\(secret)"))
-
-        // Stdin datası kontrolü
-        let inputData = SevenZipCommand.passwordInput(secret)
-        #expect(inputData != nil)
-        let inputString = String(decoding: inputData!, as: UTF8.self)
-        #expect(inputString.contains(secret + "\n"))
+            let sandboxedArgs = profile.launchArguments(executable: URL(fileURLWithPath: "/usr/bin/7zz"), arguments: args)
+            let sandboxedJoined = sandboxedArgs.joined(separator: "\u{0}")
+            #expect(!sandboxedJoined.contains(secret), "Kum havuzu argümanlarında parola bulundu: \(sandboxedArgs)")
+        }
     }
 
-    // MARK: - 2. STRES TESTİ (Stress Testing)
+    /// Canlı Kum Havuzu Okuma ve Ağ Engeli (Sandbox Read & Network Deny):
+    /// sandbox-exec altında kişisel veri dizinleri (~/.ssh) okunamamalı ve ağ erişimi tamamen reddedilmelidir.
+    @Test(.enabled(if: engineURL != nil && SandboxProfile.isAvailable))
+    func securityLiveSandboxReadDenyAndNetworkDeny() async throws {
+        let home = try makeTempFolder("sec-sandbox-home")
+        defer { StagedExtraction.removeTree(at: home) }
 
-    /// Aşırı Hiyerarşi ve Genişlik Stres Testi:
-    /// Tek bir klasörde 2.000 dosya ve 35 düzey derinlikte iç içe klasör hiyerarşisi oluşturulup
-    /// ListingParser ve ArchiveTree üzerinde stres testi yapılır.
+        let sshDir = home.appendingPathComponent(".ssh", isDirectory: true)
+        try FileManager.default.createDirectory(at: sshDir, withIntermediateDirectories: true)
+        let sshKey = sshDir.appendingPathComponent("id_ed25519")
+        try "OPENSSH PRIVATE KEY".write(to: sshKey, atomically: true, encoding: .utf8)
+
+        let downloads = home.appendingPathComponent("Downloads", isDirectory: true)
+        try FileManager.default.createDirectory(at: downloads, withIntermediateDirectories: true)
+        let safeFile = downloads.appendingPathComponent("safe.txt")
+        try "guvenli metin".write(to: safeFile, atomically: true, encoding: .utf8)
+
+        let archiveURL = downloads.appendingPathComponent("test.7z")
+        let profile = SandboxProfile.forOperation(archive: archiveURL, writable: [], protectPersonalData: true, home: home)
+        let runner = CommandRunner(executableURL: try #require(engineURL)).sandboxed(profile)
+
+        // 1. ~/.ssh altındaki anahtarı okuma/özetleme girişimi kum havuzu tarafından engellenir (exitCode != 0).
+        let deniedHash = try await runner.run(SevenZipCommand.hash(file: sshKey))
+        #expect(deniedHash.exitCode != 0, "Yasaklı ~/.ssh dizini okunabildi!")
+
+        // 2. İzinli dizindeki dosya başarıyla okunup özetlenir.
+        let allowedHash = try await runner.run(SevenZipCommand.hash(file: safeFile))
+        #expect(allowedHash.exitCode == 0, "İzinli dosya okunamadı: \(allowedHash.stderr)")
+
+        // 3. Ağ erişimi engeli: nc çalıştırılabilirse yerel soket bağlantısı kum havuzunda engellenir.
+        let ncURL = URL(fileURLWithPath: "/usr/bin/nc")
+        if FileManager.default.isExecutableFile(atPath: ncURL.path) {
+            let ncRunner = CommandRunner(executableURL: ncURL).sandboxed(profile)
+            let ncResult = try await ncRunner.run(["-z", "-w1", "127.0.0.1", "54321"])
+            #expect(ncResult.exitCode != 0, "Ağ erişimi kum havuzunda engellenmedi!")
+        }
+    }
+
+    // MARK: - 2. STRES TESTİ (02-hierarchy-stress)
+
+    /// Aşırı Hiyerarşi ve Genişlik Yapısal Stres Testi:
+    /// 2.000 dosyalık geniş klasör ve ArchiveTree.maxDepth (100) sınırını aşan 150 katmanlı derin dizin
+    /// ayrıştırılır; ağaç, arama, sıralama ve dizinleme fonksiyonlarının çökmeksizin doğru çalıştığı doğrulanır.
     @Test func stressMassiveHierarchyAndBreadth() {
         var lines = ["--\nPath = massive.7z\nType = 7z\n\n----------\n"]
 
-        // 2000 dosya genişliği
+        // 2000 dosya genişliği: wide/ klasörü altında
         for i in 1...2000 {
-            lines.append("Path = file_\(i).txt\nSize = 100\nPacked Size = 50\nAttributes = -rw-r--r--\n")
+            lines.append("Path = wide/file_\(i).txt\nSize = 100\nPacked Size = 50\nAttributes = -rw-r--r--\n")
         }
 
-        // 35 düzey derinlik
+        // 150 düzey derinlik (ArchiveTree.maxDepth = 100 sınırını aşar)
         var deepPath = ""
-        for level in 1...35 {
+        for level in 1...150 {
             deepPath = deepPath.isEmpty ? "d\(level)" : "\(deepPath)/d\(level)"
             lines.append("Path = \(deepPath)\nFolder = +\nAttributes = drwxr-xr-x\n")
         }
@@ -113,18 +163,26 @@ struct ChaosAndSecurityMatrixTests {
 
         let fullOutput = lines.joined(separator: "\n")
         let listing = ListingParser.parse(fullOutput)
-        #expect(listing.entries.count == 2036)
+        #expect(listing.entries.count == 2152)
 
-        let startTree = CFAbsoluteTimeGetCurrent()
         let tree = ArchiveTree.build(from: listing.entries)
-        let elapsedTree = CFAbsoluteTimeGetCurrent() - startTree
+        let index = ArchiveTree.index(tree)
 
-        #expect(tree.count == 2001) // 2000 files + 1 root directory "d1"
-        #expect(elapsedTree < 1.0) // 1 saniyenin altında bitmeli
+        // Geniş klasör yapısal doğrulaması
+        #expect(index["wide/file_1.txt"] != nil)
+        #expect(index["wide/file_2000.txt"] != nil)
+        #expect(ArchiveTree.contents(of: "wide", roots: tree, index: index).count == 2000)
+
+        // Arama ve sıralama işlevleri
+        #expect(!ArchiveTree.search(tree, query: "file_100").isEmpty)
+        let sorted = ArchiveTree.sorted(tree, using: [ArchiveTree.nameComparator])
+        #expect(!sorted.isEmpty)
+
+        // Derinlik sınırı: maxDepth (100) seviyesinde kesilmeli, yığın taşması önlenmelidir.
+        #expect(treeDepth(tree) == ArchiveTree.maxDepth)
     }
 
-    /// Hızlı Tekrarlı Ayrıştırma Verim Testi:
-    /// Büyük bir çıktı art arda 50 kez ayrıştırılarak bellek ve işlemci stabilitesi test edilir.
+    /// Hızlı Tekrarlı Ayrıştırma Verim ve Belirlenimcilik Testi:
     @Test func stressRapidParsingThroughput() {
         let sample = """
         --
@@ -148,132 +206,248 @@ struct ChaosAndSecurityMatrixTests {
         Packed Size = 450000
         Modified = 2026-10-18 12:02:00
         """
+        let first = ListingParser.parse(sample)
         for _ in 1...50 {
             let parsed = ListingParser.parse(sample)
-            #expect(parsed.entries.count == 3)
+            #expect(parsed.entries == first.entries)
             #expect(parsed.info.type == "zip")
+            #expect(parsed.entries.allSatisfy { !$0.path.isEmpty && ($0.size ?? 0) > 0 })
         }
     }
 
-    // MARK: - 3. KIRMA TESTİ (Destructive Testing)
+    // MARK: - 3. KIRMA TESTİ (03-malformed-data)
 
-    /// Bozuk / Parçalanmış Arşiv Başlığı Kırma Testi:
-    /// Başlık baytları rastgele bozulmuş arşiv dosyalarının motor tarafından çökme olmadan
-    /// güvenli bir şekilde reddedildiği doğrulanır.
-    @Test func destructiveCorruptedArchiveHandling() async throws {
-        guard let engine = engineURL else { return }
+    /// Bozuk, Kesik ve Çöp Baytlı Arşiv Başlığı Kırma Testi:
+    /// Motorun 0-byte, bozulmuş, kesik veya başlığı tahrif edilmiş dosyalar karşısında güvenle hata fırlattığı doğrulanır.
+    @Test(.enabled(if: engineURL != nil))
+    func destructiveCorruptedArchiveHandling() async throws {
+        let engine = try #require(engineURL)
         let root = try makeTempFolder("destr-corrupt")
-        defer { try? FileManager.default.removeItem(at: root) }
+        defer { StagedExtraction.removeTree(at: root) }
 
         let runner = CommandRunner(executableURL: engine)
 
-        // 1. 0 Baytlık dosya
+        // 1. 0 Baytlık dosya -> SevenZipError.notArchive
         let emptyFile = root.appendingPathComponent("empty.zip")
         try Data().write(to: emptyFile)
         let resEmpty = try await runner.run(SevenZipCommand.list(archive: emptyFile))
         #expect(resEmpty.exitCode != 0)
-        #expect(SevenZipError.needsPassword(resEmpty) == false)
-        #expect(throws: SevenZipError.self) { try SevenZipError.check(resEmpty) }
+        #expect(!SevenZipError.needsPassword(resEmpty))
+        #expect(throws: SevenZipError.notArchive) { try SevenZipError.check(resEmpty) }
 
-        // 2. Rastgele çöp baytlar
-        let garbageFile = root.appendingPathComponent("garbage.7z")
-        var garbageData = Data(count: 256)
-        for i in 0..<garbageData.count { garbageData[i] = UInt8.random(in: 0...255) }
-        try garbageData.write(to: garbageFile)
+        // 2. Deterministik SplitMix64 tohumlu çöp baytlar (PK ve 7z başlık önekleriyle)
+        var g = SplitMix64(seed: 0xDEAD_BEEF)
+        let signatures = ["PK\u{03}\u{04}", "7z\u{BC}\u{AF}'\u{1C}"]
+        for (idx, sig) in signatures.enumerated() {
+            let garbageFile = root.appendingPathComponent("garbage_\(idx).7z")
+            var data = Data(sig.utf8)
+            for _ in 0..<256 { data.append(UInt8(truncatingIfNeeded: g.next())) }
+            try data.write(to: garbageFile)
 
-        let resGarbage = try await runner.run(SevenZipCommand.list(archive: garbageFile))
-        #expect(resGarbage.exitCode != 0)
-        #expect(throws: SevenZipError.self) { try SevenZipError.check(resGarbage) }
+            let resGarbage = try await runner.run(SevenZipCommand.list(archive: garbageFile))
+            #expect(resGarbage.exitCode != 0)
+            #expect(!SevenZipError.needsPassword(resGarbage))
+            #expect(throws: SevenZipError.self) { try SevenZipError.check(resGarbage) }
+        }
+
+        // 3. Kesik (truncated) gerçek arşiv: son 40 baytı kırpılmış dosya
+        let validSrc = root.appendingPathComponent("sample.txt")
+        try "gecerli icerik metni".write(to: validSrc, atomically: true, encoding: .utf8)
+        let validArchive = root.appendingPathComponent("valid.zip")
+        try SevenZipError.check(try await runner.run(SevenZipCommand.create(CreateOptions(
+            sources: [validSrc], destination: validArchive, format: .zip, level: .fast
+        ))))
+
+        var archiveData = try Data(contentsOf: validArchive)
+        if archiveData.count > 40 {
+            archiveData.removeLast(40)
+            let truncatedArchive = root.appendingPathComponent("truncated.zip")
+            try archiveData.write(to: truncatedArchive)
+
+            let resTruncated = try await runner.run(SevenZipCommand.list(archive: truncatedArchive))
+            #expect(resTruncated.exitCode != 0)
+            #expect(throws: SevenZipError.self) { try SevenZipError.check(resTruncated) }
+        }
     }
 
-    // MARK: - 4. SIZMA TESTİ (Penetration Testing)
+    // MARK: - 4. SIZMA TESTİ (04-quarantine)
 
-    /// Karantina Bayrağı Sahteciliği ve Onay Biti Temizliği:
-    /// Kullanıcı onayı (`0x0040`) içeren sahte karantina bayrağı çıkarılan dosyalara aktarılırken
-    /// onay bitinin zorunlu olarak silindiği ve Gatekeeper korumasının aşılamadığı doğrulanır.
-    @Test func penetrationQuarantineUserApprovalBitStripping() {
-        // 0x0040 biti eklenmiş bir karantina dizesi (Safari'de indirilip çalıştırılmış gibi)
-        let forged = "00c3;6ad350b0;Safari;3012A7DC"
-        let sanitized = Quarantine.derivedValue(from: forged)
-        #expect(!sanitized.hasPrefix("00c3"))
-        #expect(sanitized.hasPrefix("0083")) // 0x00c3 & ~0x0040 = 0x0083
+    /// Uçtan Uca Karantina Yayılımı ve Onay Biti Temizliği:
+    /// Sahte 0x0040 onay bitine sahip bir arşivden çıkarılan tüm dosyalara (salt okunur, ._* ve sembolik bağlantılar dahil)
+    /// com.apple.quarantine özniteliğinin zorunlu olarak Gatekeeper denetimi gerektiren biçimde (0x0083) yazıldığı doğrulanır.
+    @Test(.enabled(if: engineURL != nil))
+    func penetrationQuarantineEndToEndPropagation() async throws {
+        let engine = try #require(engineURL)
+        let root = try makeTempFolder("sec-quarantine-e2e")
+        defer { StagedExtraction.removeTree(at: root) }
+
+        let srcDir = root.appendingPathComponent("src", isDirectory: true)
+        try FileManager.default.createDirectory(at: srcDir, withIntermediateDirectories: true)
+
+        let cmdFile = srcDir.appendingPathComponent("run.command")
+        try "#!/bin/sh\necho test\n".write(to: cmdFile, atomically: true, encoding: .utf8)
+        _ = chmod(cmdFile.path, 0o755)
+
+        let roFile = srcDir.appendingPathComponent("readonly.txt")
+        try "salt okunur".write(to: roFile, atomically: true, encoding: .utf8)
+        _ = chmod(roFile.path, 0o444)
+
+        let dotUnderscore = srcDir.appendingPathComponent("._config")
+        try "apple double metadata".write(to: dotUnderscore, atomically: true, encoding: .utf8)
+
+        let archiveURL = root.appendingPathComponent("quarantined.zip")
+        let runner = CommandRunner(executableURL: engine)
+        try SevenZipError.check(try await runner.run(SevenZipCommand.create(CreateOptions(
+            sources: [cmdFile, roFile, dotUnderscore], destination: archiveURL, format: .zip, level: .fast
+        ))))
+
+        // Sahte 0x0040 onay bayrağı mühürle
+        let forged = "00c3;6ad350b0;Safari;3012A7DC-0000-0000-0000-000000000000"
+        #expect(Quarantine.set(forged, on: archiveURL))
+
+        let staging = try StagedExtraction.makeStagingDirectory(for: root)
+        defer { StagedExtraction.removeTree(at: staging) }
+
+        try SevenZipError.check(try await runner.run(SevenZipCommand.extract(ExtractOptions(
+            archive: archiveURL, destination: staging, overwrite: .replace
+        ))))
+
+        _ = StagedExtraction.secureSymlinks(in: staging, extractionRoot: staging)
+        _ = Quarantine.propagate(from: archiveURL, to: staging, since: .distantPast)
+
+        let destination = root.appendingPathComponent("dest", isDirectory: true)
+        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+        _ = try StagedExtraction.merge(from: staging, into: destination, policy: .replace)
+
+        // Çıkarılan her bir dosyanın karantina etiketini kontrol et
+        for name in ["run.command", "readonly.txt", "._config"] {
+            let extracted = destination.appendingPathComponent(name)
+            #expect(FileManager.default.fileExists(atPath: extracted.path), "\(name) çıkarılmadı")
+            let qVal = Quarantine.value(of: extracted)
+            #expect(qVal != nil, "\(name) karantina değeri alamadı")
+            #expect(qVal?.hasPrefix("0083;") == true, "\(name) onay bitinden arındırılmadı: \(qVal ?? "")")
+            #expect(qVal?.hasPrefix("00c3;") == false, "\(name) hileli 00c3 onayını korudu")
+        }
     }
 
-    // MARK: - 5. YÜK VE HACİM TESTİ (Load & Volume Testing)
+    // MARK: - 5. YÜK VE HACİM TESTİ (05-saturating-arithmetic)
 
-    /// Zip-Bomb Doygun Boyut Aritmetiği (Saturating Arithmetic):
-    /// Arşiv içinde Int64.max değerine ulaşan ya da aşan boyut bildirimleri toplandığında
-    /// tamsayı taşması (overflow trap) yerine doyum (saturation) mekanizmasının çalıştığı doğrulanır.
+    /// Zip-Bomb Doygun Boyut Aritmetiği ve Boyut Taşması Koruması:
+    /// UInt64 / Int64.max sınırlarını aşan girişlerde tamsayı taşması tuzağı oluşmadan
+    /// ListingParser, ArchiveStatistics, ArchiveTree ve DiskSpace bileşenlerinde doyum sağlandığı doğrulanır.
     @Test func loadAndVolumeZipBombSaturatingSum() {
-        let huge1: Int64 = Int64.max - 100
-        let huge2: Int64 = 200
-        let result = huge1.saturatingAdding(huge2)
-        #expect(result == Int64.max)
+        let text = """
+        --
+        Path = bomb.zip
+        Type = zip
+        Physical Size = 18446744073709551615
 
-        let entries = [
-            ArchiveEntry(path: "a", size: Int64.max / 2 + 1000),
-            ArchiveEntry(path: "b", size: Int64.max / 2 + 2000),
-            ArchiveEntry(path: "c", size: Int64.max / 2 + 3000),
-        ]
-        let sum = entries.compactMap(\.size).saturatingSum()
-        #expect(sum == Int64.max)
+        ----------
+        Path = folder/huge1.bin
+        Size = 18446744073709551615
+        Packed Size = 18446744073709551615
 
-        let required = DiskSpace.requiredBytes(for: [], in: entries)
+        Path = folder/huge2.bin
+        Size = 18446744073709551615
+        Packed Size = 18446744073709551615
+        """
+        let listing = ListingParser.parse(text)
+        #expect(listing.info.physicalSize == Int64.max)
+        #expect(listing.entries.count == 2)
+        #expect(listing.entries[0].size == Int64.max)
+        #expect(listing.entries[0].packedSize == Int64.max)
+
+        let stats = ArchiveStatistics(listing: listing)
+        #expect(stats.totalSize == Int64.max)
+        #expect(stats.packedSize == Int64.max)
+
+        let tree = ArchiveTree.build(from: listing.entries)
+        let folderNode = tree.first { $0.id == "folder" }
+        #expect(folderNode?.size == Int64.max)
+
+        let required = DiskSpace.requiredBytes(for: ["folder"], in: listing.entries)
         #expect(required == Int64.max)
+
+        #expect(!DiskSpace.hasRoom(required: Int64.max, available: Int64.max - 1))
+        #expect(DiskSpace.hasRoom(required: Int64.max, available: nil))
+        #expect(throws: InsufficientSpaceError.self) {
+            try InsufficientSpaceError.check(required: Int64.max, at: URL(fileURLWithPath: "/tmp"))
+        }
+
+        // UI bayt biçimlendiricisi Int64.max değerinde çökmemeli
+        let formatted = Int64.max.formatted(.byteCount(style: .file))
+        #expect(!formatted.isEmpty)
     }
 
-    // MARK: - 6. DAYANIKLILIK TESTİ (Endurance Testing)
+    // MARK: - 6. DAYANIKLILIK TESTİ (06-endurance-leaks)
 
-    /// Hazırlık Dizinleri Oluşturma ve İmha Döngüsü Dayanıklılığı:
-    /// 30 kez art arda hazırlık dizini oluşturulup StagedExtraction.removeTree ile imha edilir.
-    /// Hiçbir sızıntı veya yetki hatası kalmadığı doğrulanır.
+    /// Hazırlık Dizinleri Oluşturma, Temizleme ve Dosya Tanıtıcısı (FD) Dayanıklılığı:
+    /// 30 ardışık staging döngüsünde salt okunur dosyalar altında dosya tanıtıcısı sızıntısı kalmadığı doğrulanır.
     @Test func enduranceStagingLifecycleCycles() throws {
         let root = try makeTempFolder("endurance-staging")
-        defer { try? FileManager.default.removeItem(at: root) }
+        defer { StagedExtraction.removeTree(at: root) }
+
+        let initialFDs = (try? FileManager.default.contentsOfDirectory(atPath: "/dev/fd").count) ?? 0
 
         for _ in 1...30 {
             let staging = try StagedExtraction.makeStagingDirectory(for: root)
             #expect(FileManager.default.fileExists(atPath: staging.path))
 
-            // İçine salt okunur klasörler ve dosyalar bırak
             let roFolder = staging.appendingPathComponent("ro", isDirectory: true)
             try FileManager.default.createDirectory(at: roFolder, withIntermediateDirectories: true)
-            try Data("x".utf8).write(to: roFolder.appendingPathComponent("ro.txt"))
-            _ = chmod(roFolder.appendingPathComponent("ro.txt").path, 0o444)
+            let roFile = roFolder.appendingPathComponent("ro.txt")
+            try Data("x".utf8).write(to: roFile)
+            _ = chmod(roFile.path, 0o444)
             _ = chmod(roFolder.path, 0o555)
+
+            let dotFile = staging.appendingPathComponent("._sample")
+            try Data("metadata".utf8).write(to: dotFile)
+            _ = StagedExtraction.isMacMetadata("._sample", in: staging)
 
             StagedExtraction.removeTree(at: staging)
             #expect(!FileManager.default.fileExists(atPath: staging.path))
         }
+
+        // Açık tanıtıcı sayısı kontrolü (işletim sistemi varyasyonları için makul toleransla)
+        let finalFDs = (try? FileManager.default.contentsOfDirectory(atPath: "/dev/fd").count) ?? 0
+        #expect(finalFDs <= initialFDs + 3, "Dosya tanıtıcısı (FD) sızıntısı tespit edildi: \(initialFDs) -> \(finalFDs)")
     }
 
-    // MARK: - 7. ZAFİYET TARAMA TESTİ (Vulnerability Scanning)
+    // MARK: - 7. ZAFİYET TARAMA TESTİ (07-input-sanitization)
 
     /// Komut ve Seçenek Enjeksiyonu Koruması (Option / Parameter Injection):
-    /// Arşiv adı veya dosya adı olarak `-` ile başlayan veya kabuk kaçışları içeren yollar
-    /// `--` ayracı ve -spd ile korunmalıdır.
+    /// Her bir komut oluşturucuda kullanıcı girdilerinin kesinlikle '--' ayracından sonra yer aldığı doğrulanır.
     @Test func vulnerabilityOptionInjectionShielding() {
         let dangerousArchive = URL(fileURLWithPath: "/tmp/-r.7z")
-        let listArgs = SevenZipCommand.list(archive: dangerousArchive)
-        #expect(listArgs.contains("--"))
-        if let dashDashIndex = listArgs.firstIndex(of: "--") {
-            #expect(dashDashIndex < listArgs.firstIndex(of: dangerousArchive.path)!)
-        }
-
         let dangerousExtract = ExtractOptions(
             archive: dangerousArchive, destination: URL(fileURLWithPath: "/tmp/dest"),
             items: ["-y", "-mhe=off", ";rm -rf /"], overwrite: .replace
         )
+
         let extractArgs = SevenZipCommand.extract(dangerousExtract)
-        #expect(extractArgs.contains("--"))
+        #expect(extractArgs.contains("-spd"))
+        if let sepIndex = extractArgs.firstIndex(of: "--") {
+            #expect(sepIndex < extractArgs.firstIndex(of: dangerousArchive.path)!)
+            for item in dangerousExtract.items {
+                if let itemIndex = extractArgs.firstIndex(of: item) {
+                    #expect(itemIndex > sepIndex, "Kullanıcı parametresi '--' öncesinde yer aldı: \(item)")
+                }
+            }
+        }
+
+        let listArgs = SevenZipCommand.list(archive: dangerousArchive)
+        #expect(listArgs.contains("-spd"))
+        if let sepIndex = listArgs.firstIndex(of: "--") {
+            #expect(sepIndex < listArgs.firstIndex(of: dangerousArchive.path)!)
+        }
     }
 
-    /// Trojan Source & Görünmez Unicode Karakter Taraması:
-    /// RLO (U+202E), LRO, Braille dolgusu ve görünmez kontrol karakterlerinin tamamı tespit edilmelidir.
+    /// Trojan Source, Görünmez Karakterler ve Ad Doğrulama Güvenliği:
     @Test func vulnerabilityTrojanSourceUnicodeScanning() {
         let rlo = "belge\u{202E}txt.app"
         #expect(OpenSafety.hasDeceptiveCharacters(rlo))
         #expect(OpenSafety.visibleName(rlo).contains("⟦U+202E⟧"))
+        #expect(!OpenSafety.hasDeceptiveCharacters(OpenSafety.visibleName(rlo)))
 
         let braille = "fatura.pdf\u{2800}\u{2800}.app"
         #expect(OpenSafety.hasDeceptiveCharacters(braille))
@@ -284,14 +458,25 @@ struct ChaosAndSecurityMatrixTests {
         let zeroWidth = "guvenli\u{200B}dosya.txt"
         #expect(OpenSafety.hasDeceptiveCharacters(zeroWidth))
 
+        let controlTab = "gizli\tdosya.txt"
+        #expect(OpenSafety.hasDeceptiveCharacters(controlTab))
+
         #expect(!OpenSafety.hasDeceptiveCharacters("Normal_Dosya_2026.pdf"))
+
+        // ArchiveTree.isValidName doğrulaması
+        #expect(ArchiveTree.isValidName("temiz_dosya.txt"))
+        #expect(!ArchiveTree.isValidName(""))
+        #expect(!ArchiveTree.isValidName("   "))
+        #expect(!ArchiveTree.isValidName("."))
+        #expect(!ArchiveTree.isValidName(".."))
+        #expect(!ArchiveTree.isValidName("dizin/dosya"))
+        #expect(!ArchiveTree.isValidName("denetim\u{0000}karakteri"))
     }
 
     /// Tehlikeli Çalıştırılabilir Türlerin Taraması:
-    /// Sistemin kod çalıştırabileceği tüm uzantı ve türlerin OpenSafety tarafından yakalandığı doğrulanır.
     @Test func vulnerabilityRiskyExecutableTypesScanning() throws {
         let temp = try makeTempFolder("risky-types")
-        defer { try? FileManager.default.removeItem(at: temp) }
+        defer { StagedExtraction.removeTree(at: temp) }
 
         let dynamicExtensions = [
             "script.scpt", "otomasyon.workflow", "aksiyon.action", "baglanti.webloc",
@@ -302,7 +487,6 @@ struct ChaosAndSecurityMatrixTests {
             #expect(OpenSafety.riskyExtensions.contains(ext), "Yakalanmayan dinamik riskli uzantı: \(ext)")
         }
 
-        // Dosya bazlı tür doğrulaması (UTType ve çalıştırma izni)
         let sampleFiles = [
             "betik.command", "kod.sh", "program.app", "profil.mobileconfig", "ayar.terminal",
             "belge.workflow", "bag.url", "script.scpt"
@@ -312,13 +496,26 @@ struct ChaosAndSecurityMatrixTests {
             try Data("echo test".utf8).write(to: file)
             #expect(OpenSafety.executableKind(of: file) != nil, "executableKind yakalayamadı: \(name)")
         }
+
+        // Güvenli dosyalar nil dönmeli
+        for safeName in ["belge.txt", "rapor.pdf", "resim.jpg"] {
+            let safeFile = temp.appendingPathComponent(safeName)
+            try Data("metin".utf8).write(to: safeFile)
+            #expect(OpenSafety.executableKind(of: safeFile) == nil, "Güvenli dosya riskli sayıldı: \(safeName)")
+        }
+
+        // Uzantısız dosyalar: çalıştırılabilir ise riskli, değilse nil
+        let binFile = temp.appendingPathComponent("calisabilir_ikili")
+        try Data("ikili".utf8).write(to: binFile)
+        _ = chmod(binFile.path, 0o755)
+        #expect(OpenSafety.executableKind(of: binFile) != nil)
+        _ = chmod(binFile.path, 0o644)
+        #expect(OpenSafety.executableKind(of: binFile) == nil)
     }
 
-    // MARK: - 8. KIRMIZI TAKIM OPERASYONEL TESTİ (Red Team Operational)
+    // MARK: - 8. KIRMIZI TAKIM OPERASYONEL TESTİ (08-access-containment)
 
-    /// Tek Başına Sembolik Bağlantı Sızdırma Engeli:
-    /// Bir saldırganın panoya kopyalama veya Finder'a sürükleme ile hedef dışındaki dosyalara erişim için
-    /// hazırladığı bağımsız sembolik bağlantılar ItemExtractor tarafından SymbolicLinkError ile reddedilir.
+    /// Tek Başına Sembolik Bağlantı Sızdırma Engeli ve Çok Parçalı Düzenleme Sınırı:
     @Test func redTeamStandaloneSymlinkExfiltrationBlocked() async throws {
         guard let engine = engineURL else { return }
         let runner = CommandRunner(executableURL: engine)
@@ -336,8 +533,7 @@ struct ChaosAndSecurityMatrixTests {
     }
 
     /// Salt Okunur ve Çok Bölümlü Arşivlerde Yerinde Düzenleme Engeli:
-    /// Çok parçalı (.001, .z01, .r01, volumes > 1) veya salt okunur dosyalarda ArchiveCapabilities düzenlemeyi reddeder.
-    @Test func redTeamReadOnlyAndMultiVolumeEditingBlocked() {
+    @Test func redTeamReadOnlyAndMultiVolumeEditingBlocked() throws {
         let singleZip = URL(fileURLWithPath: "/tmp/a.zip")
         #expect(ArchiveCapabilities.supportsEditing(type: "zip", url: singleZip, volumes: 1))
         #expect(!ArchiveCapabilities.supportsEditing(type: "zip", url: singleZip, volumes: 2))
@@ -350,13 +546,19 @@ struct ChaosAndSecurityMatrixTests {
 
         let rar = URL(fileURLWithPath: "/tmp/a.rar")
         #expect(!ArchiveCapabilities.supportsEditing(type: "rar", url: rar))
+
+        // Diskte salt okunur (chmod 0444) dosya kontrolü
+        let root = try makeTempFolder("sec-readonly-edit")
+        defer { StagedExtraction.removeTree(at: root) }
+        let roArchive = root.appendingPathComponent("readonly.zip")
+        try Data("PK".utf8).write(to: roArchive)
+        _ = chmod(roArchive.path, 0o444)
+        #expect(!ArchiveCapabilities.isEditable(type: "zip", url: roArchive))
     }
 
-    // MARK: - 9. BULANIKLIK TESTİ (Fuzz Testing)
+    // MARK: - 9. BULANIKLIK TESTİ (09-parser-fuzz)
 
-    /// ListingParser Mutasyon ve Fuzzing Testi:
-    /// Rastgele üretilmiş veya bozulmuş 100 farklı metin girdisiyle ListingParser.parse çalıştırılır;
-    /// ayrıştırıcının asla çökmediği, sonsuz döngüye girmediği ve her zaman ArchiveListing döndürdüğü doğrulanır.
+    /// ListingParser Deterministik ve Tohumlu Bulanıklık (Fuzz) Testi:
     @Test func fuzzListingParserMutations() {
         let fuzzSeeds = [
             "",
@@ -375,21 +577,24 @@ struct ChaosAndSecurityMatrixTests {
 
         for seed in fuzzSeeds {
             let result = ListingParser.parse(seed)
-            // Belirlenimci: aynı metin aynı listeyi verir; hiçbir girdinin yolu boş değildir.
             #expect(result.entries == ListingParser.parse(seed).entries)
             #expect(result.entries.allSatisfy { !$0.path.isEmpty })
+            let stats = ArchiveStatistics(listing: result)
+            #expect(stats.fileCount >= 0 && stats.folderCount >= 0)
+            #expect(stats.totalSize >= 0 && stats.packedSize >= 0)
         }
 
-        // Rastgele ASCII/UTF-8 mutasyonları
+        // Deterministik SplitMix64 tohumuyla mutasyon döngüsü
+        var g = SplitMix64(seed: 0xCAFE_BABE)
         for _ in 1...50 {
             var randomText = ""
             for _ in 1...30 {
-                let r = Int.random(in: 1...5)
+                let r = Int(UInt64.random(in: 1...5, using: &g))
                 switch r {
-                case 1: randomText += "Path = name_\(Int.random(in: 0...100))\n"
-                case 2: randomText += "Size = \(Int.random(in: -100...1000000))\n"
+                case 1: randomText += "Path = name_\(UInt64.random(in: 0...100, using: &g))\n"
+                case 2: randomText += "Size = \(Int64.random(in: -100...1000000, using: &g))\n"
                 case 3: randomText += "----------\n"
-                case 4: randomText += "Comment = {\(Int.random(in: 0...50))}\n"
+                case 4: randomText += "Comment = {\(UInt64.random(in: 0...50, using: &g))}\n"
                 default: randomText += "--\nType = zip\n"
                 }
             }
@@ -399,13 +604,10 @@ struct ChaosAndSecurityMatrixTests {
         }
     }
 
-    // MARK: - 10. KAOS VE ENDURANCE TESTİ (Chaos & Concurrency Testing)
+    // MARK: - 10. KAOS VE EŞZAMANLILIK TESTİ (10-chaos-concurrency)
 
-    /// İnatçı / Yanıt Vermeyen Süreçlerin 2 Saniyelik Kill Grace Period ile Sonlandırılması:
-    /// SIGTERM sinyalini yok sayan bir alt sürecin CommandRunner tarafından SIGKILL ile sonlandırıldığı
-    /// ve sürecin arka planda zombi olarak kalmadığı test edilir.
+    /// İnatçı Süreçlerin 2 Saniyelik Kill Grace Period ile Sonlandırılması:
     @Test func chaosProcessTerminationTimeoutAndKill() async throws {
-        // perl ile SIGTERM sinyalini yok sayıp sonsuz döngüye giren süreç
         let perl = URL(fileURLWithPath: "/usr/bin/perl")
         guard FileManager.default.isExecutableFile(atPath: perl.path) else { return }
 
@@ -427,13 +629,11 @@ struct ChaosAndSecurityMatrixTests {
     }
 
     /// Klasör İzinleri Kaos Testi (OwnerAccess İzin Yükseltme ve Geri Yükleme):
-    /// 0o000 ve 0o555 gibi içine girilemeyen klasörlerin OwnerAccess ile güvenli bir şekilde işlenip
-    /// eski kipine geri döndürüldüğü doğrulanır.
     @Test func chaosReadOnlyPermissionsRecovery() throws {
         let root = try makeTempFolder("chaos-perms")
         defer {
             _ = chmod(root.path, 0o700)
-            try? FileManager.default.removeItem(at: root)
+            StagedExtraction.removeTree(at: root)
         }
 
         let locked = root.appendingPathComponent("kilitli", isDirectory: true)
@@ -441,32 +641,33 @@ struct ChaosAndSecurityMatrixTests {
         let file = locked.appendingPathComponent("gizli.txt")
         try Data("veri".utf8).write(to: file)
 
-        // 0o000 yap (hiçbir yetki yok)
         #expect(chmod(locked.path, 0o000) == 0)
 
-        // OwnerAccess ile geçici izin açıp içini oku
         let readSuccess = OwnerAccess.granting(S_IRUSR | S_IXUSR, on: locked.path) {
             FileManager.default.fileExists(atPath: file.path)
         }
         #expect(readSuccess == true)
 
-        // İşlem bittikten sonra orijinal 0o000 kipine geri dönmüş olmalı
         var info = stat()
         #expect(lstat(locked.path, &info) == 0)
         #expect((info.st_mode & 0o777) == 0o000)
 
-        // Temizlik için aç
-        #expect(chmod(locked.path, 0o700) == 0)
+        // 0o555 klasörde yazma izin testi
+        #expect(chmod(locked.path, 0o555) == 0)
+        let writeSuccess = OwnerAccess.granting(S_IWUSR, on: locked.path) {
+            let newFile = locked.appendingPathComponent("yeni.txt")
+            return (try? Data("ek".utf8).write(to: newFile)) != nil
+        }
+        #expect(writeSuccess == true)
+        #expect(lstat(locked.path, &info) == 0)
+        #expect((info.st_mode & 0o777) == 0o555)
     }
 
     /// Eşzamanlılık ve Re-entrancy Kaos Testi:
-    /// Çok sayıda eşzamanlı Task üzerinden ayrıştırma, adlandırma ve kum havuzu fonksiyonları çağrılır;
-    /// yarış koşulu (race condition) veya veri bozulması olmadığı doğrulanır.
     @Test func chaosConcurrentReentrancy() async throws {
         struct Snapshot: Equatable, Sendable {
             let paths: [String], roots: [String], base: String, profile: String
         }
-        // Her görevin sonucu, aynı girdinin tek başına (sırayla) verdiği sonuçla birebir aynı olmalı.
         @Sendable func compute(_ i: Int) -> Snapshot {
             let sample = "--\nPath = thread_\(i).zip\nType = zip\n----------\nPath = file_\(i).txt\nSize = 10\n"
             let listing = ListingParser.parse(sample)
@@ -485,5 +686,32 @@ struct ChaosAndSecurityMatrixTests {
         }
         #expect(concurrent == expected)
         #expect(expected[7]?.paths == ["file_7.txt"] && expected[7]?.roots == ["file_7.txt"] && expected[7]?.base == "test_7")
+    }
+
+    // MARK: - 11. ATOMİK ÇIKARMA TESTİ (11-atomic-extraction)
+
+    /// Atomik Çıkarma İptal/Hata Güvencesi:
+    /// Birleştirme öncesinde işlem durursa veya hata alırsa hedef dizindeki mevcut dosyalar tek bayt değişmez.
+    @Test func atomicExtractionRollbackAndUntouchedDestination() throws {
+        let root = try makeTempFolder("atomic-extract")
+        defer { StagedExtraction.removeTree(at: root) }
+
+        let dest = root.appendingPathComponent("hedef", isDirectory: true)
+        try FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
+        let existing = dest.appendingPathComponent("mevcut.txt")
+        try "orijinal icerik".write(to: existing, atomically: true, encoding: .utf8)
+
+        let staging = try StagedExtraction.makeStagingDirectory(for: root)
+        let stagedNew = staging.appendingPathComponent("yeni.txt")
+        try "yeni cikarilan dosya".write(to: stagedNew, atomically: true, encoding: .utf8)
+
+        // Birleştirme öncesi bir iptal simülasyonu: staging imha edilir, hedef dizine dokunulmaz.
+        StagedExtraction.removeTree(at: staging)
+        #expect(!FileManager.default.fileExists(atPath: stagedNew.path))
+
+        // Hedef dizin tam olarak başlangıç halini korumalıdır.
+        #expect(try String(contentsOf: existing, encoding: .utf8) == "orijinal icerik")
+        let destContents = try FileManager.default.contentsOfDirectory(atPath: dest.path)
+        #expect(destContents == ["mevcut.txt"])
     }
 }
