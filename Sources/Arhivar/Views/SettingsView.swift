@@ -313,6 +313,9 @@ private struct AdvancedSettingsView: View {
 
 private struct ShortcutsSettingsView: View {
     @Environment(AppSettings.self) private var settings
+    @State private var recordingAction: ShortcutAction? = nil
+    @State private var monitor: Any? = nil
+    @State private var recordingWarning: String? = nil
 
     var body: some View {
         @Bindable var settings = settings
@@ -332,25 +335,110 @@ private struct ShortcutsSettingsView: View {
             }
 
             Section {
-                shortcutRow(title: settings.t(.contextQuickLook), shortcut: settings.quickLookShortcut.displayBadge)
-                shortcutRow(title: settings.t(.shortcutActionExtract), shortcut: "⌘E")
-                shortcutRow(title: settings.t(.shortcutActionExtractSelected), shortcut: "⇧⌘E")
-                shortcutRow(title: settings.t(.shortcutActionTest), shortcut: "⌘T")
-                shortcutRow(title: settings.t(.shortcutActionOpen), shortcut: "⌘↓")
-                shortcutRow(title: settings.t(.shortcutActionParent), shortcut: "⌘↑")
-                shortcutRow(title: settings.t(.contextCopy), shortcut: "⌘C")
-                shortcutRow(title: settings.t(.editPaste), shortcut: "⌘V")
-                shortcutRow(title: settings.t(.editSelectAll), shortcut: "⌘A")
-                shortcutRow(title: settings.t(.toolbarInfo), shortcut: "⌘I")
+                ForEach(ShortcutAction.allCases) { action in
+                    customShortcutRow(for: action)
+                }
+                if !allShortcutsAreDefault {
+                    HStack {
+                        Spacer()
+                        Button(settings.t(.shortcutResetAll)) {
+                            stopRecording()
+                            settings.resetAllShortcuts()
+                        }
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    }
+                    .padding(.top, 4)
+                }
+            } header: {
+                Text(settings.t(.shortcutCustomSection))
+            } footer: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(settings.t(.shortcutRecordHelp))
+                    if let warning = recordingWarning {
+                        Text(warning)
+                            .foregroundStyle(.red)
+                            .fontWeight(.semibold)
+                    }
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            }
+
+            Section {
+                readOnlyShortcutRow(title: settings.t(.editCut), shortcut: "⌘X")
+                readOnlyShortcutRow(title: settings.t(.contextCopy), shortcut: "⌘C")
+                readOnlyShortcutRow(title: settings.t(.editPaste), shortcut: "⌘V")
+                readOnlyShortcutRow(title: settings.t(.editSelectAll), shortcut: "⌘A")
             } header: {
                 Text(settings.t(.shortcutReferenceSection))
             }
         }
         .formStyle(.grouped)
         .padding()
+        .onDisappear {
+            stopRecording()
+        }
     }
 
-    private func shortcutRow(title: String, shortcut: String) -> some View {
+    private var allShortcutsAreDefault: Bool {
+        ShortcutAction.allCases.allSatisfy { settings.isDefaultShortcut(for: $0) }
+    }
+
+    private func customShortcutRow(for action: ShortcutAction) -> some View {
+        let currentShortcut = settings.shortcut(for: action)
+        let isRecording = recordingAction == action
+        let isCustomized = !settings.isDefaultShortcut(for: action)
+
+        return HStack {
+            Text(settings.t(action.titleKey))
+            Spacer()
+            if isCustomized && !isRecording {
+                Button {
+                    settings.resetShortcut(for: action)
+                } label: {
+                    Image(systemName: "arrow.counterclockwise")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help(settings.t(.shortcutResetDefault))
+            }
+
+            Button {
+                if isRecording {
+                    stopRecording()
+                } else {
+                    startRecording(for: action)
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    if isRecording {
+                        ProgressView()
+                            .controlSize(.mini)
+                        Text(settings.t(.shortcutRecordPrompt))
+                            .foregroundStyle(.tint)
+                    } else {
+                        Text(currentShortcut.displayString)
+                    }
+                }
+                .font(.system(.body, design: .monospaced))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(isRecording ? Color.accentColor.opacity(0.15) : Color(nsColor: .quaternaryLabelColor).opacity(0.2))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(isRecording ? Color.accentColor : Color.clear, lineWidth: 1.5)
+                )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func readOnlyShortcutRow(title: String, shortcut: String) -> some View {
         HStack {
             Text(title)
             Spacer()
@@ -358,7 +446,124 @@ private struct ShortcutsSettingsView: View {
                 .font(.system(.body, design: .monospaced))
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+                .background(Color(nsColor: .quaternaryLabelColor).opacity(0.2), in: RoundedRectangle(cornerRadius: 6))
         }
+    }
+
+    private func startRecording(for action: ShortcutAction) {
+        stopRecording()
+        recordingAction = action
+        recordingWarning = nil
+
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            return handleKeyDown(event, for: action)
+        }
+    }
+
+    private func stopRecording() {
+        if let monitor {
+            NSEvent.removeMonitor(monitor)
+            self.monitor = nil
+        }
+        recordingAction = nil
+        recordingWarning = nil
+    }
+
+    private func handleKeyDown(_ event: NSEvent, for action: ShortcutAction) -> NSEvent? {
+        // 1. Esc tuşu: İptal et (keyCode 53)
+        if event.keyCode == 53 {
+            DispatchQueue.main.async {
+                self.stopRecording()
+            }
+            return nil
+        }
+
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let hasCommand = flags.contains(.command)
+        let hasShift = flags.contains(.shift)
+        let hasOption = flags.contains(.option)
+        let hasControl = flags.contains(.control)
+
+        // 2. Özel tuşlar (Arrow keys, Return, Tab, Backspace vb.)
+        let specialKey: (key: String, code: UInt16)?
+        switch event.keyCode {
+        case 126: specialKey = ("↑", 126)
+        case 125: specialKey = ("↓", 125)
+        case 123: specialKey = ("←", 123)
+        case 124: specialKey = ("→", 124)
+        case 36:  specialKey = ("↩", 36)
+        case 48:  specialKey = ("⇥", 48)
+        case 51:  specialKey = ("⌫", 51)
+        default:  specialKey = nil
+        }
+
+        // 3. Delete / Backspace ile niteleyicisiz basılırsa varsayılana dön
+        if event.keyCode == 51 && !hasCommand && !hasOption && !hasControl {
+            DispatchQueue.main.async {
+                self.settings.resetShortcut(for: action)
+                self.stopRecording()
+            }
+            return nil
+        }
+
+        let keyString: String
+        let isSpecial: Bool
+        let specialCode: UInt16?
+
+        if let (symbol, code) = specialKey {
+            keyString = symbol
+            isSpecial = true
+            specialCode = code
+        } else {
+            guard let chars = event.charactersIgnoringModifiers, !chars.isEmpty,
+                  let firstChar = chars.first else {
+                return nil
+            }
+            if firstChar == " " {
+                keyString = "Space"
+                isSpecial = true
+                specialCode = 49
+            } else {
+                keyString = String(firstChar).uppercased()
+                isSpecial = false
+                specialCode = nil
+            }
+        }
+
+        // 4. Niteleyici denetimi:
+        // Standart harf ve sayılar için en az bir komut/seçenek/kontrol tuşu zorunludur.
+        let hasPrimaryModifier = hasCommand || hasOption || hasControl
+        if !hasPrimaryModifier {
+            NSSound.beep()
+            DispatchQueue.main.async {
+                self.recordingWarning = self.settings.t(.shortcutModifierRequired)
+            }
+            return nil
+        }
+
+        let newShortcut = KeyboardShortcutData(
+            key: keyString,
+            isSpecialKey: isSpecial,
+            specialKeyCode: specialCode,
+            command: hasCommand,
+            shift: hasShift,
+            option: hasOption,
+            control: hasControl
+        )
+
+        // 5. Çakışma denetimi: Başka bir eylem bu kısayolu zaten kullanıyor mu?
+        if let conflict = ShortcutAction.allCases.first(where: { $0 != action && self.settings.shortcut(for: $0) == newShortcut }) {
+            NSSound.beep()
+            DispatchQueue.main.async {
+                self.recordingWarning = String(format: self.settings.t(.shortcutConflictWarning), self.settings.t(conflict.titleKey))
+            }
+            return nil
+        }
+
+        DispatchQueue.main.async {
+            self.settings.setShortcut(newShortcut, for: action)
+            self.stopRecording()
+        }
+        return nil
     }
 }

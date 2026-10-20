@@ -10,6 +10,8 @@ struct ArhivarApp: App {
     @State private var model = AppModel.shared
 
     var body: some Scene {
+        let _ = settings.customShortcuts
+        let _ = settings.quickLookShortcut
         Window(settings.t(.appName), id: WindowID.main) {
             ContentView()
                 .environment(model)
@@ -145,17 +147,20 @@ struct AppCommands: Commands {
 
         CommandGroup(replacing: .newItem) {
             // İşlem sürerken yeni arşiv ve aç kapalıdır: istekleri işlem bitene kadar sessizce yok sayılırdı.
+            let newArchive = settings.shortcut(for: .newArchive)
             Button(settings.t(.menuNewArchive)) {
                 openWindow(id: WindowID.main)
                 model.beginCreate()
             }
-            .keyboardShortcut("n")
+            .keyboardShortcut(newArchive.keyEquivalent, modifiers: newArchive.eventModifiers)
             .disabled(model.operation != nil)
+
+            let openArchive = settings.shortcut(for: .openArchive)
             Button(settings.t(.menuOpenArchive)) {
                 openWindow(id: WindowID.main)
                 model.presentOpenPanel()
             }
-            .keyboardShortcut("o")
+            .keyboardShortcut(openArchive.keyEquivalent, modifiers: openArchive.eventModifiers)
             .disabled(model.operation != nil)
             Divider()
             // İşlem sürerken kapatılmaz: işlem bitince listeyi yeniden okuyup arşivi geri getirirdi.
@@ -180,15 +185,21 @@ struct AppCommands: Commands {
         }
 
         CommandMenu(settings.t(.menuArchive)) {
+            let extract = settings.shortcut(for: .extract)
             Button(settings.t(.menuExtractAll)) { model.extract(selectedOnly: false) }
-                .keyboardShortcut("e")
+                .keyboardShortcut(extract.keyEquivalent, modifiers: extract.eventModifiers)
                 .disabled(!model.canOperate)
+
+            let extractSel = settings.shortcut(for: .extractSelected)
             Button(settings.t(.menuExtractSelected)) { model.extract(selectedOnly: true) }
-                .keyboardShortcut("e", modifiers: [.command, .shift])
+                .keyboardShortcut(extractSel.keyEquivalent, modifiers: extractSel.eventModifiers)
                 .disabled(!model.canOperate || model.selection.isEmpty)
+
+            let test = settings.shortcut(for: .test)
             Button(settings.t(.menuTestArchive)) { model.testArchive() }
-                .keyboardShortcut("t")
+                .keyboardShortcut(test.keyEquivalent, modifiers: test.eventModifiers)
                 .disabled(!model.canOperate)
+
             if settings.quickLookShortcut.allowsCmdY {
                 Button(settings.t(.contextQuickLook)) { model.toggleQuickLook() }
                     .keyboardShortcut("y")
@@ -197,17 +208,19 @@ struct AppCommands: Commands {
                 Button(settings.t(.contextQuickLook)) { model.toggleQuickLook() }
                     .disabled(!model.canOperate || model.selection.count != 1 || model.selectionIsSymbolicLink)
             }
-            // Finder'daki gibi: ⌘↓ seçili klasöre girer ya da dosyayı açar (arşivse içine girer).
+            // Finder'daki gibi: seçili klasöre girer ya da dosyayı açar (arşivse içine girer).
+            let open = settings.shortcut(for: .open)
             Button(settings.t(.contextOpen)) { model.primaryAction(model.selection) }
-                .keyboardShortcut(.downArrow, modifiers: .command)
+                .keyboardShortcut(open.keyEquivalent, modifiers: open.eventModifiers)
                 .disabled(!model.canOperate || model.selection.count != 1 || model.selectionIsSymbolicLink)
             Button(settings.t(.contextChecksums)) { model.showChecksums() }
                 .disabled(
                     !model.canOperate || model.selection.count != 1 || model.selection.first.flatMap(model.node)?.isDirectory != false
                         || model.selectionIsSymbolicLink
                 )
+            let info = settings.shortcut(for: .info)
             Button(settings.t(.toolbarInfo)) { model.showInfo.toggle() }
-                .keyboardShortcut("i")
+                .keyboardShortcut(info.keyEquivalent, modifiers: info.eventModifiers)
                 .disabled(model.listing == nil)
             Divider()
             Button(settings.t(.editAddFiles)) { model.presentAddPanel() }
@@ -219,8 +232,9 @@ struct AppCommands: Commands {
                 .keyboardShortcut(.delete, modifiers: .command)
                 .disabled(!model.canOperate || !model.isEditable || model.selection.isEmpty)
             Divider()
+            let parent = settings.shortcut(for: .parent)
             Button(settings.t(.navUp)) { model.goUp() }
-                .keyboardShortcut(.upArrow, modifiers: .command)
+                .keyboardShortcut(parent.keyEquivalent, modifiers: parent.eventModifiers)
                 .disabled(!model.canGoUp || model.operation != nil)
             Divider()
             Button(settings.t(.menuShowInFinder)) { model.revealArchive() }

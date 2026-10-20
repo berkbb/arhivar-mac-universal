@@ -2,6 +2,7 @@ import AppKit
 import ArhivarCore
 import Foundation
 import Observation
+import SwiftUI
 
 /// Açık, koyu veya sistemi izleyen (otomatik) görünüm.
 enum AppAppearance: String, CaseIterable, Identifiable {
@@ -85,6 +86,124 @@ enum QuickLookShortcut: String, CaseIterable, Identifiable {
     }
 }
 
+/// Klavye kısayolu verisi (UserDefaults için Codable ve Sendable).
+struct KeyboardShortcutData: Codable, Equatable, Sendable {
+    var key: String
+    var isSpecialKey: Bool
+    var specialKeyCode: UInt16?
+    var command: Bool
+    var shift: Bool
+    var option: Bool
+    var control: Bool
+
+    init(
+        key: String,
+        isSpecialKey: Bool = false,
+        specialKeyCode: UInt16? = nil,
+        command: Bool = true,
+        shift: Bool = false,
+        option: Bool = false,
+        control: Bool = false
+    ) {
+        self.key = key
+        self.isSpecialKey = isSpecialKey
+        self.specialKeyCode = specialKeyCode
+        self.command = command
+        self.shift = shift
+        self.option = option
+        self.control = control
+    }
+
+    var keyEquivalent: KeyEquivalent {
+        if isSpecialKey, let code = specialKeyCode {
+            switch code {
+            case 126: return .upArrow
+            case 125: return .downArrow
+            case 123: return .leftArrow
+            case 124: return .rightArrow
+            case 36: return .return
+            case 48: return .tab
+            case 49: return .space
+            case 51: return .delete
+            default:
+                if let char = key.lowercased().first {
+                    return KeyEquivalent(char)
+                }
+                return .return
+            }
+        }
+        guard let char = key.lowercased().first else { return KeyEquivalent("?") }
+        return KeyEquivalent(char)
+    }
+
+    var eventModifiers: EventModifiers {
+        var mods: EventModifiers = []
+        if command { mods.insert(.command) }
+        if shift { mods.insert(.shift) }
+        if option { mods.insert(.option) }
+        if control { mods.insert(.control) }
+        return mods
+    }
+
+    var displayString: String {
+        var str = ""
+        if control { str += "⌃" }
+        if option { str += "⌥" }
+        if shift { str += "⇧" }
+        if command { str += "⌘" }
+        str += key.uppercased()
+        return str
+    }
+}
+
+/// Kullanıcı tarafından özelleştirilebilen eylemler.
+enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
+    case newArchive
+    case openArchive
+    case extract
+    case extractSelected
+    case test
+    case open
+    case parent
+    case info
+
+    var id: String { rawValue }
+
+    var titleKey: LKey {
+        switch self {
+        case .newArchive: .shortcutActionNewArchive
+        case .openArchive: .shortcutActionOpenArchive
+        case .extract: .shortcutActionExtract
+        case .extractSelected: .shortcutActionExtractSelected
+        case .test: .shortcutActionTest
+        case .open: .shortcutActionOpen
+        case .parent: .shortcutActionParent
+        case .info: .shortcutActionInfo
+        }
+    }
+
+    var defaultShortcut: KeyboardShortcutData {
+        switch self {
+        case .newArchive:
+            return KeyboardShortcutData(key: "N", command: true)
+        case .openArchive:
+            return KeyboardShortcutData(key: "O", command: true)
+        case .extract:
+            return KeyboardShortcutData(key: "E", command: true)
+        case .extractSelected:
+            return KeyboardShortcutData(key: "E", command: true, shift: true)
+        case .test:
+            return KeyboardShortcutData(key: "T", command: true)
+        case .open:
+            return KeyboardShortcutData(key: "↓", isSpecialKey: true, specialKeyCode: 125, command: true)
+        case .parent:
+            return KeyboardShortcutData(key: "↑", isSpecialKey: true, specialKeyCode: 126, command: true)
+        case .info:
+            return KeyboardShortcutData(key: "I", command: true)
+        }
+    }
+}
+
 /// Kullanıcı tercihleri (UserDefaults) ve yerelleştirilmiş metinler için tek kaynak.
 @Observable
 final class AppSettings {
@@ -112,10 +231,12 @@ final class AppSettings {
         /// AppModel'in kaydettiği görünüm tercihi; tümünü sıfırlarken o da silinir.
         static let browserMode = "browserMode"
         static let quickLookShortcut = "quickLookShortcut"
+        static let customShortcuts = "customShortcuts"
         static let all = [
             language, appearance, extractLocation, customExtractFolder, extractIntoSubfolder, subfolderMode, revealAfterOperation,
             overwriteMode, defaultFormat, defaultLevel, multithreaded, excludeMacMetadata, storeSymlinks,
             customEnginePath, checkUpdatesAtLaunch, updateConsentAsked, sandboxEngine, browserMode, quickLookShortcut,
+            customShortcuts,
         ]
     }
 
@@ -156,6 +277,14 @@ final class AppSettings {
     var sandboxEngine: Bool { didSet { defaults.set(sandboxEngine, forKey: Key.sandboxEngine) } }
     /// Hızlı Bakış kısayol tercihi (Boşluk ve ⌘Y, Yalnızca Boşluk, Yalnızca ⌘Y).
     var quickLookShortcut: QuickLookShortcut { didSet { defaults.set(quickLookShortcut.rawValue, forKey: Key.quickLookShortcut) } }
+    /// Kullanıcının özelleştirdiği kısayollar; varsayılandan farklı olanlar saklanır.
+    var customShortcuts: [String: KeyboardShortcutData] {
+        didSet {
+            if let data = try? JSONEncoder().encode(customShortcuts) {
+                defaults.set(data, forKey: Key.customShortcuts)
+            }
+        }
+    }
 
     init(defaults: UserDefaults = .standard, bundle: Bundle = .main) {
         self.defaults = defaults
@@ -177,6 +306,12 @@ final class AppSettings {
         updateConsentAsked = defaults.object(forKey: Key.updateConsentAsked) as? Bool ?? false
         sandboxEngine = defaults.object(forKey: Key.sandboxEngine) as? Bool ?? true
         quickLookShortcut = QuickLookShortcut(rawValue: defaults.string(forKey: Key.quickLookShortcut) ?? "") ?? .spaceAndCmdY
+        if let data = defaults.data(forKey: Key.customShortcuts),
+           let decoded = try? JSONDecoder().decode([String: KeyboardShortcutData].self, from: data) {
+            customShortcuts = decoded
+        } else {
+            customShortcuts = [:]
+        }
     }
 
     /// Eski "extractIntoSubfolder" (Bool) tercihini yeni kurala çevirir: kapalı → hiçbir zaman, açık ya da yok → akıllı.
@@ -203,10 +338,37 @@ final class AppSettings {
         updateConsentAsked = false
         sandboxEngine = true
         quickLookShortcut = .spaceAndCmdY
+        customShortcuts = [:]
         // Özellik gözlemcileri değerleri yeniden yazdı; ilk kurulumdaki gibi hiçbir tercih kalmasın.
         // "AppleLanguages" en sonda silinir: dil atanırken yeniden yazılıyordu.
         Key.all.forEach(defaults.removeObject(forKey:))
         defaults.removeObject(forKey: "AppleLanguages")
+    }
+
+    // MARK: - Kısayol yönetimi
+
+    func shortcut(for action: ShortcutAction) -> KeyboardShortcutData {
+        customShortcuts[action.rawValue] ?? action.defaultShortcut
+    }
+
+    func setShortcut(_ shortcut: KeyboardShortcutData, for action: ShortcutAction) {
+        if shortcut == action.defaultShortcut {
+            customShortcuts.removeValue(forKey: action.rawValue)
+        } else {
+            customShortcuts[action.rawValue] = shortcut
+        }
+    }
+
+    func resetShortcut(for action: ShortcutAction) {
+        customShortcuts.removeValue(forKey: action.rawValue)
+    }
+
+    func resetAllShortcuts() {
+        customShortcuts = [:]
+    }
+
+    func isDefaultShortcut(for action: ShortcutAction) -> Bool {
+        customShortcuts[action.rawValue] == nil || customShortcuts[action.rawValue] == action.defaultShortcut
     }
 
     /// Tüm pencerelere (Ayarlar ve Hakkında dahil) seçilen görünümü uygular.

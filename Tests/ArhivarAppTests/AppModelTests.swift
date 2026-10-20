@@ -1659,4 +1659,57 @@ struct AppModelTests {
         #expect(!model.isSearching)
         #expect(model.displayNodes.count > 0)
     }
+
+    /// Kısayol özelleştirmeleri, varsayılanlar, sıfırlama ve kalıcılık sınaması.
+    @Test func shortcutCustomizationPersistenceAndReset() throws {
+        let suiteName = "ShortcutTests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = AppSettings(defaults: defaults, bundle: .main)
+
+        // 1. Varsayılan kısayollar doğru yüklenmeli
+        #expect(settings.shortcut(for: .extract) == ShortcutAction.extract.defaultShortcut)
+        #expect(settings.shortcut(for: .extract).displayString == "⌘E")
+        #expect(settings.isDefaultShortcut(for: .extract))
+
+        #expect(settings.shortcut(for: .extractSelected) == ShortcutAction.extractSelected.defaultShortcut)
+        #expect(settings.shortcut(for: .extractSelected).displayString == "⇧⌘E")
+
+        #expect(settings.shortcut(for: .open).displayString == "⌘↓")
+        #expect(settings.shortcut(for: .parent).displayString == "⌘↑")
+
+        // 2. Kısayol değiştirme
+        let customExtract = KeyboardShortcutData(key: "X", command: true, shift: true)
+        settings.setShortcut(customExtract, for: .extract)
+        #expect(settings.shortcut(for: .extract) == customExtract)
+        #expect(settings.shortcut(for: .extract).displayString == "⇧⌘X")
+        #expect(!settings.isDefaultShortcut(for: .extract))
+
+        // 3. UserDefaults kalıcılığı
+        let reloaded = AppSettings(defaults: defaults, bundle: .main)
+        #expect(reloaded.shortcut(for: .extract) == customExtract)
+        #expect(!reloaded.isDefaultShortcut(for: .extract))
+
+        // 4. Tek bir kısayolu sıfırlama
+        settings.resetShortcut(for: .extract)
+        #expect(settings.shortcut(for: .extract) == ShortcutAction.extract.defaultShortcut)
+        #expect(settings.isDefaultShortcut(for: .extract))
+
+        // 5. Birden fazla kısayol değiştirip tümünü sıfırlama
+        settings.setShortcut(KeyboardShortcutData(key: "U", command: true), for: .test)
+        settings.setShortcut(KeyboardShortcutData(key: "K", command: true), for: .info)
+        #expect(!settings.isDefaultShortcut(for: .test))
+        #expect(!settings.isDefaultShortcut(for: .info))
+
+        settings.resetAllShortcuts()
+        #expect(settings.isDefaultShortcut(for: .test))
+        #expect(settings.isDefaultShortcut(for: .info))
+        #expect(settings.shortcut(for: .test) == ShortcutAction.test.defaultShortcut)
+
+        // 6. resetAll() çağrıldığında da kısayollar sıfırlanmalı
+        settings.setShortcut(KeyboardShortcutData(key: "U", command: true), for: .test)
+        settings.resetAll()
+        #expect(settings.isDefaultShortcut(for: .test))
+    }
 }

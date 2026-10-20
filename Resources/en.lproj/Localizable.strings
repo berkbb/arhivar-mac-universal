@@ -286,3 +286,13 @@
 "shortcutActionTest" = "Test Archive";
 "shortcutActionOpen" = "Open / Enter Folder";
 "shortcutActionParent" = "Parent Folder";
+"shortcutCustomSection" = "Customizable Shortcuts";
+"shortcutRecordPrompt" = "Press keys…";
+"shortcutResetDefault" = "Reset to Default";
+"shortcutResetAll" = "Reset All Shortcuts";
+"shortcutRecordHelp" = "Click a shortcut badge and press a new key combination. Press Esc to cancel.";
+"shortcutModifierRequired" = "Shortcuts must include at least one modifier key (⌘, ⌥, ⌃).";
+"shortcutConflictWarning" = "This shortcut is already used by \"%@\".";
+"shortcutActionNewArchive" = "New Archive";
+"shortcutActionOpenArchive" = "Open Archive";
+"shortcutActionInfo" = "Show Info";
