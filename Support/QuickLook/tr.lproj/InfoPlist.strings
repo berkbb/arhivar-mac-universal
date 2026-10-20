@@ -1,0 +1,24 @@
+/* Hızlı Bakış eklentisi Info.plist metinleri (Sistem Ayarları > Uzantılar) */
+"CFBundleDisplayName" = "Arhivar Hızlı Bakış";
+"CFBundleName" = "Arhivar Hızlı Bakış";
+
+/* Tür açıklamaları (UTTypeDescription) */
+"7z archive" = "7z arşivi";
+"ARJ archive" = "ARJ arşivi";
+"Bzip2 Tar archive" = "Bzip2 Tar arşivi";
+"Debian package" = "Debian paketi";
+"LZ4 archive" = "LZ4 arşivi";
+"LZH archive" = "LZH arşivi";
+"LZMA archive" = "LZMA arşivi";
+"Lzip archive" = "Lzip arşivi";
+"Microsoft CAB archive" = "Microsoft CAB arşivi";
+"QCOW2 disk image" = "QCOW2 disk görüntüsü";
+"RAR archive" = "RAR arşivi";
+"RPM package" = "RPM paketi";
+"Split archive (first volume)" = "Bölünmüş arşiv (ilk parça)";
+"SquashFS image" = "SquashFS görüntüsü";
+"UDF disk image" = "UDF disk görüntüsü";
+"VHDX disk image" = "VHDX disk görüntüsü";
+"Windows Imaging Format image" = "Windows Imaging Format görüntüsü";
+"XZ archive" = "XZ arşivi";
+"Zstandard archive" = "Zstandard arşivi";

@@ -1,0 +1,31 @@
+/* Uygulama Info.plist metinleri (Finder belge türü adları ve tür açıklamaları) */
+"CFBundleDisplayName" = "Arhivar";
+"CFBundleName" = "Arhivar";
+"NSHumanReadableCopyright" = "Babadogan Tech and Edu. 7-Zip © Igor Pavlov.";
+
+/* Belge türleri (CFBundleTypeName); "7z archive" ve "RAR archive" aşağıdaki tür açıklamalarıyla ortaktır */
+"Archive" = "Archive";
+"Disk image" = "Disk image";
+"Tar or compressed file" = "Tar or compressed file";
+"ZIP archive" = "ZIP archive";
+
+/* Tür açıklamaları (UTTypeDescription) */
+"7z archive" = "7z archive";
+"ARJ archive" = "ARJ archive";
+"Bzip2 Tar archive" = "Bzip2 Tar archive";
+"Debian package" = "Debian package";
+"LZ4 archive" = "LZ4 archive";
+"LZH archive" = "LZH archive";
+"LZMA archive" = "LZMA archive";
+"Lzip archive" = "Lzip archive";
+"Microsoft CAB archive" = "Microsoft CAB archive";
+"QCOW2 disk image" = "QCOW2 disk image";
+"RAR archive" = "RAR archive";
+"RPM package" = "RPM package";
+"Split archive (first volume)" = "Split archive (first volume)";
+"SquashFS image" = "SquashFS image";
+"UDF disk image" = "UDF disk image";
+"VHDX disk image" = "VHDX disk image";
+"Windows Imaging Format image" = "Windows Imaging Format image";
+"XZ archive" = "XZ archive";
+"Zstandard archive" = "Zstandard archive";

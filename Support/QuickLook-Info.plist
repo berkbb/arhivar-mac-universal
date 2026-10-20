@@ -12,6 +12,12 @@
 	<string>net.babadogan.arhivar.QuickLook</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>tr</string>
+		<string>en</string>
+		<string>ro</string>
+	</array>
 	<key>CFBundleName</key>
 	<string>ArhivarQuickLook</string>
 	<key>CFBundlePackageType</key>

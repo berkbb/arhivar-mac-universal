@@ -106,3 +106,30 @@ func formatSpecifiersMatchEnglish(code: String) throws {
     #expect(strings.string(.appName, language: "tr") == "Arhivar")
     #expect(strings.string(.no, language: "tr") == "no")
 }
+
+/// Info.plist'teki Finder'a görünen metinler (ad, belge türü adları, tür açıklamaları) her dilin
+/// InfoPlist.strings dosyasında birebir bulunmalıdır: uygulama (Resources) ve Hızlı Bakış eklentisi (Support/QuickLook).
+@Test(arguments: [("Support/Info.plist", "Resources"), ("Support/QuickLook-Info.plist", "Support/QuickLook")])
+func infoPlistStringsCoverEveryVisibleName(plistPath: String, stringsRoot: String) throws {
+    let packageRoot = resources.deletingLastPathComponent()
+    let data = try Data(contentsOf: packageRoot.appendingPathComponent(plistPath))
+    let plist = try #require(try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any])
+    var expected: Set<String> = ["CFBundleDisplayName", "CFBundleName"]
+    for type in plist["CFBundleDocumentTypes"] as? [[String: Any]] ?? [] {
+        if let name = type["CFBundleTypeName"] as? String { expected.insert(name) }
+    }
+    for type in plist["UTImportedTypeDeclarations"] as? [[String: Any]] ?? [] {
+        if let description = type["UTTypeDescription"] as? String { expected.insert(description) }
+    }
+    #expect(Set(plist["CFBundleLocalizations"] as? [String] ?? []) == Set(AppLanguage.supportedCodes))
+
+    var keySets: [String: Set<String>] = [:]
+    for code in AppLanguage.supportedCodes {
+        let url = packageRoot.appendingPathComponent("\(stringsRoot)/\(code).lproj/InfoPlist.strings")
+        let table = try #require(StringTable.load(contentsOf: url), "\(code): \(url.path)")
+        #expect(expected.subtracting(table.keys).sorted() == [], "\(code) InfoPlist.strings eksik: \(stringsRoot)")
+        #expect(table.values.allSatisfy { !$0.isEmpty })
+        keySets[code] = Set(table.keys)
+    }
+    #expect(Set(keySets.values).count == 1, "InfoPlist.strings anahtarları diller arasında birebir aynı olmalı: \(stringsRoot)")
+}
