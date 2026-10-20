@@ -263,3 +263,11 @@
 "editPaste" = "Yapıştır";
 "editPasteMatchStyle" = "Yapıştır ve Stili Eşleştir";
 "editSelectAll" = "Tümünü Seç";
+"licenseAppSubtitle" = "Özgür ve açık kaynak kodlu yazılım lisansı";
+"licenseNoticesSubtitle" = "Arhivar'ın içerdiği üçüncü taraf yazılımların lisans bildirimleri";
+"licenseReadOnly" = "salt okunur";
+"licensePublisher" = "Yayıncı";
+"licenseLabel" = "Lisans";
+"licenseCopyText" = "Metni Kopyala";
+"licenseCopied" = "Kopyalandı!";
+"buttonClose" = "Kapat";

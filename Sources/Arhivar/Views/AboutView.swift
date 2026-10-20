@@ -6,6 +6,7 @@ struct AboutView: View {
     @Environment(AppModel.self) private var model
     @Environment(AppSettings.self) private var settings
     @Environment(\.openURL) private var openURL
+    @State private var license: LicenseViewerItem?
 
     var body: some View {
         VStack(spacing: 16) {
@@ -44,12 +45,8 @@ struct AboutView: View {
                         Button(settings.t(.aboutRepository), systemImage: "chevron.left.forwardslash.chevron.right") { openURL(AppLinks.repository) }
                     }
                     HStack(spacing: 8) {
-                        Button(settings.t(.aboutAppLicense), systemImage: "doc.text") {
-                            model.openBundledDocument("Arhivar-License", extension: "txt")
-                        }
-                        Button(settings.t(.aboutLicense), systemImage: "doc.text.magnifyingglass") { model.openLicense() }
-                        Button(settings.t(.aboutNotices), systemImage: "list.bullet.rectangle") {
-                            model.openBundledDocument("Third-Party-Notices", extension: "txt")
+                        ForEach(LicenseDocument.allCases) { document in
+                            Button(settings.t(document.title), systemImage: document.systemImage) { showLicense(document) }
                         }
                     }
                 }
@@ -67,5 +64,15 @@ struct AboutView: View {
         .frame(width: 500)
         .containerBackground(.thickMaterial, for: .window)
         .windowMinimizeBehavior(.disabled)
+        .sheet(item: $license) { LicenseViewerSheet(item: $0) }
+    }
+
+    /// Lisans uygulama içinde salt okunur açılır; dosya bulunamazsa (yalnızca 7-Zip için) resmî sayfası açılır.
+    private func showLicense(_ document: LicenseDocument) {
+        if let text = document.text() {
+            license = LicenseViewerItem(document: document, text: text)
+        } else if let url = document.fallbackURL {
+            openURL(url)
+        }
     }
 }

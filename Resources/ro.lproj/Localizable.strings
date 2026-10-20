@@ -263,3 +263,11 @@
 "editPaste" = "Lipește";
 "editPasteMatchStyle" = "Lipește și potrivește stilul";
 "editSelectAll" = "Selectează tot";
+"licenseAppSubtitle" = "Licență software liberă și cu sursă deschisă";
+"licenseNoticesSubtitle" = "Notificările de licență pentru software-ul terț inclus în Arhivar";
+"licenseReadOnly" = "doar citire";
+"licensePublisher" = "Editor";
+"licenseLabel" = "Licență";
+"licenseCopyText" = "Copiază textul";
+"licenseCopied" = "Copiat!";
+"buttonClose" = "Închide";

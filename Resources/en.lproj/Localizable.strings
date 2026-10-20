@@ -263,3 +263,11 @@
 "editPaste" = "Paste";
 "editPasteMatchStyle" = "Paste and Match Style";
 "editSelectAll" = "Select All";
+"licenseAppSubtitle" = "Free and open-source software license";
+"licenseNoticesSubtitle" = "License notices for the third-party software bundled with Arhivar";
+"licenseReadOnly" = "read-only";
+"licensePublisher" = "Publisher";
+"licenseLabel" = "License";
+"licenseCopyText" = "Copy Text";
+"licenseCopied" = "Copied!";
+"buttonClose" = "Close";

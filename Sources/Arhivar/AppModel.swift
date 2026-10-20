@@ -1796,27 +1796,6 @@ final class AppModel {
             NSWorkspace.shared.open(AppLinks.website)
         }
     }
-
-    func openLicense() {
-        let candidates = [
-            EngineLocator.managedEngineDirectory.appendingPathComponent("License.txt"),
-            Bundle.main.url(forResource: "7-Zip-License", withExtension: "txt"),
-        ].compactMap { $0 }
-        if let license = candidates.first(where: { FileManager.default.fileExists(atPath: $0.path) }) {
-            NSWorkspace.shared.open(license)
-        } else {
-            NSWorkspace.shared.open(AppLinks.license)
-        }
-    }
-}
-
-extension AppModel {
-    /// Uygulamayla gelen bir belgeyi (lisans, bildirimler) açar.
-    func openBundledDocument(_ name: String, extension ext: String) {
-        if let url = Bundle.main.url(forResource: name, withExtension: ext) {
-            NSWorkspace.shared.open(url)
-        }
-    }
 }
 
 enum AppLinks {

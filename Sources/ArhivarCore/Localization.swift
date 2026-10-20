@@ -121,6 +121,8 @@ public enum LKey: String, CaseIterable, Sendable {
     case subfolderSmart, subfolderAlways, subfolderNever, excludeMacMetadata, settingsStoreSymlinks, settingsStoreSymlinksNote
     case duplicateNames, createPasswordConfirmHint, warningRemovedLinks, renameExists, symbolicLinkItem, nothingToArchive
     case editCut, editPaste, editPasteMatchStyle, editSelectAll
+    case licenseAppSubtitle, licenseNoticesSubtitle, licenseReadOnly, licensePublisher, licenseLabel
+    case licenseCopyText, licenseCopied, buttonClose
     case contextCopy, toastCopied, contextBrowse, navParentArchive, progressCopying
     case contextChecksums, checksumsTitle, buttonCopy, infoComment, infoBlocks, infoVolumes, progressChecksums
     case unknown
