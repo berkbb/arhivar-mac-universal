@@ -5,6 +5,8 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-10-20
+
 ### Added
 
 - Comprehensive 11-discipline chaos and security test matrix (`ChaosAndSecurityMatrixTests.swift`) with 17 dedicated automated tests covering Security (Zip-Slip traversal, zero CLI password exposure), Stress (2,000 flat entries, 35-level hierarchy depth, rapid parsing), Destructive (0-byte archives, corrupt random bytes), Penetration (quarantine user-approval bit stripping), Load & Volume (zip bomb `Int64.max` saturating sum), Endurance (multi-cycle staging cleanup under read-only permissions), Vulnerability Scanning (option injection shielding, Trojan Source Unicode spoofing detection, risky executable UTType detection), Red Team (standalone symlink exfiltration rejection, read-only and multi-volume in-place edit blocking), Fuzzing (listing parser mutations, malformed braces and negative sizes), and Chaos (process termination SIGKILL timeout after 2s grace period, `0o000`/`0o555` owner permissions recovery, high-concurrency reentrancy). Total automated test count increased to 230 tests.
