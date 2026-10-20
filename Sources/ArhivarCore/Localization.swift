@@ -100,6 +100,7 @@ public enum LKey: String, CaseIterable, Sendable {
     case errorTitle, warningTitle, errorEngineNotFound, errorEngineTimeout, errorCancelled
     case errorWrongPassword, errorNotArchive, errorFailed
     case settingsGeneral, settingsCompression, settingsAdvanced, settingsLanguage, settingsLanguageNote, languageSystem
+    case restartWarningTitle, restartMenuBarNotice
     case settingsAppearance, appearanceSystem, appearanceLight, appearanceDark
     case settingsExtraction, settingsExtractTo, extractToAsk, extractToNextTo, extractToCustom, settingsCustomFolder
     case settingsSubfolder, settingsReveal, settingsOverwrite, overwriteReplace, overwriteSkip, overwriteRename

@@ -143,6 +143,8 @@
 "settingsAdvanced" = "Gelişmiş";
 "settingsLanguage" = "Dil";
 "settingsLanguageNote" = "Arhivar hemen değişir. Sistem menüleri bir sonraki açılışta güncellenir.";
+"restartWarningTitle" = "Uygulamanın Yeniden Başlatılması Önerilir";
+"restartMenuBarNotice" = "Menü çubuğu ve arayüz dinamik olarak çevrilir. Sistem düzeyindeki iletişim kutularının da güncellenmesi için uygulamanın yeniden başlatılması önerilir.";
 "languageSystem" = "Sistem varsayılanı";
 "settingsAppearance" = "Görünüm";
 "appearanceSystem" = "Otomatik";

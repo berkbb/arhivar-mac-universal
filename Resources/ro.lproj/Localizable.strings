@@ -143,6 +143,8 @@
 "settingsAdvanced" = "Avansat";
 "settingsLanguage" = "Limbă";
 "settingsLanguageNote" = "Arhivar se schimbă imediat. Meniurile de sistem se actualizează la următoarea pornire.";
+"restartWarningTitle" = "Repornirea Aplicației Recomandată";
+"restartMenuBarNotice" = "Bara de meniu și interfața sunt traduse dinamic. Se recomandă repornirea aplicației pentru actualizarea ferestrelor de dialog de sistem.";
 "languageSystem" = "Implicit sistem";
 "settingsAppearance" = "Aspect";
 "appearanceSystem" = "Automat";

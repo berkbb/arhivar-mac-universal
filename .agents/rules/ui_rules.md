@@ -1,9 +1,9 @@
 # UI Rules, Localization & SwiftUI Table Safety Standards
 
 - **Source:** Project UI & Localization Governance (`Arhivar`)
-- **Version:** 1.0.3
+- **Version:** 1.0.4
 - **Last Review Date:** 2026-10-20
-- **Change Summary:** Codified mandatory 1:1 exact translation rule across all supported languages, trilingual `LKey` rules, SwiftUI `Table` `@Environment` ban in cells, and responder-aware Edit menu commands.
+- **Change Summary:** Added macOS MenuBar & in-app language switching restart warning standard (aligned with `aptreceipt`), codified mandatory 1:1 exact translation rule across all supported languages, trilingual `LKey` rules, SwiftUI `Table` `@Environment` ban in cells, and responder-aware Edit menu commands.
 
 ---
 
@@ -34,3 +34,13 @@
 - Always render entry file names through `OpenSafety.visibleName(_:)` so invisible format/control characters and blank fillers (`U+202E`, `U+2800`, `U+3164`, `U+115F`, `U+1160`, `U+FFA0`) are visibly shown as `⟦U+XXXX⟧` accompanied by an orange warning icon (`exclamationmark.triangle.fill`).
 - Honor `@Environment(\.accessibilityReduceMotion)` in `ProgressOverlay` (`isActive: !reduceMotion` on `.symbolEffect`).
 - Bound `FileIcons.byPath` cache at `FileIcons.maxCachedPaths` (`256`) so `NSImage` instances do not grow unbounded across sessions.
+
+---
+
+## 4. macOS MenuBar, System Dialogs & In-App Language Switching Restart Warning Standard
+
+- **The macOS Platform Constraint:** When an application provides an in-app language picker independent of macOS System Settings, dynamic string lookups (`settings.t(...)` or `L10n`) immediately update SwiftUI views and custom windows. However, system-level Cocoa controls (`NSApp.mainMenu` top-level menus, system file panels `NSOpenPanel`/`NSSavePanel`, system alert buttons, and standard Services) evaluate language bundles upon process initialization or via `AppleLanguages` in `UserDefaults`.
+- **Mandatory Restart Warning Rule (AptReceipt Standard):**
+  1. Whenever the user changes the application language in Preferences / Settings, the UI **must** trigger an informative alert (`restartWarningTitle`: *"Application Restart Recommended"* / *"Uygulamanın Yeniden Başlatılması Önerilir"* / *"Repornirea Aplicației Recomandată"*) and display an explanatory footer notice (`restartMenuBarNotice`: *"Menubar and interface are dynamically translated. Restarting the application is recommended to also reload system-level dialogs."* / *"Menü çubuğu ve arayüz dinamik olarak çevrilir. Sistem düzeyindeki iletişim kutularının da güncellenmesi için uygulamanın yeniden başlatılması önerilir."*).
+  2. The application must write the selected language code to the `"AppleLanguages"` key in `UserDefaults` (`defaults.set([code], forKey: "AppleLanguages")`), ensuring the next cold launch opens with the selected locale at the Cocoa/AppKit level.
+  3. No app may claim instantaneous complete system dialog translation without surfacing this restart warning to the user.

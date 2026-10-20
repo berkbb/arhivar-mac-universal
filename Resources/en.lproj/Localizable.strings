@@ -143,6 +143,8 @@
 "settingsAdvanced" = "Advanced";
 "settingsLanguage" = "Language";
 "settingsLanguageNote" = "Arhivar switches instantly. System menus follow after the next launch.";
+"restartWarningTitle" = "Application Restart Recommended";
+"restartMenuBarNotice" = "Menubar and interface are dynamically translated. Restarting the application is recommended to also reload system-level dialogs.";
 "languageSystem" = "System default";
 "settingsAppearance" = "Appearance";
 "appearanceSystem" = "Automatic";

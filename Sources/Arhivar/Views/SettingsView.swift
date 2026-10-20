@@ -24,6 +24,7 @@ struct SettingsView: View {
 
 private struct GeneralSettingsView: View {
     @Environment(AppSettings.self) private var settings
+    @State private var showRestartAlert = false
 
     var body: some View {
         @Bindable var settings = settings
@@ -35,6 +36,11 @@ private struct GeneralSettingsView: View {
                             .tag(language)
                     }
                 }
+                .onChange(of: settings.language) { old, new in
+                    if old != new {
+                        showRestartAlert = true
+                    }
+                }
                 Picker(settings.t(.settingsAppearance), selection: $settings.appearance) {
                     ForEach(AppAppearance.allCases) { appearance in
                         Label(settings.t(appearance.titleKey), systemImage: appearance.systemImage)
@@ -43,7 +49,7 @@ private struct GeneralSettingsView: View {
                 }
                 .pickerStyle(.segmented)
             } footer: {
-                Text(settings.t(.settingsLanguageNote))
+                Text(settings.t(.restartMenuBarNotice))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -73,6 +79,11 @@ private struct GeneralSettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .alert(settings.t(.restartWarningTitle), isPresented: $showRestartAlert) {
+            Button(settings.t(.buttonOK), role: .cancel) { }
+        } message: {
+            Text(settings.t(.restartMenuBarNotice))
+        }
     }
 
     private func chooseFolder() {

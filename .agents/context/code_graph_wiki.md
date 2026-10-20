@@ -39,7 +39,7 @@
 | `Views/ArchiveBrowserView.swift` | `ArchiveBrowserView`, `NameCell`, `PathBar`, `StatusBarView`, `ArchiveInfoView`, `ProgressOverlay`, `ToastView`, `FileIcons` | Hierarchical `Table`, breadcrumb path bar with nested archive crumbs and folder drop targets, status bar, info popover, bounded icon cache |
 | `Views/CreateArchiveSheet.swift` | `CreateArchiveSheet`, `PasswordSheet` | New Archive modal form, duplicate source basename disambiguation, validation messages, password unlock sheet |
 | `Views/WelcomeView.swift` | `WelcomeView`, `EngineStatusView`, `UpdateBanner` | Home drop zone, `7zz` engine status, and update banners for both Arhivar and 7-Zip |
-| `Views/SettingsView.swift` | `SettingsView`, `GeneralSettingsView`, `CompressionSettingsView`, `AdvancedSettingsView` | Preferences UI (language, appearance, extraction subfolder/overwrite rules, compression defaults, custom engine, sandbox toggle, reset) |
+| `Views/SettingsView.swift` | `SettingsView`, `GeneralSettingsView`, `CompressionSettingsView`, `AdvancedSettingsView` | Preferences UI (language with restart recommendation alert and menubar notice, appearance, extraction subfolder/overwrite rules, compression defaults, custom engine, sandbox toggle, reset) |
 | `Views/SidebarView.swift` | `SidebarView` | Home navigation and recent archives list |
 | `Views/AboutView.swift` | `AboutView` | Version info, credits, license/manual/repository links |
 
