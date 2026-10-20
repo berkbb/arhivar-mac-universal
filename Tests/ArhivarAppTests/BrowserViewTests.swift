@@ -82,6 +82,7 @@ struct BrowserViewTests {
 
     private func settle() async {
         while model.operation != nil { await model.operationTask?.value }
+        await model.searchTask?.value
     }
 
     private func table(in view: NSView) -> NSTableView? {

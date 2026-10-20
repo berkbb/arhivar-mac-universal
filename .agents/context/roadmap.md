@@ -191,7 +191,6 @@ A workflow of 68 agents (recon per discipline → adversarial verification of ev
 - **Location:** `Tests/ArhivarCoreTests/ChaosAndSecurityMatrixTests.swift`
 
 #### S36. ⬜ [P3] Accepted limitations / deferred (confirmed by the audit, not fixed)
-- **Main-actor tree work:** `ArchiveTree.build/index/sorted` at open and `search` on every keystroke run synchronously on the main actor; an archive with hundreds of thousands of entries stalls the UI (no crash, no data risk). Would need off-main building with a snapshot handoff.
 - **`installArchive` for split archives** deletes the stale `name.7z.00N` volumes before moving the new ones in; a crash in between loses the old split archive. Move-aside + rollback like `mergeItem` is the fix.
 - **Drag export runs outside `perform`:** `dragItem(for:)` extracts in `ArchiveItemTransfer` with no operation state and no cancel path; closing/switching the archive mid-drop runs `discardAllSessions()` under the running 7-Zip (it fails with `errno=2`, nothing escapes). Needs a drag lifecycle tied to the operation state.
 - **LF in an entry name:** 7-Zip prints it as `_` in listings, so the deceptive-name badge cannot see it and per-item extract/open/delete match nothing (S17 reports the error instead of success); whole-archive extraction works. 7-Zip limitation.
@@ -200,6 +199,10 @@ A workflow of 68 agents (recon per discipline → adversarial verification of ev
 - **Staging folders on a volume never used again** (crash mid-extraction to an external disk) are swept only when that destination is used again (S15).
 - **Matrix test-quality grades** (9 partial, 1 does-not-prove, 1 tautological) are tracked as open item 2 above.
 - **Location:** n/a (design notes)
+
+#### S37. ✅ [P2] Off-Main Tree Building, Cached Nested Context, and Debounced Async Search
+- **Status:** ✅ Done — In archives with 500k+ entries, `ArchiveTree.build` and `index` are now offloaded to `Task.detached` within `fetchListing`, delivering pre-computed trees directly to `apply` with zero main-thread stall. Returning from nested archives (`returnToArchive`) directly restores the cached `tree` and `nodeIndex` from `ArchiveContext` in $O(1)$ time. Searching in large archives ($\ge 1000$ nodes) uses a 60ms-debounced, cancellable background task (`searchTask`), setting `isSearching = true` to display an overlay `ProgressView` without blocking `@MainActor`. Test `asyncSearchForLargeArchiveRunsInBackgroundAndUpdatesDisplay` (app).
+- **Location:** `Sources/Arhivar/AppModel.swift`, `Sources/Arhivar/Views/ArchiveBrowserView.swift`, `Tests/ArhivarAppTests/AppModelTests.swift`
 ---
 
 

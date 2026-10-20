@@ -60,6 +60,7 @@ private final class Fixture {
 
     func settle() async {
         while model.operation != nil { await model.operationTask?.value }
+        await model.searchTask?.value
     }
 
     /// Çıkarma hedefini sabitler (panel açılmasın) ve hedef klasörü döndürür.
@@ -1533,5 +1534,40 @@ struct AppModelTests {
         fixture.model.settings.sandboxEngine = false
         let plain = fixture.model.confined(runner, archive: archive)
         #expect(plain.sandbox == nil)
+    }
+
+    /// 1.000+ öğeli büyük arşivlerde arama ana thread'i dondurmaz; arka planda asenkron çalışır ve displayNodes'u günceller.
+    @Test func asyncSearchForLargeArchiveRunsInBackgroundAndUpdatesDisplay() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+
+        let folder = fixture.workspace.appendingPathComponent("large_src")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        for i in 0..<1050 {
+            try "veri".write(to: folder.appendingPathComponent(String(format: "file_%04d.txt", i)), atomically: true, encoding: .utf8)
+        }
+        let archive = fixture.workspace.appendingPathComponent("large.7z")
+        let runner = CommandRunner(executableURL: try #require(fixture.model.engineURL))
+        let options = CreateOptions(sources: [folder], destination: archive, format: .sevenZip, level: .fast)
+        _ = try await runner.run(SevenZipCommand.create(options))
+
+        let model = fixture.model
+        model.openArchive(archive)
+        await fixture.settle()
+        #expect(model.tree.count > 0)
+
+        // 1.000+ öğe varken arama başlat:
+        model.searchText = "file_0500"
+        #expect(model.isSearching)
+
+        await fixture.settle()
+        #expect(!model.isSearching)
+        #expect(model.displayNodes.contains { $0.id.contains("file_0500.txt") })
+
+        // Arama temizlenince anında senkron olarak döner:
+        model.searchText = ""
+        #expect(!model.isSearching)
+        #expect(model.displayNodes.count > 0)
     }
 }

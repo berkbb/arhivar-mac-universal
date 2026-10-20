@@ -114,6 +114,8 @@ struct ArchiveContext {
     let previewCache: [String: URL]
     let currentFolder: String
     let selection: Set<String>
+    let tree: [ArchiveNode]
+    let nodeIndex: [String: ArchiveNode]
 }
 
 struct CreateRequest: Identifiable {
@@ -142,8 +144,10 @@ final class AppModel {
     private(set) var archiveURL: URL?
     private(set) var listing: ArchiveListing?
     private(set) var statistics: ArchiveStatistics?
-    private(set) var tree: [ArchiveNode] = [] { didSet { nodeIndex = ArchiveTree.index(tree); rebuildDisplay() } }
+    private(set) var tree: [ArchiveNode] = []
     private(set) var displayNodes: [ArchiveNode] = []
+    /// 1.000+ öğeli büyük arşivlerde arka plan araması sürerken true olur.
+    private(set) var isSearching = false
     var searchText = "" { didSet { rebuildDisplay() } }
     var currentFolder = "" { didSet { rebuildDisplay() } }
     var browserMode: BrowserMode = .folders {
@@ -172,6 +176,7 @@ final class AppModel {
     private(set) var archiveStack: [ArchiveContext] = []
 
     @ObservationIgnored private var nodeIndex: [String: ArchiveNode] = [:]
+    @ObservationIgnored var searchTask: Task<Void, Never>?
     @ObservationIgnored private var password: String?
     @ObservationIgnored private var currentTask: Task<Void, Never>?
     @ObservationIgnored private var toastTask: Task<Void, Never>?
@@ -517,11 +522,13 @@ final class AppModel {
     }
 
     /// 7zz'den okunmuş, henüz görünüme uygulanmamış liste.
-    private struct LoadedListing {
+    private struct LoadedListing: Sendable {
         let url: URL
         let password: String?
         let listing: ArchiveListing
         let headersEncrypted: Bool
+        let tree: [ArchiveNode]
+        let nodeIndex: [String: ArchiveNode]
     }
 
     private func fetchListing(of url: URL, runner: CommandRunner, password currentPassword: String?) async throws -> LoadedListing {
@@ -543,7 +550,20 @@ final class AppModel {
                 // Sorgu yapılamadıysa adlar açık varsayılır.
             }
         }
-        return LoadedListing(url: url, password: currentPassword, listing: listing, headersEncrypted: encryptedHeaders)
+
+        try Task.checkCancellation()
+
+        // 500k+ dosyalık devasa arşivlerde ağaç ve indeks inşasını arka planda koştur:
+        let (tree, nodeIndex) = await Task.detached(priority: .userInitiated) {
+            let builtTree = ArchiveTree.build(from: listing.entries)
+            let index = ArchiveTree.index(builtTree)
+            return (builtTree, index)
+        }.value
+
+        return LoadedListing(
+            url: url, password: currentPassword, listing: listing, headersEncrypted: encryptedHeaders,
+            tree: tree, nodeIndex: nodeIndex
+        )
     }
 
     /// Listeyi 7zz'den okur ve görünüm durumunu günceller.
@@ -579,7 +599,8 @@ final class AppModel {
         selection = []
         updatingDisplayOnce {
             if !keepFolder { searchText = "" }
-            tree = ArchiveTree.build(from: loaded.listing.entries)
+            tree = loaded.tree
+            nodeIndex = loaded.nodeIndex
             currentFolder = keepFolder && node(folder)?.isDirectory == true ? folder : ""
         }
     }
@@ -597,6 +618,9 @@ final class AppModel {
 
     /// Açık arşive ait her durumu siler (kapatma; düzenlemeden sonra yeniden listeleme başarısız olduğunda).
     private func resetArchiveState() {
+        searchTask?.cancel()
+        searchTask = nil
+        isSearching = false
         discardAllSessions()
         // Kapanan arşive bağlı parola isteği (ör. Hızlı Bakış) arşivsiz bir sayfa olarak kalmasın.
         if let pending = passwordRequest, Self.targetsOpenArchive(pending) { passwordRequest = nil }
@@ -607,8 +631,10 @@ final class AppModel {
         hardLinks = []
         updatingDisplayOnce {
             tree = []
+            nodeIndex = [:]
             searchText = ""
             currentFolder = ""
+            displayNodes = []
         }
         selection = []
         password = nil
@@ -647,7 +673,8 @@ final class AppModel {
         guard let archiveURL, let listing else { return }
         archiveStack.append(ArchiveContext(
             url: archiveURL, password: password, listing: listing, headersEncrypted: headersEncrypted, isEditable: isEditable,
-            sessionRoot: sessionRoot, previewCache: previewCache, currentFolder: currentFolder, selection: selection
+            sessionRoot: sessionRoot, previewCache: previewCache, currentFolder: currentFolder, selection: selection,
+            tree: tree, nodeIndex: nodeIndex
         ))
         // Üstteki arşivin geçici klasörü (iç arşivin kendisi orada) açık kalır; iç arşiv kendi klasörünü kullanır.
         sessionRoot = nil
@@ -679,7 +706,8 @@ final class AppModel {
                 hardLinks = Set(context.listing.entries.lazy.filter(\.isHardLink).map(\.path))
                 updatingDisplayOnce {
                     searchText = ""
-                    tree = ArchiveTree.build(from: context.listing.entries)
+                    tree = context.tree
+                    nodeIndex = context.nodeIndex
                     currentFolder = node(context.currentFolder)?.isDirectory == true ? context.currentFolder : ""
                 }
                 selection = context.selection
@@ -1679,15 +1707,50 @@ final class AppModel {
         guard !displayUpdatesPaused else { return }
         displayRebuildCount += 1
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let source: [ArchiveNode]
-        if !query.isEmpty {
-            source = ArchiveTree.search(tree, query: query)
-        } else if browserMode == .folders {
-            source = ArchiveTree.contents(of: currentFolder, roots: tree, index: nodeIndex)
-        } else {
-            source = tree
+
+        searchTask?.cancel()
+
+        if query.isEmpty {
+            isSearching = false
+            let source: [ArchiveNode]
+            if browserMode == .folders {
+                source = ArchiveTree.contents(of: currentFolder, roots: tree, index: nodeIndex)
+            } else {
+                source = tree
+            }
+            displayNodes = ArchiveTree.sorted(source, using: sortOrder)
+            return
         }
-        displayNodes = ArchiveTree.sorted(source, using: sortOrder)
+
+        let currentTree = tree
+        let comparators = sortOrder
+
+        // Küçük ve orta boy arşivlerde (< 1.000 düğüm) veya testlerde anında senkron çalış:
+        if nodeIndex.count < 1000 {
+            isSearching = false
+            let source = ArchiveTree.search(currentTree, query: query)
+            displayNodes = ArchiveTree.sorted(source, using: comparators)
+            return
+        }
+
+        // 1.000+ düğümlü büyük arşivlerde ana thread'i dondurmamak için asenkron koştur:
+        isSearching = true
+        displayNodes = []
+        searchTask = Task { @MainActor [weak self] in
+            // Kullanıcı seri yazıyorsa (burst) 60ms bekle:
+            try? await Task.sleep(for: .milliseconds(60))
+            if Task.isCancelled { return }
+
+            let matches = await Task.detached(priority: .userInitiated) {
+                let raw = ArchiveTree.search(currentTree, query: query)
+                return ArchiveTree.sorted(raw, using: comparators)
+            }.value
+
+            if Task.isCancelled { return }
+            guard let self, self.searchText.trimmingCharacters(in: .whitespacesAndNewlines) == query else { return }
+            self.displayNodes = matches
+            self.isSearching = false
+        }
     }
 
     // MARK: - Son arşivler ve Finder

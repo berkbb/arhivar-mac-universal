@@ -32,7 +32,7 @@
 | File | Primary Symbols | Responsibilities |
 | :--- | :--- | :--- |
 | `ArhivarApp.swift` | `ArhivarApp`, `AppDelegate`, `AppCommands` | SwiftUI scenes (`main`, `about`, `Settings`), menu bar shortcuts (`⌘C`, `⌘V`, `⌘A`, `⌘↓`, `⌘↑`, `⌘I`, `⌘E`), `NSServices` registration |
-| `AppModel.swift` | `AppModel`, `ArchiveContext`, `PendingAction`, `EngineStatus`, `UpdateState`, `AppUpdateState` | Central `@Observable` state machine, all async `7zz` workflows, nested archive stack (`archiveStack`), password retry queue, Finder service queue (`serviceQueue`) |
+| `AppModel.swift` | `AppModel`, `ArchiveContext`, `PendingAction`, `EngineStatus`, `UpdateState`, `AppUpdateState` | Central `@Observable` state machine, async `7zz` workflows, off-main tree building, debounced async search (`searchTask`, `isSearching`), nested archive stack (`archiveStack` with cached trees), password retry queue, Finder service queue (`serviceQueue`) |
 | `AppSettings.swift` | `AppSettings`, `AppAppearance`, `ExtractLocation` | `UserDefaults`-backed preferences, legacy `extractIntoSubfolder` migration, locale-aware byte/date/percent formatting |
 | `FinderServices.swift` | `FinderServices` | macOS `NSServices` handler for `extractHere`, `openArchive`, and `compress` |
 | `Views/ContentView.swift` | `ContentView`, `InfoToolbarButton`, `EditDialogs` | `NavigationSplitView` shell, toolbar, drop target, alerts, sheets, and edit confirmation dialogs |

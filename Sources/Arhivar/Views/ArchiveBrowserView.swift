@@ -61,7 +61,10 @@ struct ArchiveBrowserView: View {
         .quickLookPreview($model.quickLookURL)
         .overlay {
             if model.displayNodes.isEmpty {
-                if !model.searchText.isEmpty {
+                if model.isSearching {
+                    ProgressView()
+                        .controlSize(.regular)
+                } else if !model.searchText.isEmpty {
                     ContentUnavailableView(settings.t(.noSearchResults, model.searchText), systemImage: "magnifyingglass")
                 } else if model.tree.isEmpty {
                     ContentUnavailableView(settings.t(.emptyArchive), systemImage: "archivebox")
