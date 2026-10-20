@@ -5,6 +5,7 @@ import QuickLookUI
 import SwiftUI
 
 /// Finder'dan çağrılan Hızlı Bakış (Quick Look) görünüm denetleyicisi.
+@objc(PreviewViewController)
 public final class PreviewViewController: NSViewController, QLPreviewingController {
 
     public override func loadView() {
@@ -23,10 +24,18 @@ public final class PreviewViewController: NSViewController, QLPreviewingControll
                 }
 
                 let profile = SandboxProfile.forOperation(archive: url, writable: [], protectPersonalData: true)
-                let runner = CommandRunner(executableURL: engineURL, sandbox: profile)
+                let sandboxedRunner = CommandRunner(executableURL: engineURL, sandbox: profile)
 
                 do {
-                    let result = try await runner.run(SevenZipCommand.list(archive: url))
+                    let result: ProcessResult
+                    do {
+                        result = try await sandboxedRunner.run(SevenZipCommand.list(archive: url))
+                    } catch {
+                        // Quick Look eklenti ortamında sandbox-exec kısıtlıysa doğrudan 7zz ile çalıştır:
+                        let directRunner = CommandRunner(executableURL: engineURL)
+                        result = try await directRunner.run(SevenZipCommand.list(archive: url))
+                    }
+
                     if SevenZipError.needsPassword(result) {
                         presentEncryptedHeaders(for: url)
                         handler(nil)
