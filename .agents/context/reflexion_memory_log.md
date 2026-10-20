@@ -179,12 +179,14 @@
 
 ---
 
-## Episode 19: SwiftUI `.quickLookPreview` Framework Trap on Rapid Key Toggles (`Cmd+Y` / `Space`)
-- **Context:** Rapidly toggling file previews inside an archive using `Cmd+Y` or `Space` 3 or more times consecutively.
-- **Root Cause:** Apple's private `_QuickLook_SwiftUI` framework has an unhandled condition on macOS Tahoe: when the binding `$model.quickLookURL` changes rapidly, `-[QLPreviewPanelController _doReloadDataIfNecessary]` executes Foundation KVO notifications where `currentPreviewItemIndex` evaluates to `NSNotFound` (`Int.max` = `0x7fffffffffffffff`). Apple's internal Swift closure in `_QuickLook_SwiftUI` performs an out-of-bounds array subscript or range check with `Int.max`, triggering an immediate `EXC_BREAKPOINT` / `SIGTRAP` fatal trap that crashes the application process.
+## Episode 20: PluginKit App Sandbox Entitlement & UTI Declarations for Finder Quick Look (`.appex`)
+- **Context:** Quick Look preview of archive files in macOS Finder when pressing Space. Even though the extension was selected in System Settings > Quick Look, pressing Space on an archive displayed only generic file metadata rather than the rich contents view.
+- **Root Causes:**
+  1. *PluginKit Daemon Rejection:* macOS `pkd` requires all Quick Look App Extensions (`com.apple.quicklook.preview`) to carry `com.apple.security.app-sandbox = true` in their code signature entitlements. When codesigned without `--entitlements Support/QuickLook.entitlements`, `pluginkit -a` silently fails to activate the plug-in (`pkd` marks it inactive).
+  2. *UTImportedTypeDeclarations Prerequisite:* QuickLook inspects `QLSupportedContentTypes` in the extension's `Info.plist`. If any UTI (e.g. `org.7-zip.7-zip-archive`, `com.rarlab.rar-archive`, `org.tukaani.xz-archive`) is not declared in `UTImportedTypeDeclarations` in the host or extension `Info.plist`, `QuickLookSupport` logs `Invalid content type identifier` and skips the extension entirely.
+  3. *Security-Scoped URL Access in Sandboxed Extensions:* When Finder invokes `preparePreviewOfFile(at:completionHandler:)`, the incoming file URL is security-scoped. The extension must invoke `url.startAccessingSecurityScopedResource()` (and balance with `stopAccessingSecurityScopedResource()`) before passing the URL to subprocess engines or reading attributes.
 - **Solution & Guardrail:**
-  1. Remove SwiftUI's `.quickLookPreview` modifier entirely from views.
-  2. Implement a dedicated AppKit `QuickLookCoordinator` managing the native `QLPreviewPanel.shared()` singleton conforming to `QLPreviewPanelDataSource` and `QLPreviewPanelDelegate`.
-  3. Wire AppKit responder methods `acceptsPreviewPanelControl`, `beginPreviewPanelControl`, and `endPreviewPanelControl` on `AppDelegate`.
-  4. Intercept `Space` (key code 49) and `Esc` (key code 53) in `previewPanel(_:handle:)` to ensure clean keyboard dismissal.
-  5. In headless unit testing environments (`isTesting`), bypass `makeKeyAndOrderFront` and asynchronous window visibility KVO observation to prevent background tasks from prematurely clearing `model.quickLookURL`.
+  1. Provide dedicated `Support/QuickLook.entitlements` with `com.apple.security.app-sandbox` and `com.apple.security.files.user-selected.read-only`.
+  2. In `Scripts/build_app.sh`, pass `--entitlements "$ROOT/Support/QuickLook.entitlements"` when codesigning `ArhivarQuickLook.appex`.
+  3. Add complete `UTImportedTypeDeclarations` covering all supported archive formats to both `Support/Info.plist` and `Support/QuickLook-Info.plist`.
+  4. Enclose file access in `PreviewViewController` with security-scoped resource access and set `preferredContentSize = NSSize(width: 740, height: 500)`.

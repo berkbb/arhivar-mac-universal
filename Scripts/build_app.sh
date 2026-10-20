@@ -72,7 +72,7 @@ if [ -f "$BIN_DIR/ArhivarQuickLook" ]; then
   mkdir -p "$QL_APPEX/Contents/MacOS" "$QL_APPEX/Contents/Resources"
   cp "$BIN_DIR/ArhivarQuickLook" "$QL_APPEX/Contents/MacOS/ArhivarQuickLook"
   cp "$ROOT/Support/QuickLook-Info.plist" "$QL_APPEX/Contents/Info.plist"
-  codesign "${SIGN_ARGS[@]}" "$QL_APPEX"
+  codesign "${SIGN_ARGS[@]}" --entitlements "$ROOT/Support/QuickLook.entitlements" "$QL_APPEX"
 fi
 
 if [ "$SIGN_IDENTITY" = "-" ]; then echo "▸ Ad-hoc imzalanıyor…"; else echo "▸ İmzalanıyor: $SIGN_IDENTITY"; fi

@@ -51,6 +51,7 @@ struct ArchiveBrowserView: View {
             model.primaryAction(ids)
         }
         .onKeyPress(.space) {
+            guard settings.quickLookShortcut.allowsSpace else { return .ignored }
             model.toggleQuickLook()
             return .handled
         }

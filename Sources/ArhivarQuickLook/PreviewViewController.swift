@@ -9,13 +9,22 @@ import SwiftUI
 public final class PreviewViewController: NSViewController, QLPreviewingController {
 
     public override func loadView() {
-        view = NSView(frame: NSRect(x: 0, y: 0, width: 720, height: 480))
+        view = NSView(frame: NSRect(x: 0, y: 0, width: 740, height: 500))
         view.wantsLayer = true
+        preferredContentSize = NSSize(width: 740, height: 500)
     }
 
     /// Finder kullanıcısı bir arşiv dosyasındayken Boşluk tuşuna bastığında çağrılır.
     public func preparePreviewOfFile(at url: URL, completionHandler handler: @escaping (Error?) -> Void) {
+        preferredContentSize = NSSize(width: 740, height: 500)
+        let isAccessing = url.startAccessingSecurityScopedResource()
+
         Task { @MainActor in
+            defer {
+                if isAccessing {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
             do {
                 guard let engineURL = EngineLocator.locate(customPath: nil) else {
                     presentError("7-Zip (7zz) motoru bulunamadı.", for: url)
@@ -23,46 +32,43 @@ public final class PreviewViewController: NSViewController, QLPreviewingControll
                     return
                 }
 
-                let profile = SandboxProfile.forOperation(archive: url, writable: [], protectPersonalData: true)
-                let sandboxedRunner = CommandRunner(executableURL: engineURL, sandbox: profile)
-
+                let result: ProcessResult
                 do {
-                    let result: ProcessResult
-                    do {
-                        result = try await sandboxedRunner.run(SevenZipCommand.list(archive: url))
-                    } catch {
-                        // Quick Look eklenti ortamında sandbox-exec kısıtlıysa doğrudan 7zz ile çalıştır:
-                        let directRunner = CommandRunner(executableURL: engineURL)
-                        result = try await directRunner.run(SevenZipCommand.list(archive: url))
-                    }
+                    let profile = SandboxProfile.forOperation(archive: url, writable: [], protectPersonalData: true)
+                    let sandboxedRunner = CommandRunner(executableURL: engineURL, sandbox: profile)
+                    result = try await sandboxedRunner.run(SevenZipCommand.list(archive: url))
+                } catch {
+                    // Quick Look eklenti ortamında sandbox-exec kısıtlıysa doğrudan 7zz ile çalıştır:
+                    let directRunner = CommandRunner(executableURL: engineURL)
+                    result = try await directRunner.run(SevenZipCommand.list(archive: url))
+                }
 
-                    if SevenZipError.needsPassword(result) {
-                        presentEncryptedHeaders(for: url)
-                        handler(nil)
-                        return
-                    }
-
-                    try SevenZipError.check(result)
-                    let listing = ListingParser.parse(result.stdout, fallbackName: ArchiveNaming.streamItemName(for: url))
-                    let statistics = ArchiveStatistics(listing: listing)
-                    let tree = ArchiveTree.build(from: listing.entries)
-                    let isEncrypted = listing.entries.contains { $0.isEncrypted }
-
-                    presentContent(
-                        for: url,
-                        listing: listing,
-                        statistics: statistics,
-                        nodes: tree,
-                        isEncrypted: isEncrypted
-                    )
-                    handler(nil)
-                } catch SevenZipError.wrongPassword {
+                if SevenZipError.needsPassword(result) {
                     presentEncryptedHeaders(for: url)
                     handler(nil)
-                } catch {
-                    presentError(error.localizedDescription, for: url)
-                    handler(nil)
+                    return
                 }
+
+                try SevenZipError.check(result)
+                let listing = ListingParser.parse(result.stdout, fallbackName: ArchiveNaming.streamItemName(for: url))
+                let statistics = ArchiveStatistics(listing: listing)
+                let tree = ArchiveTree.build(from: listing.entries)
+                let isEncrypted = listing.entries.contains { $0.isEncrypted }
+
+                presentContent(
+                    for: url,
+                    listing: listing,
+                    statistics: statistics,
+                    nodes: tree,
+                    isEncrypted: isEncrypted
+                )
+                handler(nil)
+            } catch SevenZipError.wrongPassword {
+                presentEncryptedHeaders(for: url)
+                handler(nil)
+            } catch {
+                presentError(error.localizedDescription, for: url)
+                handler(nil)
             }
         }
     }

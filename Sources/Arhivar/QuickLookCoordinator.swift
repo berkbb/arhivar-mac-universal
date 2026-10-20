@@ -12,6 +12,7 @@ final class QuickLookCoordinator: NSObject, QLPreviewPanelDataSource, QLPreviewP
 
     private(set) var currentURL: URL?
     private var isClosingInternally = false
+    private var closeObserver: Any?
     var onClose: (@MainActor () -> Void)?
 
     private var isTesting: Bool {
@@ -33,7 +34,21 @@ final class QuickLookCoordinator: NSObject, QLPreviewPanelDataSource, QLPreviewP
         guard let panel = QLPreviewPanel.shared() else { return }
         panel.dataSource = self
         panel.delegate = self
+        panel.currentPreviewItemIndex = 0
         panel.reloadData()
+
+        if closeObserver == nil {
+            closeObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.willCloseNotification,
+                object: panel,
+                queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.handlePanelDidClose()
+                }
+            }
+        }
+
         if !panel.isVisible {
             panel.makeKeyAndOrderFront(nil)
         }
