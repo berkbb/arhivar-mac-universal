@@ -22,8 +22,9 @@ swift test
 
 ### Step 2: Verify Localization & Document Icon Parity
 Included automatically in `RunnerAndLocalizationTests` and `DocumentIconTests`:
-- Every `LKey` case in `Sources/ArhivarCore/Localization.swift` must exist in `Resources/tr.lproj/Localizable.strings`, `Resources/en.lproj/Localizable.strings`, and `Resources/ro.lproj/Localizable.strings`.
-- Positional and typed format specifiers (`%@`, `%ld`, `%1$@`, `%2$@`) must match across all three languages.
+- **Mandatory 1:1 Exact Translation (No Language Exceptions):** Whichever language is supported (`tr`, `en`, `ro`, or future additions), every `LKey` case in `Sources/ArhivarCore/Localization.swift` must exist with an authentic, non-fallback, exact 1:1 translation in all language tables (`Resources/tr.lproj/Localizable.strings`, `Resources/en.lproj/Localizable.strings`, and `Resources/ro.lproj/Localizable.strings`).
+- Zero tolerance for missing keys, untranslated English text in non-English tables, or format specifier mismatches.
+- Positional and typed format specifiers (`%@`, `%ld`, `%1$@`, `%2$@`) and argument counts must match 1:1 identically across all three languages.
 - Every document type in `Support/Info.plist` must map to one of the six `Resources/DocumentIcons/{zip,7z,rar,tar,disk,archive}.icns` files with `LSHandlerRank = Alternate`, and every imported/service archive UTI must belong to exactly one family.
 
 ### Step 3: Verify Universal App Bundle & Code Signature (When Packaging)

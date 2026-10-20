@@ -1,20 +1,22 @@
 # UI Rules, Localization & SwiftUI Table Safety Standards
 
 - **Source:** Project UI & Localization Governance (`Arhivar`)
-- **Version:** 1.0.2
-- **Last Review Date:** 2026-10-17
-- **Change Summary:** Codified trilingual `LKey` rules, SwiftUI `Table` `@Environment` ban in cells, and responder-aware Edit menu commands.
+- **Version:** 1.0.3
+- **Last Review Date:** 2026-10-20
+- **Change Summary:** Codified mandatory 1:1 exact translation rule across all supported languages, trilingual `LKey` rules, SwiftUI `Table` `@Environment` ban in cells, and responder-aware Edit menu commands.
 
 ---
 
-## 1. Strict Ban on Hardcoded UI Strings
+## 1. Strict Ban on Hardcoded UI Strings & Mandatory 1:1 Exact Translation
 
+- **Mandatory 1:1 Exact Translation (No Language Exceptions):** Whichever language is supported or added (`tr`, `en`, `ro`, or future additions), every single string key must have an authentic, idiomatic, and exact 1:1 translation across all language tables.
+- **Zero Fallback Tolerance:** Leaving placeholder text, English strings inside non-English tables, or missing keys is strictly prohibited. Every new feature, button, dialog, or menu item must be simultaneously translated into all active languages before merging or releasing.
 - Every user-visible string in `Sources/Arhivar/` must be retrieved via `settings.t(.key)` (or `model.t(.key)`) using a case of `LKey` (`Sources/ArhivarCore/Localization.swift`).
 - Every `LKey` case must exist in all three localization tables:
   - `Resources/tr.lproj/Localizable.strings` (Turkish — default language)
   - `Resources/en.lproj/Localizable.strings` (English)
   - `Resources/ro.lproj/Localizable.strings` (Romanian)
-- Format specifiers (`%@`, `%ld`, `%1$@`, `%2$@`) must match across all three languages.
+- Format specifiers (`%@`, `%ld`, `%1$@`, `%2$@`) and argument counts must match 1:1 identically across all three languages.
 
 ---
 
