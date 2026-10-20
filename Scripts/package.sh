@@ -45,9 +45,7 @@ codesign --verify --deep --strict "$APP"
 
 echo "▸ Dağıtım dosyaları hazırlanıyor…"
 mkdir -p "$DIST"
-rm -f "$DIST/$NAME.zip" "$DIST/$NAME.dmg"
-
-ditto -c -k --keepParent "$APP" "$DIST/$NAME.zip"
+rm -f "$DIST/$NAME.zip" "$DIST/$NAME.dmg" "$DIST/$NAME.dmg.sig" "$DIST/SHA256SUMS.txt" "$DIST/$NAME.sha256"
 
 STAGING="$(mktemp -d "${TMPDIR:-/tmp}/arhivar-dmg.XXXXXX")"
 trap 'rm -rf "$STAGING"' EXIT
@@ -75,12 +73,12 @@ if [ -n "$APP_PUBLIC_KEY" ]; then
 fi
 
 echo "▸ SHA-256 özetleri oluşturuluyor…"
-(cd "$DIST" && shasum -a 256 "$NAME.dmg" "$NAME.zip" > SHA256SUMS.txt)
+(cd "$DIST" && shasum -a 256 "$NAME.dmg" > SHA256SUMS.txt)
 cp "$DIST/SHA256SUMS.txt" "$DIST/$NAME.sha256"
 
 echo "✓ Paketler hazır:"
 # ls | awk '{ print $9 }' boşluk içeren yolları keserdi; boyut ve yol ayrı ayrı yazılır.
-READY_FILES=("$DIST/$NAME.zip" "$DIST/$NAME.dmg" "$DIST/SHA256SUMS.txt" "$DIST/$NAME.sha256")
+READY_FILES=("$DIST/$NAME.dmg" "$DIST/SHA256SUMS.txt" "$DIST/$NAME.sha256")
 if [ -f "$DMG_PATH.sig" ]; then
   READY_FILES+=("$DMG_PATH.sig")
 fi

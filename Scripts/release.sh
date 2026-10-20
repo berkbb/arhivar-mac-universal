@@ -67,7 +67,7 @@ EOF
 
 # --- Paketleme ---------------------------------------------------------------
 "$ROOT/Scripts/package.sh" "${PACKAGE_ARGS[@]+"${PACKAGE_ARGS[@]}"}"
-ASSETS=("dist/$NAME.dmg" "dist/$NAME.dmg.sig" "dist/SHA256SUMS.txt" "dist/$NAME.zip" "dist/$NAME.sha256")
+ASSETS=("dist/$NAME.dmg" "dist/$NAME.dmg.sig" "dist/SHA256SUMS.txt" "dist/$NAME.sha256")
 for asset in "${ASSETS[@]}"; do [ -f "$asset" ] || fail "$asset oluşmadı"; done
 
 # --- Etiket ve GitHub sürümü -------------------------------------------------
