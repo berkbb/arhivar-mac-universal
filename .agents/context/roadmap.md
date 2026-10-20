@@ -18,14 +18,24 @@
 
 ---
 
-### Test-Quality Items
-
-#### 2. 🟡 [Medium] Strengthen the 11-Discipline Chaos & Security Matrix (`ChaosAndSecurityMatrixTests.swift`)
-- **Status:** ⬜ Open — an adversarially verified audit (2026-10-19) graded every discipline of the matrix on whether its tests *prove* the architectural claim they are named after: 01 sandbox isolation, 02 hierarchy stress, 03 malformed data, 05 saturating arithmetic, 06 endurance/leaks, 07 input sanitization, 08 access containment, 10 chaos/concurrency and 11 atomic extraction are **partial**; 04 quarantine **does not prove** its claim (it only checks `derivedValue` string math, never a propagated xattr); 09 parser fuzz was **tautological** (`count >= 0`, now replaced by determinism assertions). The real coverage of those claims lives in `SandboxTests`, `AuditFixesTests`, `SecurityHardeningTests`, `FuzzTests`, `HardeningIntegrationTests` and `AppModelTests`.
-- **Strengthen (per discipline):** 01 — live stdin password delivery through `CommandRunner` (`/bin/cat`), argv-wide secret scan over every builder, live read-deny and network-deny runs via the `home:` injection point, and an app-level check that `AppModel.confined` wires the profile when the setting is on. 02 — assert the built tree structurally (`index`, `search`, `sorted`, `contents`, depth = `maxDepth` for an over-deep listing) and drop the hardcoded `< 1.0 s` wall-clock bound. 03 — assert the exact error case (`.notArchive`, `needsPassword == false`), use the seeded SplitMix64 generator with real signatures, add truncated/bit-flipped real archives, run through the sandboxed runner. 04 — propagate a real `com.apple.quarantine` to an extracted tree and read it back (including `._*`, read-only items, symlinked archive). 05 — exercise `requiredBytes` with `Int64.max` sizes and the header `Physical Size`. 06 — repeat extraction cycles and assert no staging folders or file descriptors remain (`lsof`-free: count entries of `/dev/fd`). 07 — route hostile names through `OpenSafety.visibleName`/`hasDeceptiveCharacters` and the rename/create validators. 08 — hard links, destination symlinks, placeholders below `0000` folders (now in `AuditFixesTests`). 10 — real cancellation races (`cancelOperation` during post-processing, queue head) and the re-entrancy comparison (done). 11 — a cancel between 7-Zip exit and merge must leave the destination untouched; replace-across-types rollback.
-- **Location:** `Tests/ArhivarCoreTests/ChaosAndSecurityMatrixTests.swift`
-
 ## Done
+
+### 11-Discipline Chaos & Security Matrix Strengthening (2026-10-20)
+
+#### S0. ✅ [P1] Strengthen the 11-Discipline Chaos & Security Matrix (`ChaosAndSecurityMatrixTests.swift`)
+- **Status:** ✅ Done — every discipline of the matrix now rigorously proves its architectural claim end-to-end:
+  - **01 Sandbox:** Live stdin password delivery verified through `CommandRunner` with `/bin/cat`; secret scans over all `SevenZipCommand` argument builders; live read-deny and network-deny runs under `sandbox-exec` via `SandboxProfile.forOperation(home:)`; `AppModel.confined` wires the profile when sandbox setting is on (`confinedWiresSandboxProfileWhenSettingIsOn`).
+  - **02 Hierarchy Stress:** Structural validation of the built tree with `ArchiveTree.index`, `search`, `sorted`, and `contents`; depth clamped to `ArchiveTree.maxDepth` for over-deep listings; removed fragile wall-clock bounds.
+  - **03 Malformed Data:** Asserted exact error cases (`SevenZipError.notArchive`, `needsPassword == false`); seeded SplitMix64 generator with real archive signatures; truncated and bit-flipped real archives executed via the sandboxed runner.
+  - **04 Quarantine:** End-to-end `com.apple.quarantine` propagation (clearing `0x0040` user-approved bit) across `run.command`, `0444` read-only files, AppleDouble (`._*`) metadata, and symlinked archives.
+  - **05 Saturating Arithmetic:** Driving `DiskSpace.requiredBytes` and `Physical Size` with `Int64.max`-scale values without integer overflow traps.
+  - **06 Endurance & Leak Prevention:** Multi-cycle staging creation and cleanup with targeted `fcntl(F_GETPATH)` file descriptor leak tracking and leftover verification.
+  - **07 Input Sanitization:** Shielding against command/option injection via explicit `--` separator placement; Unicode Trojan Source and homoglyph scanning via `OpenSafety`.
+  - **08 Access Containment:** Prevention of read-only and multi-volume archive in-place modifications, link traversal containment, and placeholder cleanup under `0000`/`0555` permissions.
+  - **09 Parser Fuzzing:** Deterministic fuzzing over `ListingParser` mutations asserting valid non-empty entries and idempotence.
+  - **10 Chaos & Concurrency:** Real cancellation races with SIGKILL timeout after a 2s grace period, and multi-task reentrancy equivalence against serial results.
+  - **11 Atomic Extraction:** Rollback on cancel or failure leaving destination untouched; cross-type replace backup restoration.
+- **Location:** `Tests/ArhivarCoreTests/ChaosAndSecurityMatrixTests.swift`, `Tests/ArhivarAppTests/AppModelTests.swift`
 
 ### Fuzz & Security Testing Round — Deeply Nested Path Stack Overflow (2026-10-18)
 

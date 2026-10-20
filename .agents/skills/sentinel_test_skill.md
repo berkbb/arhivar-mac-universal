@@ -17,7 +17,7 @@ Validates `ArhivarCore` and `Arhivar` across unit tests, real `7zz` integration 
 ```bash
 swift test
 ```
-- **Expected Result:** All **273 tests** pass across `ArhivarCoreTests` and `ArhivarAppTests` (including `FuzzTests`, `ArchiveTreeDepthTests`, `SecurityHardeningTests`, `AuditFixesTests`, `ChaosAndSecurityMatrixTests`, `DocumentIconTests`, `RoadmapTests`, `RoadmapIntegrationTests`, `HardeningTests`, `HardeningIntegrationTests`, `EdgeCaseTests`, `ReadOnlyTreeTests`, `LocationAndVolumeTests`, `AppleDoubleTests`, `EngineIntegrationTests`, `AppModelTests`, and `BrowserViewTests`).
+- **Expected Result:** All **276 tests** pass across `ArhivarCoreTests` and `ArhivarAppTests` (including `FuzzTests`, `ArchiveTreeDepthTests`, `SecurityHardeningTests`, `AuditFixesTests`, `ChaosAndSecurityMatrixTests`, `DocumentIconTests`, `RoadmapTests`, `RoadmapIntegrationTests`, `HardeningTests`, `HardeningIntegrationTests`, `EdgeCaseTests`, `ReadOnlyTreeTests`, `LocationAndVolumeTests`, `AppleDoubleTests`, `EngineIntegrationTests`, `AppModelTests`, and `BrowserViewTests`).
 - **Real Engine Requirement:** Integration suites automatically use `Vendor/7-Zip/7zz` (or `$ARHIVAR_7ZZ`). Ensure `Vendor/7-Zip/7zz` is executable (`chmod +x Vendor/7-Zip/7zz`) so no integration suite is skipped.
 
 ### Step 2: Verify Localization & Document Icon Parity
