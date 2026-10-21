@@ -206,6 +206,9 @@ final class AppModel {
     @ObservationIgnored private var didLaunch = false
     @ObservationIgnored private var headersEncrypted = false
     @ObservationIgnored private var serviceQueue: [URL] = []
+    /// Bir işlem sürerken istenen son arşiv (ör. Finder'dan art arda açma); işlem bitince açılır.
+    @ObservationIgnored private var pendingOpen: URL?
+    @ObservationIgnored private var pendingOpenTask: Task<Void, Never>?
     /// Açık arşivin önizleme ve sürükleme dosyaları; arşiv kapanınca ve uygulamadan çıkışta silinir.
     @ObservationIgnored private var sessionRoot: URL?
     @ObservationIgnored private var serviceTask: Task<Void, Never>?
@@ -522,6 +525,20 @@ final class AppModel {
     }
 
     func openArchive(_ url: URL) {
+        // İşlem sürerken gelen istek yok sayılmaz: işlem (ve sorulan parola) bitince en son istenen arşiv açılır.
+        // Aradaki istekler atlanır; kullanıcı yalnızca son seçtiğini görmek ister.
+        if operation != nil {
+            pendingOpen = url
+            guard pendingOpenTask == nil else { return }
+            pendingOpenTask = Task {
+                await waitUntilIdle()
+                pendingOpenTask = nil
+                guard let next = pendingOpen else { return }
+                pendingOpen = nil
+                openArchive(next)
+            }
+            return
+        }
         // Sembolik bağlantı üzerinden verilen arşiv gerçek dosyasıyla açılır: yerinde düzenleme bağlantıyı bozmasın,
         // kum havuzu ve karantina gerçek dosyaya baksın. (Yalnızca son bileşen bağlantıysa; /private gibi yazım korunur.)
         var url = url
@@ -1405,6 +1422,9 @@ final class AppModel {
     /// Kuyruktaki işlerin bitmesini bekler (testler ve sıralı servisler için).
     var serviceQueueTask: Task<Void, Never>? { serviceTask }
 
+    /// İşlem sürerken istenen arşivin açılmasını bekler (testler için).
+    var pendingOpenQueueTask: Task<Void, Never>? { pendingOpenTask }
+
     private func waitUntilIdle() async {
         while operation != nil || passwordRequest != nil {
             await operationTask?.value
@@ -1582,6 +1602,8 @@ final class AppModel {
     /// İptal, Finder'dan gelen "Buraya Çıkar" kuyruğunun tamamını durdurur; sıradaki arşive geçilmez.
     func cancelOperation() {
         serviceQueue.removeAll()
+        // İptal bekleyen açma isteğini de kapsar: kullanıcı durdurmak istedi, ardından başka arşiv açılmamalı.
+        pendingOpen = nil
         currentTask?.cancel()
     }
 

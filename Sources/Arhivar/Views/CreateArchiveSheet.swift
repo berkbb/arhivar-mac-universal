@@ -103,6 +103,7 @@ struct CreateArchiveSheet: View {
                     .buttonStyle(.borderless)
                     .foregroundStyle(.secondary)
                     .help(settings.t(.createRemove))
+                    .accessibilityLabel(settings.t(.createRemove))
                 }
             }
             Button(settings.t(.createAddFiles), systemImage: "plus") { chooseSources() }

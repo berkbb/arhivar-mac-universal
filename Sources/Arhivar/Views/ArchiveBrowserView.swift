@@ -185,6 +185,7 @@ private struct PathBar: View {
             .buttonStyle(.borderless)
             .disabled(!model.canGoUp)
             .help(settings.t(.navUp))
+            .accessibilityLabel(settings.t(.navUp))
 
             Divider().frame(height: 16)
 
@@ -393,6 +394,9 @@ struct ProgressOverlay: View {
             }
             .padding(30)
             .glassEffect(.regular, in: .rect(cornerRadius: 26))
+            // Cam kart zaman zaman erişilebilirlikte tek bir "Vazgeç" düğmesine dönüşüyordu: başlık ("Arşiv okunuyor…")
+            // ve ilerleme VoiceOver'da ayrıca okunamıyordu. Başlık, ilerleme ve Vazgeç ayrı öğeler olarak kalsın.
+            .accessibilityElement(children: .contain)
             // Kart hafifçe büyüyerek yerine oturur; arka plan karartması yalnızca solar.
             .scaleEffect(appeared || reduceMotion ? 1 : 0.92)
             .opacity(appeared || reduceMotion ? 1 : 0)

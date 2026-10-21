@@ -395,6 +395,7 @@ private struct ShortcutsSettingsView: View {
                 }
                 .buttonStyle(.plain)
                 .help(settings.t(.shortcutResetDefault))
+                .accessibilityLabel(settings.t(.shortcutResetDefault))
             }
 
             Button {

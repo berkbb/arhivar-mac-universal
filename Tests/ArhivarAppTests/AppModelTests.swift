@@ -959,6 +959,52 @@ struct AppModelTests {
         #expect(model.displayRebuildCount - before == 1)
     }
 
+    /// Bir arşiv okunurken gelen açma istekleri sessizce düşmez: işlem bitince en son istenen açılır, aradakiler atlanır.
+    @Test func openRequestsWhileBusyOpenTheLatestAfterwards() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let first = try await fixture.makeArchive("birinci.7z", format: .sevenZip)
+        let middle = try await fixture.makeArchive("orta.zip", format: .zip)
+        let last = try await fixture.makeArchive("son.7z", format: .sevenZip)
+        let model = fixture.model
+
+        model.openArchive(first)
+        #expect(model.operation != nil)
+        model.openArchive(middle)
+        model.openArchive(last)
+        // Bekleyen istek, çalışan işlemin yerini almaz.
+        #expect(model.operation != nil)
+
+        await fixture.settle()
+        await model.pendingOpenQueueTask?.value
+        await fixture.settle()
+        #expect(model.archiveURL?.lastPathComponent == "son.7z")
+        #expect(model.recentArchives.first?.lastPathComponent == "son.7z")
+        #expect(!model.recentArchives.contains { $0.lastPathComponent == "orta.zip" })
+        #expect(model.alert == nil)
+    }
+
+    /// İptal, bekleyen açma isteğini de kapsar: kullanıcı durdurdu, ardından başka arşiv açılmaz.
+    @Test func cancelDropsPendingOpenRequest() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let first = try await fixture.makeArchive("birinci.7z", format: .sevenZip)
+        let pending = try await fixture.makeArchive("bekleyen.7z", format: .sevenZip)
+        let model = fixture.model
+
+        model.openArchive(first)
+        model.openArchive(pending)
+        model.cancelOperation()
+
+        await fixture.settle()
+        await model.pendingOpenQueueTask?.value
+        await fixture.settle()
+        #expect(model.archiveURL?.lastPathComponent != "bekleyen.7z")
+        #expect(model.operation == nil)
+    }
+
     /// Arka arkaya hızlıca Cmd+Y / Boşluk yapıldığında (ör. 5 kez üst üste) çökmeden açılıp kapanmalıdır.
     @Test func quickLookRapidTogglesDoNotCrash() async throws {
         let fixture = try Fixture()
