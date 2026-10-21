@@ -260,6 +260,7 @@
 "infoBlocks" = "Blocuri solide";
 "infoVolumes" = "Volume";
 "progressChecksums" = "Se calculează sumele de control…";
+"progressCancelling" = "Se anulează…";
 "progressCopying" = "Se pregătesc elementele de copiat…";
 "editCut" = "Decupează";
 "editPaste" = "Lipește";

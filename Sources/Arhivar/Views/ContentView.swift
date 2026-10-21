@@ -6,7 +6,7 @@ struct ContentView: View {
     @Environment(AppSettings.self) private var settings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// İşlem bittiğinde en az süre dolana kadar gösterilen son durum (ilerleme tamamlanmış olarak).
+    /// İşlem başarıyla bittiğinde kısa bir süre gösterilen son durum (ilerleme tamamlanmış olarak).
     @State private var finishingOperation: OperationState?
     @State private var lastOperation: OperationState?
     @State private var overlayShownAt = ContinuousClock.now
@@ -46,7 +46,8 @@ struct ContentView: View {
         .onChange(of: model.operation?.id, initial: true) { _, id in operationChanged(id) }
         .onChange(of: model.operation?.progress) { _, _ in lastOperation = model.operation ?? lastOperation }
         .overlay(alignment: .bottom) {
-            if let toast = model.toast {
+            // Bildirim, ilerleme penceresi kaybolduktan sonra gelir: ikisi üst üste görünmesin.
+            if let toast = model.toast, finishingOperation == nil {
                 ToastView(toast: toast)
                     .padding(.bottom, 64)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -86,7 +87,9 @@ struct ContentView: View {
         }
         guard let last = lastOperation else { return }
         lastOperation = nil
-        guard let remaining = OverlayTiming.remaining(shownAt: overlayShownAt, now: .now) else { return }
+        guard let remaining = OverlayTiming.remaining(
+            shownAt: overlayShownAt, now: .now, outcome: model.lastOperationOutcome, isDeterminate: last.progress != nil
+        ) else { return }
         finishingOperation = OverlayTiming.finished(last)
         lingerTask = Task {
             try? await Task.sleep(for: remaining)
@@ -242,11 +245,20 @@ enum OverlayTiming {
     /// kapanmasın, yumuşakça belirip kaybolsun.
     static let minimumDuration: Duration = .milliseconds(700)
 
-    /// İşlem bittiğinde pencerenin daha ne kadar gösterileceği; en az süre dolduysa nil (hemen kapanır).
+    /// İlerleme çubuğu olan işlem başarıyla bitince çubuğun dolu (%100) göründüğü kısa an. Çubuk %98'deyken
+    /// pencerenin aniden kaybolmaması için en az süre dolmuş olsa da uygulanır.
+    static let completionBeat: Duration = .milliseconds(350)
+
+    /// İşlem bittiğinde pencerenin daha ne kadar gösterileceği; nil ise hemen kapanır.
+    /// İptal ve hatada beklenmez (kullanıcı durdurdu ya da uyarı gelecek); başarıda en az süre ve tamamlanma anı uygulanır.
+    /// - Parameter outcome: nil, ardından gerçek işlemin başladığı hazırlık adımıdır (motor denetimi).
     static func remaining(
-        shownAt: ContinuousClock.Instant, now: ContinuousClock.Instant, minimum: Duration = minimumDuration
+        shownAt: ContinuousClock.Instant, now: ContinuousClock.Instant, outcome: OperationOutcome?, isDeterminate: Bool,
+        minimum: Duration = minimumDuration
     ) -> Duration? {
+        guard outcome != .cancelled, outcome != .failed else { return nil }
         let remaining = minimum - (now - shownAt)
+        if outcome == .succeeded, isDeterminate { return max(remaining, completionBeat) }
         return remaining > .zero ? remaining : nil
     }
 

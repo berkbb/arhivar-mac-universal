@@ -8,17 +8,42 @@ import Testing
     let start = ContinuousClock.now
 
     @Test func quickOperationLingersForTheRestOfTheMinimum() {
-        let remaining = OverlayTiming.remaining(shownAt: start, now: start + .milliseconds(100))
+        let remaining = OverlayTiming.remaining(shownAt: start, now: start + .milliseconds(100), outcome: .succeeded, isDeterminate: false)
         #expect(remaining == OverlayTiming.minimumDuration - .milliseconds(100))
     }
 
-    @Test func slowOperationClosesImmediately() {
-        #expect(OverlayTiming.remaining(shownAt: start, now: start + OverlayTiming.minimumDuration) == nil)
-        #expect(OverlayTiming.remaining(shownAt: start, now: start + .seconds(3)) == nil)
+    @Test func slowIndeterminateOperationClosesImmediately() {
+        #expect(OverlayTiming.remaining(shownAt: start, now: start + OverlayTiming.minimumDuration, outcome: .succeeded, isDeterminate: false) == nil)
+        #expect(OverlayTiming.remaining(shownAt: start, now: start + .seconds(3), outcome: .succeeded, isDeterminate: false) == nil)
+    }
+
+    /// Uzun çıkarmada çubuk %98'deyken pencere aniden kaybolmaz: %100 kısa bir an görünür.
+    @Test func slowDeterminateSuccessShowsCompletionBeat() {
+        #expect(OverlayTiming.remaining(shownAt: start, now: start + .seconds(12), outcome: .succeeded, isDeterminate: true) == OverlayTiming.completionBeat)
+    }
+
+    @Test func quickDeterminateSuccessUsesTheLongerOfMinimumAndBeat() {
+        let remaining = OverlayTiming.remaining(shownAt: start, now: start + .milliseconds(100), outcome: .succeeded, isDeterminate: true)
+        #expect(remaining == OverlayTiming.minimumDuration - .milliseconds(100))
+        let late = OverlayTiming.remaining(shownAt: start, now: start + .milliseconds(600), outcome: .succeeded, isDeterminate: true)
+        #expect(late == OverlayTiming.completionBeat)
+    }
+
+    /// İptal ve hata: pencere hemen kapanır; iptal edilen işlem "tamamlandı" (%100) görünmez.
+    @Test(arguments: [OperationOutcome.cancelled, .failed])
+    func cancelAndFailureCloseImmediately(outcome: OperationOutcome) {
+        #expect(OverlayTiming.remaining(shownAt: start, now: start + .milliseconds(50), outcome: outcome, isDeterminate: true) == nil)
+        #expect(OverlayTiming.remaining(shownAt: start, now: start + .milliseconds(50), outcome: outcome, isDeterminate: false) == nil)
+    }
+
+    /// Hazırlık adımı (sonuç yok): ardından gerçek işlem başlar, en az süre kuralı aynen uygulanır.
+    @Test func preparationStepKeepsMinimumRule() {
+        #expect(OverlayTiming.remaining(shownAt: start, now: start + .milliseconds(200), outcome: nil, isDeterminate: false) == .milliseconds(500))
+        #expect(OverlayTiming.remaining(shownAt: start, now: start + .seconds(1), outcome: nil, isDeterminate: false) == nil)
     }
 
     @Test func customMinimumIsRespected() {
-        #expect(OverlayTiming.remaining(shownAt: start, now: start + .milliseconds(50), minimum: .milliseconds(200)) == .milliseconds(150))
+        #expect(OverlayTiming.remaining(shownAt: start, now: start + .milliseconds(50), outcome: .succeeded, isDeterminate: false, minimum: .milliseconds(200)) == .milliseconds(150))
     }
 
     @Test func finishedStateCompletesDeterminateProgressOnly() {

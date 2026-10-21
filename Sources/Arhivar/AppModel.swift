@@ -24,6 +24,15 @@ struct OperationState: Identifiable {
     let id = UUID()
     let titleKey: LKey
     var progress: Double?
+    /// Vazgeç'e basıldı; 7zz duruyor ve yarım dosyalar siliniyor (büyük çıkarmada birkaç saniye sürebilir).
+    var isCancelling = false
+}
+
+/// Biten işlemin sonucu: ilerleme penceresi başarıda tamamlanmış görünüp kısa bir an bekler, iptal ve hatada hemen kapanır.
+enum OperationOutcome: Equatable {
+    case succeeded
+    case cancelled
+    case failed
 }
 
 struct Toast: Identifiable, Equatable {
@@ -173,6 +182,8 @@ final class AppModel {
 
     private(set) var recentArchives: [URL] = []
     private(set) var operation: OperationState?
+    /// Son biten işlemin sonucu; `operation` nil olmadan önce yazılır.
+    private(set) var lastOperationOutcome: OperationOutcome?
     var toast: Toast?
     var alert: AlertItem? { didSet { if alert == nil { schedulePendingConsent() } } }
     var passwordRequest: PasswordRequest? { didSet { if passwordRequest == nil { schedulePendingConsent() } } }
@@ -890,54 +901,75 @@ final class AppModel {
 
             // 2. Hedefle aynı birimdeki hazırlık klasörüne çıkar; iptal ya da hata hedefi değiştirmez.
             let staging = try StagedExtraction.makeStagingDirectory(for: base)
-            defer { StagedExtraction.removeTree(at: staging) }
-            let options = ExtractOptions(archive: archive, destination: staging, items: rawItems, password: password, overwrite: .replace)
-            let result = try await self.confined(runner, archive: archive, writable: [staging]).run(
-                SevenZipCommand.extract(options), workingDirectory: options.workingDirectory, input: options.input, onProgress: progress
-            )
-            var warnings = [try SevenZipError.check(result)].compactMap { $0 }
-            // İptal 7zz bittikten sonra geldiyse: sonraki adımlar (bağlantı ayıklama, karantina, birleştirme) iptali
-            // denetlemez; hazırlık klasörü atılır, hedefe dokunulmaz.
-            if Task.isCancelled { throw SevenZipError.cancelled }
+            // Hazırlık klasörü her durumda silinir; ana iş parçacığı dışında (bkz. discardStaging).
+            do {
+                let options = ExtractOptions(archive: archive, destination: staging, items: rawItems, password: password, overwrite: .replace)
+                let result = try await self.confined(runner, archive: archive, writable: [staging]).run(
+                    SevenZipCommand.extract(options), workingDirectory: options.workingDirectory, input: options.input, onProgress: progress
+                )
+                var warnings = [try SevenZipError.check(result)].compactMap { $0 }
+                // İptal 7zz bittikten sonra geldiyse: sonraki adımlar (bağlantı ayıklama, karantina, birleştirme) iptali
+                // denetlemez; hazırlık klasörü atılır, hedefe dokunulmaz.
+                if Task.isCancelled { throw SevenZipError.cancelled }
 
-            // 3. Taşınacak içerik: alt klasördeyken seçilenler o klasörün yolu olmadan hedefe gider.
-            let content = StagedExtraction.contentRoot(in: staging, stripping: stripping)
-            // 7zz seçilen öğeyi eşleştiremezse (ör. adında satır sonu olan girdi listede "_" ile yazılır) 0 ile biter ama
-            // hiçbir şey çıkmaz; "çıkarıldı" denmesin.
-            if !items.isEmpty, ((try? StagedExtraction.entries(ofDirectory: content.path)) ?? []).isEmpty {
-                throw SevenZipError.failed(code: result.exitCode, message: items.map { ($0 as NSString).lastPathComponent }.joined(separator: ", "))
-            }
+                // 3. Taşınacak içerik: alt klasördeyken seçilenler o klasörün yolu olmadan hedefe gider.
+                let content = StagedExtraction.contentRoot(in: staging, stripping: stripping)
+                // 7zz seçilen öğeyi eşleştiremezse (ör. adında satır sonu olan girdi listede "_" ile yazılır) 0 ile biter ama
+                // hiçbir şey çıkmaz; "çıkarıldı" denmesin.
+                if !items.isEmpty, ((try? StagedExtraction.entries(ofDirectory: content.path)) ?? []).isEmpty {
+                    throw SevenZipError.failed(code: result.exitCode, message: items.map { ($0 as NSString).lastPathComponent }.joined(separator: ", "))
+                }
 
-            // 4. 7zz'nin reddettiği bağlantıların 0 baytlık yer tutucularını sil (hedefteki dosyaları ezmesinler);
-            // taşınan içeriğin dışını gösteren bağlantıları ayıkla, karantina işaretini aktar.
-            // Sembolik VE sabit bağlantılar: 7zz dışarıyı göstereni reddedip yerine 0 baytlık dosya bırakır.
-            let links = (entries ?? []).filter { $0.isSymbolicLink || $0.isHardLink }.map(\.path)
-            let placeholders = StagedExtraction.removeLinkPlaceholders(in: staging, links: links)
-            let prefix = content == staging ? "" : stripping + "/"
-            let escaping = StagedExtraction.secureSymlinks(in: content, extractionRoot: staging).map { prefix + $0 }
-            let removedLinks = Array(Set(placeholders + escaping)).sorted()
-            if !removedLinks.isEmpty {
-                warnings.append(self.t(.warningRemovedLinks, removedLinks.prefix(10).joined(separator: ", ")))
-            }
-            Quarantine.propagate(from: archive, to: staging, since: .distantPast)
+                // 4. 7zz'nin reddettiği bağlantıların 0 baytlık yer tutucularını sil (hedefteki dosyaları ezmesinler);
+                // taşınan içeriğin dışını gösteren bağlantıları ayıkla, karantina işaretini aktar.
+                // Sembolik VE sabit bağlantılar: 7zz dışarıyı göstereni reddedip yerine 0 baytlık dosya bırakır.
+                let links = (entries ?? []).filter { $0.isSymbolicLink || $0.isHardLink }.map(\.path)
+                let placeholders = StagedExtraction.removeLinkPlaceholders(in: staging, links: links)
+                let prefix = content == staging ? "" : stripping + "/"
+                let escaping = StagedExtraction.secureSymlinks(in: content, extractionRoot: staging).map { prefix + $0 }
+                let removedLinks = Array(Set(placeholders + escaping)).sorted()
+                if !removedLinks.isEmpty {
+                    warnings.append(self.t(.warningRemovedLinks, removedLinks.prefix(10).joined(separator: ", ")))
+                }
+                Quarantine.propagate(from: archive, to: staging, since: .distantPast)
 
-            // 5. Alt klasör kuralına göre hedefi belirle ve seçilen üzerine yazma kuralıyla taşı.
-            let destination = StagedExtraction.destination(for: content, base: base, archiveName: archiveName, mode: subfolderMode)
-            // Tüm arşiv akıllı kuralla doğrudan hedefe çıkıyorsa Finder'ın eklediği üst veri (__MACOSX, .DS_Store, ._*)
-            // hedefe dağılmaz. Kullanıcının açıkça seçtiği öğelere dokunulmaz.
-            if items.isEmpty {
-                StagedExtraction.leaveOutRootMetadata(in: content, destination: destination, base: base, mode: subfolderMode)
+                // 5. Alt klasör kuralına göre hedefi belirle ve seçilen üzerine yazma kuralıyla taşı.
+                let destination = StagedExtraction.destination(for: content, base: base, archiveName: archiveName, mode: subfolderMode)
+                // Tüm arşiv akıllı kuralla doğrudan hedefe çıkıyorsa Finder'ın eklediği üst veri (__MACOSX, .DS_Store, ._*)
+                // hedefe dağılmaz. Kullanıcının açıkça seçtiği öğelere dokunulmaz.
+                if items.isEmpty {
+                    StagedExtraction.leaveOutRootMetadata(in: content, destination: destination, base: base, mode: subfolderMode)
+                }
+                // Birleştirme başladıktan sonra iptal edilmez (yarım hedef kalmasın); son fırsat burası.
+                if Task.isCancelled { throw SevenZipError.cancelled }
+                let changed = try StagedExtraction.merge(from: content, into: destination, policy: policy)
+                // Doğrudan hedefe tek anlamlı öğe çıktıysa Finder o öğeyi seçsin (macOS üst verileri sayılmaz).
+                let meaningfulChanged = changed.filter { !StagedExtraction.isMacMetadata($0.lastPathComponent, in: destination) }
+                let targetItems = meaningfulChanged.isEmpty ? changed : meaningfulChanged
+                let reveal = destination == base && targetItems.count == 1 ? targetItems[0] : destination
+                let warning = warnings.isEmpty ? nil : warnings.joined(separator: "\n\n")
+                self.finish(message: self.t(.toastExtracted, reveal.lastPathComponent), reveal: reveal, warning: warning)
+            } catch {
+                await Self.discardStaging(staging)
+                throw error
             }
-            // Birleştirme başladıktan sonra iptal edilmez (yarım hedef kalmasın); son fırsat burası.
-            if Task.isCancelled { throw SevenZipError.cancelled }
-            let changed = try StagedExtraction.merge(from: content, into: destination, policy: policy)
-            // Doğrudan hedefe tek anlamlı öğe çıktıysa Finder o öğeyi seçsin (macOS üst verileri sayılmaz).
-            let meaningfulChanged = changed.filter { !StagedExtraction.isMacMetadata($0.lastPathComponent, in: destination) }
-            let targetItems = meaningfulChanged.isEmpty ? changed : meaningfulChanged
-            let reveal = destination == base && targetItems.count == 1 ? targetItems[0] : destination
-            let warning = warnings.isEmpty ? nil : warnings.joined(separator: "\n\n")
-            self.finish(message: self.t(.toastExtracted, reveal.lastPathComponent), reveal: reveal, warning: warning)
+            await Self.discardStaging(staging)
         }
+    }
+
+    /// 7zz'nin bildirdiği ilerleme. Yüzde bayt üzerinden hesaplanır: çok sayıda küçük dosyada (ör. 4.000 dosya, birkaç KB)
+    /// iş bitene kadar "%0" kalır. Çubuk %0'da takılı görünmesin diye gerçek bir değer gelene kadar belirsiz kalır.
+    func applyProgress(_ value: Double) {
+        // İptal sürerken gelen son bildirimler çubuğu yeniden doldurmasın.
+        guard let current = operation, !current.isCancelling else { return }
+        guard value > 0 || current.progress != nil else { return }
+        operation?.progress = value
+    }
+
+    /// Hazırlık klasörünü ana iş parçacığı dışında siler ve bitmesini bekler. İptal edilen büyük bir çıkarmada on binlerce
+    /// yarım dosya kalır (16.000 dosya ≈ 2,5 sn); ana iş parçacığında silmek arayüzü saniyelerce donduruyordu.
+    nonisolated private static func discardStaging(_ staging: URL) async {
+        await Task.detached(priority: .userInitiated) { StagedExtraction.removeTree(at: staging) }.value
     }
 
     func testArchive() {
@@ -1601,6 +1633,11 @@ final class AppModel {
 
     /// İptal, Finder'dan gelen "Buraya Çıkar" kuyruğunun tamamını durdurur; sıradaki arşive geçilmez.
     func cancelOperation() {
+        // Pencere hemen "İptal ediliyor…" gösterir: durma ve temizlik sürerken tıklamanın alındığı görülsün.
+        if currentTask != nil, operation?.isCancelling == false {
+            operation?.isCancelling = true
+            operation?.progress = nil
+        }
         serviceQueue.removeAll()
         // İptal bekleyen açma isteğini de kapsar: kullanıcı durdurmak istedi, ardından başka arşiv açılmamalı.
         pendingOpen = nil
@@ -1661,9 +1698,12 @@ final class AppModel {
             }
             do {
                 try await body(runner) { value in
-                    Task { @MainActor in self.operation?.progress = value }
+                    Task { @MainActor in self.applyProgress(value) }
                 }
+                lastOperationOutcome = Task.isCancelled ? .cancelled : .succeeded
             } catch {
+                let cancelled = Task.isCancelled || (error as? SevenZipError) == .cancelled
+                lastOperationOutcome = cancelled ? .cancelled : .failed
                 handle(error, archive: archive, retry: retry, usedPassword: usedPassword)
             }
         }

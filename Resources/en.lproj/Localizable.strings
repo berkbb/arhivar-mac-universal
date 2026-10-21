@@ -260,6 +260,7 @@
 "infoBlocks" = "Solid blocks";
 "infoVolumes" = "Volumes";
 "progressChecksums" = "Calculating checksums…";
+"progressCancelling" = "Cancelling…";
 "progressCopying" = "Preparing items to copy…";
 "editCut" = "Cut";
 "editPaste" = "Paste";

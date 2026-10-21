@@ -260,6 +260,7 @@
 "infoBlocks" = "Katı bloklar";
 "infoVolumes" = "Parçalar";
 "progressChecksums" = "Sağlama değerleri hesaplanıyor…";
+"progressCancelling" = "İptal ediliyor…";
 "progressCopying" = "Kopyalanacak öğeler hazırlanıyor…";
 "editCut" = "Kes";
 "editPaste" = "Yapıştır";

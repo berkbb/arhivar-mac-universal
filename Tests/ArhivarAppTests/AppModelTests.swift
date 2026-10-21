@@ -985,6 +985,83 @@ struct AppModelTests {
         #expect(model.alert == nil)
     }
 
+    /// İlerleme penceresi biten işlemin sonucuna göre davranır: başarı, iptal ve hata ayrı bildirilir.
+    @Test func operationOutcomeIsRecorded() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let model = fixture.model
+
+        model.openArchive(try await fixture.makeArchive("tamam.7z", format: .sevenZip))
+        await fixture.settle()
+        #expect(model.lastOperationOutcome == .succeeded)
+
+        model.openArchive(try await fixture.makeArchive("iptal.7z", format: .sevenZip))
+        model.cancelOperation()
+        await fixture.settle()
+        #expect(model.lastOperationOutcome == .cancelled)
+
+        let fake = fixture.workspace.appendingPathComponent("sahte.7z")
+        try "arşiv değil".write(to: fake, atomically: true, encoding: .utf8)
+        model.openArchive(fake)
+        await fixture.settle()
+        #expect(model.lastOperationOutcome == .failed)
+        #expect(model.alert != nil)
+    }
+
+    /// Vazgeç'e basılınca pencere hemen "İptal ediliyor" durumuna geçer; ikinci basış ve ilerleme bildirimleri onu bozmaz.
+    @Test func cancelShowsCancellingStateImmediately() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let model = fixture.model
+
+        model.openArchive(try await fixture.makeArchive("uzun.7z", format: .sevenZip))
+        let id = model.operation?.id
+        model.cancelOperation()
+        #expect(model.operation?.isCancelling == true)
+        #expect(model.operation?.progress == nil)
+        // Aynı işlem: pencere yeni bir işlem sanıp en az süreyi baştan saymasın.
+        #expect(model.operation?.id == id)
+        model.cancelOperation()
+        #expect(model.operation?.isCancelling == true)
+
+        await fixture.settle()
+        #expect(model.operation == nil)
+        #expect(model.lastOperationOutcome == .cancelled)
+    }
+
+    /// 7zz küçük dosyalarda iş bitene kadar %0 bildirir: çubuk %0'da takılı görünmez, gerçek değer gelince dolmaya başlar.
+    @Test func zeroProgressKeepsTheBarIndeterminate() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let model = fixture.model
+
+        model.openArchive(try await fixture.makeArchive("ilerleme.7z", format: .sevenZip))
+        model.applyProgress(0)
+        #expect(model.operation?.progress == nil)
+        model.applyProgress(0.25)
+        #expect(model.operation?.progress == 0.25)
+        // Başladıktan sonra %0 yeniden belirsize döndürmez (çubuk geri sıçramasın).
+        model.applyProgress(0)
+        #expect(model.operation?.progress == 0)
+        model.cancelOperation()
+        model.applyProgress(0.9)
+        #expect(model.operation?.progress == nil)
+        await fixture.settle()
+        model.applyProgress(0.5)
+        #expect(model.operation == nil)
+    }
+
+    /// Boştayken Vazgeç hiçbir şey yapmaz.
+    @Test func cancelWhileIdleIsANoOp() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        fixture.model.cancelOperation()
+        #expect(fixture.model.operation == nil)
+    }
+
     /// İptal, bekleyen açma isteğini de kapsar: kullanıcı durdurdu, ardından başka arşiv açılmaz.
     @Test func cancelDropsPendingOpenRequest() async throws {
         let fixture = try Fixture()

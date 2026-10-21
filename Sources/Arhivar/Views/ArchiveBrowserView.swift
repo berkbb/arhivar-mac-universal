@@ -372,11 +372,12 @@ struct ProgressOverlay: View {
                     .font(.system(size: 46, weight: .regular))
                     .foregroundStyle(.tint)
                     .symbolRenderingMode(.hierarchical)
-                    .symbolEffect(.bounce.up.byLayer, options: .repeating.speed(0.7), isActive: !reduceMotion)
+                    .symbolEffect(.bounce.up.byLayer, options: .repeating.speed(0.7), isActive: !reduceMotion && !operation.isCancelling)
                     .frame(height: 56)
                     .accessibilityHidden(true)
-                Text(settings.t(operation.titleKey))
+                Text(settings.t(operation.isCancelling ? .progressCancelling : operation.titleKey))
                     .font(.headline)
+                    .contentTransition(.opacity)
                 if let progress = operation.progress {
                     ProgressView(value: progress)
                         .frame(width: 300)
@@ -390,7 +391,7 @@ struct ProgressOverlay: View {
                 }
                 Button(settings.t(.buttonCancel), role: .cancel) { model.cancelOperation() }
                     .buttonStyle(.glass)
-                    .disabled(isFinishing)
+                    .disabled(isFinishing || operation.isCancelling)
             }
             .padding(30)
             .glassEffect(.regular, in: .rect(cornerRadius: 26))
