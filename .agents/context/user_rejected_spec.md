@@ -9,7 +9,7 @@
 
 1. **No Direct C/C++ Linking to 7-Zip or unRAR:**
    - **Rule:** Never link `7-Zip` or `unRAR` source code into the Swift binary.
-   - **Rationale:** `7-Zip` is licensed under GNU LGPL with the `unRAR` restriction. Invoking the standalone `7zz` binary as a separate subprocess keeps `Arhivar` cleanly MIT-licensed while complying with LGPL and unRAR terms.
+   - **Rationale:** `7-Zip` is licensed under GNU LGPL with the `unRAR` restriction. Invoking the unmodified standalone `7zz` binary as a separate subprocess keeps it a separate work from the GPL-3.0-licensed `Arhivar` (relicensed in 1.4.2), so the bundled engine stays under its own LGPL and unRAR terms instead of being combined into the Swift binary.
 2. **No RAR Archive Creation:**
    - **Rule:** Never add `.rar` to `ArchiveFormat` or generate `a -trar` commands.
    - **Rationale:** Prohibited by the `unRAR` license restriction and unsupported by `7zz`.
