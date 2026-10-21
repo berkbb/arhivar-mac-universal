@@ -306,5 +306,5 @@
 "qlUnpacked" = "Unpacked: %@";
 "qlMoreItems" = "… and %ld more items. Open in Arhivar to see them all.";
 "qlEncryptedHeadersTitle" = "Password-Protected Archive";
-"qlEncryptedHeadersMessage" = "This archive's file list is encrypted with a password.\nOpen the archive in Arhivar to view its contents.";
+"qlEncryptedHeadersMessage" = "This archive is password-protected; its files are not shown here.\nOpen the archive in Arhivar to view its contents.";
 "qlErrorTitle" = "Archive Could Not Be Read";

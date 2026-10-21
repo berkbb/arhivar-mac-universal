@@ -306,5 +306,5 @@
 "qlUnpacked" = "Dezarhivat: %@";
 "qlMoreItems" = "… și încă %ld elemente. Deschideți în Arhivar pentru a le vedea pe toate.";
 "qlEncryptedHeadersTitle" = "Arhivă protejată prin parolă";
-"qlEncryptedHeadersMessage" = "Lista de fișiere a acestei arhive este criptată cu o parolă.\nDeschideți arhiva în Arhivar pentru a-i vedea conținutul.";
+"qlEncryptedHeadersMessage" = "Această arhivă este protejată prin parolă; fișierele ei nu sunt afișate aici.\nDeschideți arhiva în Arhivar pentru a-i vedea conținutul.";
 "qlErrorTitle" = "Arhiva nu a putut fi citită";

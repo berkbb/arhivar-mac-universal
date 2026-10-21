@@ -26,6 +26,36 @@ public enum PreviewListing {
         return try await Task.detached { try readInProcess(url, fallbackName) }.value
     }
 
+    /// Hızlı Bakış'ta gösterilecek içerik.
+    public enum Content: Sendable, Equatable {
+        case listing(ArchiveListing)
+        /// Parolayla korunan arşiv: dosya listesi de gösterilmez, yalnızca kilit ekranı.
+        case locked
+    }
+
+    /// Hızlı Bakış ne göstermeli? Parolayla korunan arşivlerde (dosya listesi şifreli 7z/rar, içeriği şifreli zip ya da 7z,
+    /// tek bir şifreli dosya içeren arşiv) liste yerine kilit ekranı gösterilir: Finder'da Boşluk'a basan biri dosya
+    /// adlarını da görmemeli; içerik yalnızca parolayla, Arhivar'da açılır.
+    public static func content(
+        archive url: URL,
+        runEngine: EngineRunner = runEngineList,
+        readInProcess: @escaping @Sendable (URL, String) throws -> ArchiveListing = { url, name in
+            try LibArchiveReader.list(archive: url, fallbackName: name)
+        }
+    ) async throws -> Content {
+        do {
+            let listing = try await load(archive: url, runEngine: runEngine, readInProcess: readInProcess)
+            return isPasswordProtected(listing) ? .locked : .listing(listing)
+        } catch SevenZipError.wrongPassword, LibArchiveReader.ReadError.encryptedHeaders {
+            return .locked
+        }
+    }
+
+    /// Arşivde parolayla şifrelenmiş en az bir girdi var mı?
+    public static func isPasswordProtected(_ listing: ArchiveListing) -> Bool {
+        listing.entries.contains(where: \.isEncrypted)
+    }
+
     /// 7zz ile listeler: önce çekirdek kum havuzunda, sandbox-exec kısıtlıysa doğrudan.
     @Sendable public static func runEngineList(_ url: URL) async -> ProcessResult? {
         guard let engineURL = EngineLocator.locate(customPath: nil) else { return nil }

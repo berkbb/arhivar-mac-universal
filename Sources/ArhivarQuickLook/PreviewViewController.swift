@@ -27,21 +27,19 @@ public final class PreviewViewController: NSViewController, QLPreviewingControll
             }
             do {
                 // Quick Look kum havuzu alt süreç başlatmayı yasaklar: 7zz başlatılamazsa liste süreç içinde okunur.
-                let listing = try await PreviewListing.load(archive: url)
-                let statistics = ArchiveStatistics(listing: listing)
-                let tree = ArchiveTree.build(from: listing.entries)
-                let isEncrypted = listing.entries.contains { $0.isEncrypted }
-
-                presentContent(
-                    for: url,
-                    listing: listing,
-                    statistics: statistics,
-                    nodes: tree,
-                    isEncrypted: isEncrypted
-                )
-                handler(nil)
-            } catch SevenZipError.wrongPassword, LibArchiveReader.ReadError.encryptedHeaders {
-                presentEncryptedHeaders(for: url)
+                // Parolayla korunan arşivde dosya adları da gösterilmez, kilit ekranı gelir.
+                switch try await PreviewListing.content(archive: url) {
+                case .locked:
+                    presentEncryptedHeaders(for: url)
+                case .listing(let listing):
+                    presentContent(
+                        for: url,
+                        listing: listing,
+                        statistics: ArchiveStatistics(listing: listing),
+                        nodes: ArchiveTree.build(from: listing.entries),
+                        isEncrypted: false
+                    )
+                }
                 handler(nil)
             } catch {
                 let l10n = QuickLookStrings.shared

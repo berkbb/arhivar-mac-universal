@@ -92,3 +92,84 @@ import Testing
         #expect(received.withLock { $0 } == ArchiveNaming.streamItemName(for: gzip))
     }
 }
+
+/// Parolalı arşivler Hızlı Bakış'ta listelenmez, kilit ekranı gösterilir. Gerçek arşivlerle, iki okuyucuyla da
+/// (Quick Look kum havuzunda libarchive; 7zz başlatılabildiğinde 7zz) denenir.
+@Suite(.serialized) struct PasswordProtectedPreviewTests {
+    static let sevenZip = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("Vendor/7-Zip/7zz")
+    static let hasSevenZip = FileManager.default.isExecutableFile(atPath: sevenZip.path)
+
+    enum Reader: String, CaseIterable { case libarchive, sevenZip }
+
+    /// Ad → oluşturma komutu (çalışma klasörü: not.txt ve b.txt içeren kaynak) ve beklenen sonuç.
+    static let fixtures: [(name: String, tool: String, arguments: [String], locked: Bool)] = [
+        ("zipcrypto.zip", "/usr/bin/zip", ["-q", "-P", "Gizli-123", "ARCHIVE", "not.txt", "b.txt"], true),
+        ("aes.zip", "7zz", ["a", "-bso0", "-tzip", "-pGizli-123", "-mem=AES256", "ARCHIVE", "not.txt", "b.txt"], true),
+        ("icerik-sifreli.7z", "7zz", ["a", "-bso0", "-pGizli-123", "ARCHIVE", "not.txt", "b.txt"], true),
+        ("baslik-sifreli.7z", "7zz", ["a", "-bso0", "-pGizli-123", "-mhe=on", "ARCHIVE", "not.txt", "b.txt"], true),
+        ("normal.zip", "/usr/bin/zip", ["-q", "ARCHIVE", "not.txt", "b.txt"], false),
+        ("normal.7z", "7zz", ["a", "-bso0", "ARCHIVE", "not.txt", "b.txt"], false),
+    ]
+
+    let workspace: URL
+
+    init() throws {
+        workspace = FileManager.default.temporaryDirectory.appendingPathComponent("ArhivarLocked-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: workspace, withIntermediateDirectories: true)
+        try "gizli içerik\n".write(to: workspace.appendingPathComponent("not.txt"), atomically: true, encoding: .utf8)
+        try "ikinci\n".write(to: workspace.appendingPathComponent("b.txt"), atomically: true, encoding: .utf8)
+    }
+
+    private func run(_ tool: String, _ arguments: [String]) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: tool == "7zz" ? Self.sevenZip.path : tool)
+        process.arguments = arguments
+        process.currentDirectoryURL = workspace
+        try process.run()
+        process.waitUntilExit()
+        try #require(process.terminationStatus == 0, "\(tool) \(arguments.joined(separator: " "))")
+    }
+
+    private func make(_ name: String) throws -> (URL, Bool) {
+        let fixture = try #require(Self.fixtures.first { $0.name == name })
+        let archive = workspace.appendingPathComponent(name)
+        try run(fixture.tool, fixture.arguments.map { $0 == "ARCHIVE" ? archive.path : $0 })
+        return (archive, fixture.locked)
+    }
+
+    private func engine(_ reader: Reader) -> PreviewListing.EngineRunner {
+        switch reader {
+        case .libarchive: { _ in nil }
+        case .sevenZip: { url in try? await CommandRunner(executableURL: Self.sevenZip).run(SevenZipCommand.list(archive: url)) }
+        }
+    }
+
+    @Test(.enabled(if: hasSevenZip, "7zz yok"), arguments: fixtures.map(\.name), Reader.allCases)
+    func passwordProtectedArchivesShowLock(name: String, reader: Reader) async throws {
+        defer { try? FileManager.default.removeItem(at: workspace) }
+        let (archive, expectLocked) = try make(name)
+        let content = try await PreviewListing.content(archive: archive, runEngine: engine(reader))
+        if expectLocked {
+            #expect(content == .locked, "\(name) / \(reader.rawValue)")
+        } else {
+            guard case .listing(let listing) = content else {
+                Issue.record("\(name) / \(reader.rawValue): liste bekleniyordu, \(content)")
+                return
+            }
+            #expect(Set(listing.entries.map(\.path)) == ["not.txt", "b.txt"])
+        }
+    }
+
+    /// Yalnızca bir dosyası parolalı zip: diğer adlar da gösterilmez.
+    @Test(arguments: Reader.allCases)
+    func singleEncryptedEntryLocksTheWholePreview(reader: Reader) async throws {
+        try #require(reader == .libarchive || Self.hasSevenZip)
+        defer { try? FileManager.default.removeItem(at: workspace) }
+        let archive = workspace.appendingPathComponent("karisik.zip")
+        try run("/usr/bin/zip", ["-q", archive.path, "b.txt"])
+        try run("/usr/bin/zip", ["-q", "-P", "Gizli-123", archive.path, "not.txt"])
+        #expect(try await PreviewListing.content(archive: archive, runEngine: engine(reader)) == .locked)
+    }
+}

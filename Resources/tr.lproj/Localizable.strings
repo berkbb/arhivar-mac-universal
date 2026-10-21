@@ -306,5 +306,5 @@
 "qlUnpacked" = "Açık: %@";
 "qlMoreItems" = "… ve %ld öğe daha. Tümünü görmek için Arhivar ile açın.";
 "qlEncryptedHeadersTitle" = "Parola Korumalı Arşiv";
-"qlEncryptedHeadersMessage" = "Bu arşivin dosya listesi parola ile şifrelenmiştir.\nİçeriği görüntülemek için arşivi Arhivar ile açın.";
+"qlEncryptedHeadersMessage" = "Bu arşiv parola ile korunuyor; dosyaları burada gösterilmez.\nİçeriği görüntülemek için arşivi Arhivar ile açın.";
 "qlErrorTitle" = "Arşiv Okunamadı";
