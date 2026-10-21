@@ -5,7 +5,23 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ## [Unreleased]
 
+### Security
+
+- Password-protected archives no longer reveal their file names. Finder Quick Look shows the lock screen for every password-protected archive (ZipCrypto/AES zip, 7z with encrypted contents or file list, any archive with a single encrypted file), and the app asks for the password before listing such an archive. Because the list of a content-encrypted archive is readable with any password, the password is verified by test-decrypting the smallest encrypted file before names are shown.
+- A hard link to a private file (for example a key in `~/.ssh`) planted inside a folder that is archived is no longer packed. The sandbox denies personal folders by path, so a second name for the same inode outside them was readable; create and add now compare multi-link files against the credential folders (`SecretLinks`, `SandboxProfile.secretDirectories`) and skip matches with a warning, while deliberately archiving `~/.ssh` itself still works.
+- Extraction stops before the disk fills up when an archive under-declares or omits its unpacked size (single-stream `.bz2`/`.lzma`, crafted zip bombs). `DiskSpaceGuard` watches free space during extraction, stops 7zz below a 512 MB floor, discards the staging folder and shows a dedicated message (`errorDiskFilling`).
+- A file or archive whose name contains "wrong password" is no longer misreported as a password error (which hid the real error, such as a CRC failure). `SevenZipError.reportsWrongPassword` matches 7-Zip's message position only.
+
 ### Fixed
+
+- Extracting a large downloaded (quarantined) archive no longer freezes the interface for several seconds at the end (measured 14 s for 50,000 files): link checks, quarantine propagation and the final move now run off the main thread. Cancelling a large extraction no longer freezes the interface while partial files are removed, and the overlay switches to "Cancelling…" immediately.
+- The progress overlay shows a short 100% completion beat on success, closes immediately on cancel or failure, shows the toast only after it closes, and stays indeterminate while 7-Zip reports 0% for many small files.
+- Open requests that arrive while an operation is running are no longer dropped silently; the most recent one opens when the operation finishes.
+- VoiceOver audit of every screen with the native accessibility API: the toolbar extract control read "Not Junk" (its SF Symbol name) and the Folders/Tree switch read "Move" and "Bulleted List Indent"; they now read their localized titles, and the extract control keeps its press action plus "Extract All" / "Extract Selected" as named actions. Shortcut recorder buttons announce the action name with the key combination as their value. The progress overlay keeps its title, progress and cancel button as separate elements, and icon-only buttons carry localized labels. `stress-test.sh` re-runs the audit on the archive view, welcome screen, create sheet and password sheet.
+
+### Added
+
+- `Scripts/stress-test.sh`: a keyboard-free pre-release stress round against the real app (large quarantined extraction with UI latency measurement, cancel, password-protected archives, Finder Quick Look over encrypted, broken and large archives, crash-report check). It drives Arhivar through accessibility using language-independent identifiers and restores the settings it changes.
 
 - Finder Quick Look previews no longer fail with "7-Zip (7zz) engine not found". Quick Look extensions run under the system `quicklook-preview` sandbox profile, which forbids launching child processes, so the bundled `7zz` can never run there. The extension now falls back to listing archives in-process with macOS's built-in libarchive (`LibArchiveReader`, `CLibArchive` target), including header-encrypted 7z detection and single-stream `.gz`/`.xz`/`.bz2` files.
 - The Finder Quick Look preview is now fully localized (Turkish, English, Romanian) instead of showing hard-coded Turkish text. New `ql*` keys were added 1:1 to all three tables, and the tables are copied into the extension bundle. The extension follows the macOS preferred language because its sandbox cannot read the app's language setting; sizes, dates and percentages use the same locale.

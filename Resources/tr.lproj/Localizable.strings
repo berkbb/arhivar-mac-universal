@@ -198,6 +198,7 @@
 "settingsSandbox" = "7-Zip motorunu yalıtılmış çalıştır (önerilir)";
 "settingsSandboxNote" = "7zz ağa çıkamaz, yalnızca hedef klasöre yazabilir ve arşiv okurken ~/.ssh ya da Anahtar Zinciri gibi özel klasörleri okuyamaz.";
 "errorDiskSpace" = "Yetersiz disk alanı: %1$@ gerekiyor, %2$@ boş. Hiçbir şey yazılmadı.";
+"errorDiskFilling" = "Disk dolmak üzereydi; çıkarma durduruldu (%@ boş alan kalmıştı). Hedefe hiçbir şey yazılmadı.";
 "appUpdateSection" = "Arhivar güncellemeleri";
 "appUpdateAvailable" = "Arhivar %1$@ yayımlandı (sizdeki: %2$@).";
 "appUpdateUpToDate" = "Arhivar güncel (%@).";
@@ -246,6 +247,7 @@
 "duplicateNames" = "Aynı adlı öğeler arşivde aynı klasörde bulunamaz: %@";
 "createPasswordConfirmHint" = "Onaylamak için parolayı yeniden girin.";
 "warningRemovedLinks" = "Hedefin dışını gösteren sembolik bağlantılar atlandı: %@";
+"warningSkippedSecretLinks" = "Gizli bir dosyanın (ör. ~/.ssh içindeki bir anahtarın) ikinci adı (sabit bağlantı) olduğu için arşive eklenmedi: %@";
 "renameExists" = "Bu klasörde “%@” adlı bir öğe zaten var.";
 "symbolicLinkItem" = "“%@” bir sembolik bağlantı. Tek başına açılamaz, önizlenemez, kopyalanamaz ya da sürüklenemez; bunun yerine bulunduğu klasörü çıkarın.";
 "nothingToArchive" = "Arşivlenecek bir şey yok: adlandırılmış borular (FIFO), soketler ve aygıt dosyaları atlanır.";

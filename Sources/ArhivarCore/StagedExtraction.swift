@@ -571,10 +571,13 @@ public enum DiskSpace {
 public struct InsufficientSpaceError: Error, Equatable, Sendable {
     public let required: Int64
     public let available: Int64
+    /// Ön denetimde değil, yazma sürerken (boyutu bilinmeyen ya da yanlış bildirilen içerik) disk dolmak üzereyken durduruldu.
+    public let stoppedWhileWriting: Bool
 
-    public init(required: Int64, available: Int64) {
+    public init(required: Int64, available: Int64, stoppedWhileWriting: Bool = false) {
         self.required = required
         self.available = available
+        self.stoppedWhileWriting = stoppedWhileWriting
     }
 
     /// Gerekirse hata fırlatır.
@@ -582,6 +585,47 @@ public struct InsufficientSpaceError: Error, Equatable, Sendable {
         let available = DiskSpace.availableCapacity(at: url)
         guard DiskSpace.hasRoom(required: required, available: available) else {
             throw InsufficientSpaceError(required: required, available: available ?? 0)
+        }
+    }
+}
+
+/// Çıkarma sürerken hedef birimdeki boş alanı izler.
+///
+/// Ön denetim (`InsufficientSpaceError.check`) arşivin bildirdiği boyutlara dayanır. Tek akışlı `.bz2` / ham `.lzma`
+/// boyut bildirmez, uydurma bir arşiv de küçük boyut yazabilir: böyle bir "sıkıştırma bombası" diski doldurabilirdi.
+/// Boş alan `floor` altına inince iş iptal edilir (7zz durdurulur) ve `InsufficientSpaceError` fırlatılır; çağıran
+/// hazırlık klasörünü siler, yer geri kazanılır.
+public enum DiskSpaceGuard {
+    public static let interval: Duration = .milliseconds(500)
+    /// Sistemin çalışması için bırakılan en az boş alan (ön denetimdeki payın yarısı).
+    public static let floor: Int64 = DiskSpace.reserve / 2
+
+    /// `operation` sürerken boş alanı izler; alan tükenirse onu iptal edip hata fırlatır, yoksa sonucunu döndürür.
+    public static func run<T: Sendable>(
+        watching url: URL,
+        floor: Int64 = floor,
+        interval: Duration = interval,
+        available: (@Sendable () -> Int64?)? = nil,
+        _ operation: @escaping @Sendable () async throws -> T
+    ) async throws -> T {
+        let available = available ?? { DiskSpace.availableCapacity(at: url) }
+        return try await withThrowingTaskGroup(of: T?.self) { group in
+            group.addTask { try await operation() }
+            group.addTask {
+                while true {
+                    // İş iptal edilince (ör. Vazgeç) izleyici sessizce çıkar: kendi CancellationError'ı işin "iptal edildi"
+                    // sonucundan önce gelip bir hata gibi gösterilmesin.
+                    do { try await Task.sleep(for: interval) } catch { return nil }
+                    if let free = available(), free < floor {
+                        throw InsufficientSpaceError(required: floor, available: max(0, free), stoppedWhileWriting: true)
+                    }
+                }
+            }
+            defer { group.cancelAll() }
+            while let result = try await group.next() {
+                if let result { return result }
+            }
+            throw CancellationError()
         }
     }
 }

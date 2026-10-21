@@ -11,8 +11,9 @@
 
 | File | Primary Symbols | Responsibilities |
 | :--- | :--- | :--- |
+| `PreviewListing.swift` | `PreviewListing`, `PreviewListing.Content` | Quick Look listing decision: 7zz when it can launch, otherwise libarchive; `content` returns `.locked` for any password-protected archive so names are never shown |
 | `LibArchiveReader.swift` | `LibArchiveReader`, `LibArchiveReader.ReadError` | In-process, read-only archive listing through system libarchive (`CLibArchive` target) for the Quick Look sandbox; raw-stream fallback, encrypted-header detection, `maxEntries` cap |
-| `CommandRunner.swift` | `ProcessResult`, `SevenZipError`, `ProgressParser`, `CommandRunner`, `ProcessBox`, `RunState` | Async subprocess execution, `stdin` pipe feeding, `-bsp1` progress parsing, `SIGTERM` + 2s `SIGKILL` escalation, exit code classification |
+| `CommandRunner.swift` | `ProcessResult`, `SevenZipError` (`reportsWrongPassword` matches 7-Zip's message position only), `ProgressParser`, `CommandRunner`, `ProcessBox`, `RunState` | Async subprocess execution, `stdin` pipe feeding, `-bsp1` progress parsing, `SIGTERM` + 2s `SIGKILL` escalation, exit code classification |
 | `ArchiveOptions.swift` | `ArchiveFormat`, `CompressionLevel`, `OverwriteMode`, `SubfolderMode`, `VolumeSize`, `CreateOptions`, `ExtractOptions`, `SevenZipCommand` | Format capabilities, CLI switch generation for `list`, `test`, `extract`, `create`, and two-step `.tar.*` (`tarStage`, `compressTarStage`) |
 | `ArchiveEditing.swift` | `ArchiveCapabilities` (`isEditable`, `supportsEditing`, `isWritable`), `SevenZipCommand.add/delete/rename`, `AddPlan` (`NothingToArchiveError`), `SpecialFiles`, `ItemExtractor` (`SymbolicLinkError`), `ArchiveItemTransfer`, `ArchiveTree` navigation helpers | In-place archive editing (multi-volume edit guard), `0o700` subfolder staging (`AddPlan`, skips FIFOs/sockets, refuses special-only sources), FIFO/socket/device exclusion (`-x!`, walks symlinked folders when links are followed), duplicate basename detection, per-target link containment and placeholder cleanup in item extraction, Finder drag-out (`Transferable`) |
 | `ArchiveListing.swift` | `ArchiveEntry` (`isSymbolicLink`), `ArchiveInfo`, `ArchiveListing`, `ListingParser`, `ArchiveStatistics`, `Int64.saturatingAdding` | Zero-allocation byte-level `7zz l -slt` parser (last `----------` marker = header boundary, brace-delimited comments), civil-calendar timestamp parser (`daysFromCivil`), path normalization (`normalizedPath`, drops `.`/`..`), duplicate-aware saturating statistics |
@@ -76,3 +77,12 @@
 - **Adding a Supported Archive Format:** Update `ArchiveFormat` (`ArchiveOptions.swift`), `ArchiveNaming.archiveExtensions` (`Engine.swift`), `Support/Info.plist` (`CFBundleDocumentTypes` in exactly one of the six icon families, `NSServices`, `UTImportedTypeDeclarations`), and verify with `DocumentIconTests`, `CommandTests`, and `RoadmapTests`.
 - **Modifying `ArchiveNode` or `ArchiveBrowserView` Table Columns:** Never introduce `@Environment` lookups inside `NameCell` or any table cell view; verify with `BrowserViewTests`.
 - **Modifying `AppSettings` Keys:** Add new `UserDefaults` keys to `AppSettings.Key.all` so `resetAll()` removes them cleanly (`resetRemovesAllPreferences` test).
+
+### Additions (2026-10-21)
+
+| File | Primary Symbols | Responsibilities |
+| :--- | :--- | :--- |
+| `StagedExtraction.swift` | `DiskSpaceGuard`, `InsufficientSpaceError.stoppedWhileWriting` | Watches free space during extraction and stops 7zz below a 512 MB floor (decompression bombs with missing or false sizes) |
+| `ArchiveEditing.swift` | `SecretLinks`, `FileIdentity`, `AddPlan.skippedSecretLinks` | Detects hard links to files in credential folders (`SandboxProfile.secretDirectories`) inside create/add sources; skipped with a warning, also while copying add sources |
+| `ArchiveListing.swift` | `ArchiveListing.passwordProbeItem` | Smallest encrypted file, test-decrypted to verify a password before names of a content-encrypted archive are shown |
+| `Scripts/StressProbe.swift`, `Scripts/stress-test.sh` | — | Keyboard-free pre-release stress round over the real app and Finder Quick Look via accessibility identifiers (`arhivar.progress`, `arhivar.progress.cancel`, `arhivar.password`, `arhivar.password.cancel`, `arhivar.browser`) |

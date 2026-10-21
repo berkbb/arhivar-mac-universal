@@ -120,3 +120,81 @@ private func tempDir(_ name: String) throws -> URL {
     }
     #expect(SevenZipError.diagnostic(from: "ERRORS:\nUnexpected end of archive\n\nErrors: 1\n").contains("Unexpected end of archive"))
 }
+
+/// Gizli klasördeki (ör. ~/.ssh) bir dosyanın, arşivlenecek bir klasöre bırakılmış ikinci adı (sabit bağlantı) bulunur.
+/// Gerçek ev klasörüne dokunulmaz: korunan klasör geçici bir "ev" altındadır.
+@Suite struct SecretLinksTests {
+    let home: URL
+    let secret: URL
+    let project: URL
+
+    init() throws {
+        home = FileManager.default.temporaryDirectory.appendingPathComponent("ArhivarHome-\(UUID().uuidString)", isDirectory: true)
+        secret = home.appendingPathComponent(".ssh/id_test")
+        project = home.appendingPathComponent("proje", isDirectory: true)
+        try FileManager.default.createDirectory(at: secret.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: project.appendingPathComponent("alt"), withIntermediateDirectories: true)
+        try "-----BEGIN OPENSSH PRIVATE KEY-----".write(to: secret, atomically: true, encoding: .utf8)
+        try "normal".write(to: project.appendingPathComponent("not.txt"), atomically: true, encoding: .utf8)
+        // Saldırgan: anahtara proje içinde ikinci bir ad bırakır.
+        #expect(link(secret.path, project.appendingPathComponent("alt/anahtar").path) == 0)
+    }
+
+    var detector: SecretLinks { SecretLinks(protectedRoots: [home.appendingPathComponent(".ssh")]) }
+
+    @Test func findsHardLinkToASecretInsideTheSources() {
+        defer { try? FileManager.default.removeItem(at: home) }
+        #expect(detector.archivePaths(in: [project]) == ["proje/alt/anahtar"])
+        #expect(detector.isSecretLink(atPath: project.appendingPathComponent("alt/anahtar").path))
+        #expect(!detector.isSecretLink(atPath: project.appendingPathComponent("not.txt").path))
+    }
+
+    /// Kullanıcı ~/.ssh klasörünü bilerek yedekliyorsa içindeki dosyalar arşivlenir.
+    @Test func filesInsideTheProtectedFolderItselfAreNotFlagged() {
+        defer { try? FileManager.default.removeItem(at: home) }
+        #expect(detector.archivePaths(in: [home.appendingPathComponent(".ssh")]).isEmpty)
+        #expect(!detector.isSecretLink(atPath: secret.path))
+    }
+
+    /// Korunan klasörle ilgisi olmayan sıradan sabit bağlantılar (ör. yedekleme araçları) etkilenmez.
+    @Test func unrelatedHardLinksAreKept() throws {
+        defer { try? FileManager.default.removeItem(at: home) }
+        let original = project.appendingPathComponent("rapor.txt")
+        try "rapor".write(to: original, atomically: true, encoding: .utf8)
+        #expect(link(original.path, project.appendingPathComponent("rapor-kopya.txt").path) == 0)
+        #expect(detector.archivePaths(in: [project]) == ["proje/alt/anahtar"])
+    }
+
+    /// Bağlantılar izlenecekse (sembolik bağlantı bağlantı olarak saklanmıyorsa), gizli bağlantıyı gösteren bağlantı da bulunur.
+    @Test func symlinkToTheHardLinkIsFoundWhenFollowing() throws {
+        defer { try? FileManager.default.removeItem(at: home) }
+        try FileManager.default.createSymbolicLink(atPath: project.appendingPathComponent("kisayol").path, withDestinationPath: "alt/anahtar")
+        #expect(detector.archivePaths(in: [project], followingSymlinks: true).sorted() == ["proje/alt/anahtar", "proje/kisayol"])
+        #expect(detector.archivePaths(in: [project], followingSymlinks: false) == ["proje/alt/anahtar"])
+    }
+
+    /// Ekleme farklı klasörlerdeki kaynakları kopyalar: kopya yeni bir inode olacağından gizli bağlantı kopyalanmaz.
+    @Test func addPlanCopyingSkipsTheSecretLink() throws {
+        defer { try? FileManager.default.removeItem(at: home) }
+        let other = home.appendingPathComponent("baska/ek.txt")
+        try FileManager.default.createDirectory(at: other.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try "ek".write(to: other, atomically: true, encoding: .utf8)
+        let stagingRoot = home.appendingPathComponent("hazirlik", isDirectory: true)
+        let plan = try AddPlan.make(sources: [project, other], into: "", stagingRoot: stagingRoot, secretLinks: detector)
+        let staging = try #require(plan.stagingDirectory)
+        #expect(plan.skippedSecretLinks == [project.appendingPathComponent("alt/anahtar").path])
+        #expect(!FileManager.default.fileExists(atPath: staging.appendingPathComponent("proje/alt/anahtar").path))
+        #expect(FileManager.default.fileExists(atPath: staging.appendingPathComponent("proje/not.txt").path))
+    }
+
+    /// Doğrudan seçilen bir gizli bağlantı da eklenmez.
+    @Test func addPlanSkipsADirectlySelectedSecretLink() throws {
+        defer { try? FileManager.default.removeItem(at: home) }
+        let link = project.appendingPathComponent("alt/anahtar")
+        let normal = project.appendingPathComponent("alt/normal.txt")
+        try "n".write(to: normal, atomically: true, encoding: .utf8)
+        let plan = try AddPlan.make(sources: [link, normal], into: "", stagingRoot: home.appendingPathComponent("hazirlik"), secretLinks: detector)
+        #expect(plan.names == ["normal.txt"])
+        #expect(plan.skippedSecretLinks == [link.path])
+    }
+}

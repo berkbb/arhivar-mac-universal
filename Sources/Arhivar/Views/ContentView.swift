@@ -109,8 +109,14 @@ struct ContentView: View {
         ToolbarItem(placement: .navigation) {
             if model.listing != nil {
                 Picker(settings.t(.viewModeLabel), selection: Binding(get: { model.browserMode }, set: { model.browserMode = $0 })) {
-                    Label(settings.t(.viewFolders), systemImage: "folder").tag(BrowserMode.folders)
-                    Label(settings.t(.viewTree), systemImage: "list.bullet.indent").tag(BrowserMode.tree)
+                    // Araç çubuğundaki bölmeli seçicide macOS adı simgeden türetiyordu (VoiceOver: "Taşı",
+                    // "Madde İşaretli Liste Girintisi"); bölmeler metinleriyle okunsun.
+                    Label(settings.t(.viewFolders), systemImage: "folder")
+                        .accessibilityLabel(settings.t(.viewFolders))
+                        .tag(BrowserMode.folders)
+                    Label(settings.t(.viewTree), systemImage: "list.bullet.indent")
+                        .accessibilityLabel(settings.t(.viewTree))
+                        .tag(BrowserMode.tree)
                 }
                 .pickerStyle(.segmented)
                 .help(settings.t(.viewModeLabel))
@@ -143,11 +149,24 @@ struct ContentView: View {
                 Button(settings.t(.menuExtractSelected)) { model.extract(selectedOnly: true) }
                     .disabled(model.selection.isEmpty)
             } label: {
-                Label(settings.t(.toolbarExtract), systemImage: "arrow.up.bin")
+                // Simgenin kendi adı ("İstenmeyen Değil") yerine düğmenin metni okunsun.
+                Label {
+                    Text(settings.t(.toolbarExtract))
+                } icon: {
+                    Image(systemName: "arrow.up.bin").accessibilityLabel(settings.t(.toolbarExtract))
+                }
             } primaryAction: {
                 model.extract(selectedOnly: !model.selection.isEmpty)
             }
             .help(settings.t(.menuExtractAll))
+            // Birincil eylemli menüde macOS adı simgeden türetiyordu (VoiceOver: "İstenmeyen Değil").
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(settings.t(.toolbarExtract))
+            .accessibilityAddTraits(.isButton)
+            // Tek öğeye indirgenince basma eylemi kayboluyordu; birincil eylem ve menünün iki seçeneği geri verilir.
+            .accessibilityAction { model.extract(selectedOnly: !model.selection.isEmpty) }
+            .accessibilityAction(named: settings.t(.menuExtractAll)) { model.extract(selectedOnly: false) }
+            .accessibilityAction(named: settings.t(.menuExtractSelected)) { model.extract(selectedOnly: true) }
             .disabled(!model.canOperate)
 
             Button {

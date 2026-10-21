@@ -1,3 +1,4 @@
+import Synchronization
 import CoreTransferable
 import Darwin
 import Foundation
@@ -79,6 +80,15 @@ public struct AddPlan: Sendable, Equatable {
     public let names: [String]
     /// İşlemden sonra silinmesi gereken geçici klasör.
     public let stagingDirectory: URL?
+    /// Kopyalanırken atlanan, gizli bir dosyanın ikinci adı olan dosyalar (kaynaktaki yolları; bkz. `SecretLinks`).
+    public var skippedSecretLinks: [String] = []
+
+    public init(workingDirectory: URL, names: [String], stagingDirectory: URL?, skippedSecretLinks: [String] = []) {
+        self.workingDirectory = workingDirectory
+        self.names = names
+        self.stagingDirectory = stagingDirectory
+        self.skippedSecretLinks = skippedSecretLinks
+    }
 
     /// Farklı klasörlerden aynı adlı öğeler aynı arşiv yoluna düşerdi.
     public struct DuplicateNameError: Error, Equatable, Sendable {
@@ -112,11 +122,21 @@ public struct AddPlan: Sendable, Equatable {
 
     /// - Parameter followingSymlinks: Bağlantılar bağlantı olarak saklanmayacaksa true; 7zz o zaman bağlantının
     ///   gösterdiğini okur, FIFO'yu gösteren bağlantı da FIFO gibi atlanır.
+    /// - Parameter secretLinks: Verilirse kişisel gizli klasördeki bir dosyanın ikinci adı olan dosyalar kopyalanmaz.
     public static func make(
-        sources: [URL], into folder: String, stagingRoot: URL, followingSymlinks: Bool = false, fileManager: FileManager = .default
+        sources: [URL], into folder: String, stagingRoot: URL, followingSymlinks: Bool = false,
+        secretLinks: SecretLinks? = nil, fileManager: FileManager = .default
     ) throws -> AddPlan {
         // FIFO ve soketler kopyalanamaz (ENOTSUP) ve 7zz'yi kilitler; kopyalanmadan atlanır.
-        let sources = sources.filter { !SpecialFiles.isSpecial(atPath: $0.path, followingSymlinks: followingSymlinks) }
+        var skippedTopLevel: [String] = []
+        let sources = sources.filter { source in
+            if SpecialFiles.isSpecial(atPath: source.path, followingSymlinks: followingSymlinks) { return false }
+            if let secretLinks, secretLinks.isSecretLink(atPath: source.path, followingSymlinks: followingSymlinks) {
+                skippedTopLevel.append(source.path)
+                return false
+            }
+            return true
+        }
         guard !sources.isEmpty else { throw NothingToArchiveError() }
         let duplicates = duplicateNames(in: sources)
         guard duplicates.isEmpty else { throw DuplicateNameError(names: duplicates) }
@@ -124,7 +144,9 @@ public struct AddPlan: Sendable, Equatable {
         let folder = ListingParser.normalizedPath(folder)
         if let parent = sources.first?.deletingLastPathComponent(), folder.isEmpty,
            sources.allSatisfy({ $0.deletingLastPathComponent() == parent }) {
-            return AddPlan(workingDirectory: parent, names: sources.map(\.lastPathComponent), stagingDirectory: nil)
+            return AddPlan(
+                workingDirectory: parent, names: sources.map(\.lastPathComponent), stagingDirectory: nil, skippedSecretLinks: skippedTopLevel
+            )
         }
         // Kopyalar kullanıcının (belki gizli) dosyalarıdır: geçici klasör yalnızca kullanıcıya açık olsun.
         // Alt klasörler varsayılan izinlerle oluşturulur; arşive 0700 olarak girmesinler.
@@ -135,7 +157,7 @@ public struct AddPlan: Sendable, Equatable {
         do {
             try fileManager.createDirectory(at: target, withIntermediateDirectories: true)
             // Klasörlerin içindeki özel dosyalar da kopyalanmaz.
-            let skipping = SpecialFiles.SkippingCopier(followingSymlinks: followingSymlinks)
+            let skipping = SpecialFiles.SkippingCopier(followingSymlinks: followingSymlinks, secretLinks: secretLinks)
             let copier = FileManager()
             copier.delegate = skipping
             var names: [String] = []
@@ -145,7 +167,10 @@ public struct AddPlan: Sendable, Equatable {
             }
             withExtendedLifetime(skipping) {}
             let topLevel = folder.split(separator: "/").first.map(String.init)
-            return AddPlan(workingDirectory: staging, names: topLevel.map { [$0] } ?? names, stagingDirectory: staging)
+            return AddPlan(
+                workingDirectory: staging, names: topLevel.map { [$0] } ?? names, stagingDirectory: staging,
+                skippedSecretLinks: skippedTopLevel + skipping.skippedSecretLinks
+            )
         } catch {
             // Önce kopyalanan salt okunur (0555) bir klasör `removeItem` ile silinemezdi.
             StagedExtraction.removeTree(at: staging, fileManager: fileManager)
@@ -180,7 +205,13 @@ public enum SpecialFiles {
     /// 7zz bir kaynağı son yol bileşeniyle saklar; `-x!` ile verilen bu yollar yalnızca o öğeyi dışlar.
     /// - Parameter followingSymlinks: Bağlantılar bağlantı olarak saklanmayacaksa true. 7zz o zaman klasörü gösteren
     ///   bağlantıların içine de iner; içlerindeki FIFO'lar da bağlantının yoluyla ("klasör/bag/pipe") bulunur.
-    public static func archivePaths(in sources: [URL], followingSymlinks: Bool = false, fileManager: FileManager = .default) -> [String] {
+    /// - Parameters:
+    ///   - specials: Özel dosyalar (FIFO, soket, aygıt) listelensin mi?
+    ///   - matchingRegularFile: Verilirse bu koşulu sağlayan sıradan dosyalar da listelenir (ör. `SecretLinks`).
+    public static func archivePaths(
+        in sources: [URL], followingSymlinks: Bool = false, specials: Bool = true,
+        matchingRegularFile: ((String, stat) -> Bool)? = nil, fileManager: FileManager = .default
+    ) -> [String] {
         var result: [String] = []
         // Döngüye giren bağlantılar ("a/geri → ..") için yalnızca o yoldaki üst klasörler tutulur: aynı klasöre iki
         // ayrı bağlantıdan inilirse 7zz ikisini de okur, ikisinin özel dosyaları da dışlanmalı.
@@ -192,6 +223,7 @@ public enum SpecialFiles {
             }
             switch info.st_mode & S_IFMT {
             case S_IFREG:
+                if let matchingRegularFile, matchingRegularFile(path, info) { result.append(archivePath) }
                 return
             case S_IFDIR:
                 let identity = FileIdentity(device: info.st_dev, inode: info.st_ino)
@@ -200,28 +232,33 @@ public enum SpecialFiles {
                     visit((path as NSString).appendingPathComponent(child), as: archivePath + "/" + child, ancestors: ancestors.union([identity]))
                 }
             default:
-                result.append(archivePath)
+                if specials { result.append(archivePath) }
             }
         }
         for source in sources { visit(source.path, as: source.lastPathComponent, ancestors: []) }
         return result
     }
 
-    private struct FileIdentity: Hashable {
-        let device: dev_t
-        let inode: ino_t
-    }
-
     /// Kopyalarken özel dosyaları (bağlantılar izlenecekse FIFO'yu gösteren bağlantıları da) atlayan `FileManager` temsilcisi.
     final class SkippingCopier: NSObject, FileManagerDelegate {
         let followingSymlinks: Bool
+        let secretLinks: SecretLinks?
+        /// Gizli bir dosyanın ikinci adı olduğu için kopyalanmayan dosyalar (kaynaktaki yolları).
+        private(set) var skippedSecretLinks: [String] = []
 
-        init(followingSymlinks: Bool = false) {
+        init(followingSymlinks: Bool = false, secretLinks: SecretLinks? = nil) {
             self.followingSymlinks = followingSymlinks
+            self.secretLinks = secretLinks
         }
 
         func fileManager(_ fileManager: FileManager, shouldCopyItemAt srcURL: URL, to dstURL: URL) -> Bool {
-            !SpecialFiles.isSpecial(atPath: srcURL.path, followingSymlinks: followingSymlinks)
+            if SpecialFiles.isSpecial(atPath: srcURL.path, followingSymlinks: followingSymlinks) { return false }
+            // Kopya yeni bir inode olur; gizli dosyanın içeriği o zaman ayırt edilemeden arşive girerdi.
+            if let secretLinks, secretLinks.isSecretLink(atPath: srcURL.path, followingSymlinks: followingSymlinks) {
+                skippedSecretLinks.append(srcURL.path)
+                return false
+            }
+            return true
         }
     }
 }
@@ -415,5 +452,89 @@ extension ArchiveTree {
         // Denetim karakterleri (NUL, CR, LF…): NUL içeren bir ad süreç argümanı olarak verilemez ve uygulamayı çökertirdi.
         guard !trimmed.unicodeScalars.contains(where: { $0.properties.generalCategory == .control }) else { return false }
         return !trimmed.isEmpty && trimmed != "." && trimmed != ".." && !trimmed.contains("/")
+    }
+}
+
+struct FileIdentity: Hashable, Sendable {
+    let device: dev_t
+    let inode: ino_t
+
+    init(_ info: stat) {
+        device = info.st_dev
+        inode = info.st_ino
+    }
+
+    init(device: dev_t, inode: ino_t) {
+        self.device = device
+        self.inode = inode
+    }
+}
+
+/// Kişisel gizli klasörlerdeki (ör. `~/.ssh`) dosyaların başka bir yerdeki ikinci adları (sabit bağlantı, hard link).
+///
+/// Kum havuzu bu klasörleri YOLLA yasaklar (bkz. `SandboxProfile`); aynı inode'a klasörün dışındaki bir sabit
+/// bağlantıdan erişilirse içerik okunur ve arşive girer. Arşivlenecek bir klasöre böyle bir bağlantı bırakan yerel bir
+/// süreç, gizli anahtarı kullanıcının arşivine taşıyabilirdi. Kaynaklardaki çok adlı (`st_nlink > 1`) sıradan dosyalar
+/// korunan klasörlerdeki dosyalarla karşılaştırılır; eşleşenler arşive alınmaz. Korunan klasörün içindeki bir dosya
+/// (kullanıcı `~/.ssh` klasörünü bilerek yedekliyorsa) etkilenmez.
+public final class SecretLinks: Sendable {
+    public let protectedRoots: [URL]
+    /// Korunan klasörlerde taranacak en çok öğe (çok büyük bir klasör arşivlemeyi yavaşlatmasın).
+    static let scanLimit = 20_000
+    private let identities = Mutex<Set<FileIdentity>?>(nil)
+
+    public init(protectedRoots: [URL] = SandboxProfile.secretDirectories(home: FileManager.default.homeDirectoryForCurrentUser)) {
+        self.protectedRoots = protectedRoots.map { $0.resolvingSymlinksInPath() }
+    }
+
+    /// Dosya, korunan klasörlerin dışında duran ve korunan bir dosyanın ikinci adı olan sıradan bir dosya mı?
+    public func isSecretLink(atPath path: String, followingSymlinks: Bool = false) -> Bool {
+        var info = stat()
+        guard lstat(path, &info) == 0 else { return false }
+        if info.st_mode & S_IFMT == S_IFLNK {
+            guard followingSymlinks, stat(path, &info) == 0 else { return false }
+        }
+        return isSecretLink(atPath: path, info: info)
+    }
+
+    func isSecretLink(atPath path: String, info: stat) -> Bool {
+        // Tek adlı dosyalar (neredeyse tümü) taramaya hiç yol açmaz.
+        guard info.st_mode & S_IFMT == S_IFREG, info.st_nlink > 1 else { return false }
+        let resolved = URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+        if protectedRoots.contains(where: { resolved == $0.path || resolved.hasPrefix($0.path + "/") }) { return false }
+        return protectedIdentities().contains(FileIdentity(info))
+    }
+
+    /// Kaynaklardaki böyle dosyaların arşivdeki yolları (`-x!` ile dışlanmak üzere).
+    public func archivePaths(in sources: [URL], followingSymlinks: Bool = false) -> [String] {
+        SpecialFiles.archivePaths(in: sources, followingSymlinks: followingSymlinks, specials: false) { path, info in
+            self.isSecretLink(atPath: path, info: info)
+        }
+    }
+
+    /// Korunan klasörlerdeki çok adlı dosyaların kimlikleri; ilk gerektiğinde bir kez taranır.
+    private func protectedIdentities() -> Set<FileIdentity> {
+        identities.withLock { cached in
+            if let cached { return cached }
+            var found = Set<FileIdentity>()
+            var visited = 0
+            func visit(_ path: String, depth: Int) {
+                guard visited < Self.scanLimit, depth < 12 else { return }
+                visited += 1
+                var info = stat()
+                guard lstat(path, &info) == 0 else { return }
+                switch info.st_mode & S_IFMT {
+                case S_IFREG where info.st_nlink > 1: found.insert(FileIdentity(info))
+                case S_IFDIR:
+                    for child in (try? StagedExtraction.entries(ofDirectory: path)) ?? [] {
+                        visit((path as NSString).appendingPathComponent(child), depth: depth + 1)
+                    }
+                default: break
+                }
+            }
+            for root in protectedRoots { visit(root.path, depth: 0) }
+            cached = found
+            return found
+        }
     }
 }

@@ -428,6 +428,10 @@ private struct ShortcutsSettingsView: View {
                 )
             }
             .buttonStyle(.plain)
+            // VoiceOver yalnızca "⌘N, düğme" diyordu; hangi işlemin kısayolu olduğu söylenmiyordu.
+            .accessibilityLabel(settings.t(action.titleKey))
+            .accessibilityValue(isRecording ? settings.t(.shortcutRecordPrompt) : currentShortcut.displayString)
+            .accessibilityHint(settings.t(.shortcutRecordHelp))
         }
     }
 

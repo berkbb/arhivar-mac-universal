@@ -588,6 +588,14 @@ final class AppModel {
         try SevenZipError.check(result)
         let listing = ListingParser.parse(result.stdout, fallbackName: ArchiveNaming.streamItemName(for: url))
 
+        // Adları açık, içeriği parolalı arşiv: dosya adları da parola girilmeden gösterilmez (Hızlı Bakış'taki gibi).
+        // Liste yanlış parolayla da okunduğundan parola en küçük şifreli dosya sınanarak doğrulanır; yanlışsa yeniden sorulur.
+        if let probe = listing.passwordProbeItem {
+            guard currentPassword != nil else { throw SevenZipError.wrongPassword }
+            let tested = try await runner.run(SevenZipCommand.test(archive: url, items: [probe]), input: SevenZipCommand.passwordInput(currentPassword))
+            try SevenZipError.check(tested)
+        }
+
         // Adlar şifreliyse (7z -mhe) parolasız liste parola ister; eklemelerde de korunmalı.
         // Parolasız liste başarılıysa adlar açıktır (-mhe=off).
         var encryptedHeaders = false
@@ -904,9 +912,17 @@ final class AppModel {
             // Hazırlık klasörü her durumda silinir; ana iş parçacığı dışında (bkz. discardStaging).
             do {
                 let options = ExtractOptions(archive: archive, destination: staging, items: rawItems, password: password, overwrite: .replace)
-                let result = try await self.confined(runner, archive: archive, writable: [staging]).run(
-                    SevenZipCommand.extract(options), workingDirectory: options.workingDirectory, input: options.input, onProgress: progress
-                )
+                let extractor = self.confined(runner, archive: archive, writable: [staging])
+                // Boyutu bilinmeyen ya da yanlış bildirilen içerik (sıkıştırma bombası) diski doldurmasın: boş alan
+                // tükenmek üzereyse 7zz durdurulur, hazırlık klasörü silinir.
+                let guardConfig = Self.diskSpaceGuard
+                let result = try await DiskSpaceGuard.run(
+                    watching: staging, floor: guardConfig.floor, interval: guardConfig.interval, available: guardConfig.available
+                ) {
+                    try await extractor.run(
+                        SevenZipCommand.extract(options), workingDirectory: options.workingDirectory, input: options.input, onProgress: progress
+                    )
+                }
                 var warnings = [try SevenZipError.check(result)].compactMap { $0 }
                 // İptal 7zz bittikten sonra geldiyse: sonraki adımlar (bağlantı ayıklama, karantina, birleştirme) iptali
                 // denetlemez; hazırlık klasörü atılır, hedefe dokunulmaz.
@@ -923,26 +939,30 @@ final class AppModel {
                 // 4. 7zz'nin reddettiği bağlantıların 0 baytlık yer tutucularını sil (hedefteki dosyaları ezmesinler);
                 // taşınan içeriğin dışını gösteren bağlantıları ayıkla, karantina işaretini aktar.
                 // Sembolik VE sabit bağlantılar: 7zz dışarıyı göstereni reddedip yerine 0 baytlık dosya bırakır.
+                // 5. Alt klasör kuralına göre hedefi belirle. Tüm arşiv akıllı kuralla doğrudan hedefe çıkıyorsa Finder'ın
+                // eklediği üst veri (__MACOSX, .DS_Store, ._*) hedefe dağılmaz; kullanıcının açıkça seçtiği öğelere dokunulmaz.
+                // Bu adımlar her dosyayı dolaşır (50.000 dosyada bağlantı taraması ~0,45 sn, indirilmiş arşivde karantina
+                // ~3,5 sn): ana iş parçacığında arayüzü donduruyordu. Sıra ve sonuç aynı, yalnızca arka planda çalışır.
                 let links = (entries ?? []).filter { $0.isSymbolicLink || $0.isHardLink }.map(\.path)
-                let placeholders = StagedExtraction.removeLinkPlaceholders(in: staging, links: links)
                 let prefix = content == staging ? "" : stripping + "/"
-                let escaping = StagedExtraction.secureSymlinks(in: content, extractionRoot: staging).map { prefix + $0 }
-                let removedLinks = Array(Set(placeholders + escaping)).sorted()
+                let (removedLinks, destination) = await Task.detached(priority: .userInitiated) {
+                    let placeholders = StagedExtraction.removeLinkPlaceholders(in: staging, links: links)
+                    let escaping = StagedExtraction.secureSymlinks(in: content, extractionRoot: staging).map { prefix + $0 }
+                    Quarantine.propagate(from: archive, to: staging, since: .distantPast)
+                    let destination = StagedExtraction.destination(for: content, base: base, archiveName: archiveName, mode: subfolderMode)
+                    if items.isEmpty {
+                        StagedExtraction.leaveOutRootMetadata(in: content, destination: destination, base: base, mode: subfolderMode)
+                    }
+                    return (Array(Set(placeholders + escaping)).sorted(), destination)
+                }.value
                 if !removedLinks.isEmpty {
                     warnings.append(self.t(.warningRemovedLinks, removedLinks.prefix(10).joined(separator: ", ")))
                 }
-                Quarantine.propagate(from: archive, to: staging, since: .distantPast)
-
-                // 5. Alt klasör kuralına göre hedefi belirle ve seçilen üzerine yazma kuralıyla taşı.
-                let destination = StagedExtraction.destination(for: content, base: base, archiveName: archiveName, mode: subfolderMode)
-                // Tüm arşiv akıllı kuralla doğrudan hedefe çıkıyorsa Finder'ın eklediği üst veri (__MACOSX, .DS_Store, ._*)
-                // hedefe dağılmaz. Kullanıcının açıkça seçtiği öğelere dokunulmaz.
-                if items.isEmpty {
-                    StagedExtraction.leaveOutRootMetadata(in: content, destination: destination, base: base, mode: subfolderMode)
-                }
                 // Birleştirme başladıktan sonra iptal edilmez (yarım hedef kalmasın); son fırsat burası.
                 if Task.isCancelled { throw SevenZipError.cancelled }
-                let changed = try StagedExtraction.merge(from: content, into: destination, policy: policy)
+                let changed = try await Task.detached(priority: .userInitiated) {
+                    try StagedExtraction.merge(from: content, into: destination, policy: policy)
+                }.value
                 // Doğrudan hedefe tek anlamlı öğe çıktıysa Finder o öğeyi seçsin (macOS üst verileri sayılmaz).
                 let meaningfulChanged = changed.filter { !StagedExtraction.isMacMetadata($0.lastPathComponent, in: destination) }
                 let targetItems = meaningfulChanged.isEmpty ? changed : meaningfulChanged
@@ -965,6 +985,14 @@ final class AppModel {
         guard value > 0 || current.progress != nil else { return }
         operation?.progress = value
     }
+
+    /// Çıkarma sırasında boş alan izlemesinin ayarları; testler küçük bir aralık ve sahte boş alan verir.
+    struct DiskSpaceGuardConfig: Sendable {
+        var floor = DiskSpaceGuard.floor
+        var interval = DiskSpaceGuard.interval
+        var available: (@Sendable () -> Int64?)? = nil
+    }
+    static var diskSpaceGuard = DiskSpaceGuardConfig()
 
     /// Hazırlık klasörünü ana iş parçacığı dışında siler ve bitmesini bekler. İptal edilen büyük bir çıkarmada on binlerce
     /// yarım dosya kalır (16.000 dosya ≈ 2,5 sn); ana iş parçacığında silmek arayüzü saniyelerce donduruyordu.
@@ -1265,15 +1293,23 @@ final class AppModel {
             let sourceBytes = compresses ? 0 : await Self.measure(sources)
             try self.checkSpaceForWriting(archive: archive, sourceBytes: sourceBytes, compresses: compresses)
             let plan = try AddPlan.make(
-                sources: sources, into: folderPath, stagingRoot: ItemExtractor.temporaryRoot, followingSymlinks: !storeSymlinks
+                sources: sources, into: folderPath, stagingRoot: ItemExtractor.temporaryRoot, followingSymlinks: !storeSymlinks,
+                secretLinks: Self.makeSecretLinks()
             )
             defer {
                 if let staging = plan.stagingDirectory { StagedExtraction.removeTree(at: staging) }
             }
             // FIFO, soket ve aygıt dosyaları eklenmez: 7zz bir FIFO'yu okurken sonsuza dek bekler.
-            let excluded = await Self.specialFiles(
-                in: plan.names.map { plan.workingDirectory.appendingPathComponent($0) }, followingSymlinks: !storeSymlinks
-            )
+            let planned = plan.names.map { plan.workingDirectory.appendingPathComponent($0) }
+            var excluded = await Self.specialFiles(in: planned, followingSymlinks: !storeSymlinks)
+            // Gizli bir dosyanın ikinci adı eklenmez. Kopyalanan kaynaklarda kopyalama sırasında atlanmıştır (kopya yeni
+            // bir inode olur, sonradan ayırt edilemezdi); yerinde eklenenler 7zz'ye dışlama olarak verilir.
+            var skippedSecrets = plan.skippedSecretLinks.map { ($0 as NSString).lastPathComponent }
+            if plan.stagingDirectory == nil {
+                let inPlace = await Self.secretLinks(in: planned, followingSymlinks: !storeSymlinks)
+                excluded += inPlace
+                skippedSecrets += inPlace
+            }
             let work = try self.editWorkDirectory(for: archive)
             defer { StagedExtraction.removeTree(at: work) }
             let command = SevenZipCommand.add(
@@ -1289,9 +1325,11 @@ final class AppModel {
             let preserved = PreservedAttributes(of: archive)
             defer { preserved?.restore(to: archive) }
             let result = try await writer.run(command, workingDirectory: plan.workingDirectory, input: SevenZipCommand.passwordInput(currentPassword), onProgress: progress)
-            let warning = try SevenZipError.check(result)
+            let engineWarning = try SevenZipError.check(result)
             try await self.relistAfterEdit(of: archive, runner: runner, password: currentPassword)
-            self.finishEdit(warning: warning)
+            let secretWarning = skippedSecrets.isEmpty ? nil : self.t(.warningSkippedSecretLinks, Self.shortList(skippedSecrets))
+            let warnings = [secretWarning, engineWarning].compactMap { $0 }
+            self.finishEdit(warning: warnings.isEmpty ? nil : warnings.joined(separator: "\n\n"))
         }
     }
 
@@ -1386,6 +1424,25 @@ final class AppModel {
     /// Kaynakların toplam boyutu; büyük klasörlerde arayüzü dondurmamak için arka planda ölçülür.
     nonisolated private static func measure(_ urls: [URL]) async -> Int64 {
         await Task.detached(priority: .userInitiated) { DiskSpace.totalSize(of: urls) }.value
+    }
+
+    /// Sabit bağlantı denetiminde korunan klasörler; testler geçici bir "ev" klasörü verir (gerçek ~/.ssh'e dokunulmaz).
+    static var secretLinkRoots: [URL]? = nil
+
+    static func makeSecretLinks() -> SecretLinks {
+        secretLinkRoots.map { SecretLinks(protectedRoots: $0) } ?? SecretLinks()
+    }
+
+    /// Kaynaklarda gizli bir dosyanın ikinci adı olan dosyaların arşivdeki yolları; arka planda taranır.
+    private static func secretLinks(in urls: [URL], followingSymlinks: Bool) async -> [String] {
+        let detector = makeSecretLinks()
+        return await Task.detached(priority: .userInitiated) { detector.archivePaths(in: urls, followingSymlinks: followingSymlinks) }.value
+    }
+
+    /// Uyarıda gösterilecek kısa liste (en çok 10 ad).
+    private static func shortList(_ paths: [String]) -> String {
+        let shown = paths.prefix(10).joined(separator: ", ")
+        return paths.count > 10 ? shown + ", …" : shown
     }
 
     /// Kaynaklardaki özel dosyaların (FIFO, soket, aygıt) arşivdeki yolları; arka planda taranır.
@@ -1537,6 +1594,9 @@ final class AppModel {
             // FIFO, soket ve aygıt dosyaları arşive alınmaz: 7zz bir FIFO'yu okurken sonsuza dek bekler.
             var staged = options
             staged.excludedPaths = await Self.specialFiles(in: options.sources, followingSymlinks: followsLinks)
+            // Gizli bir dosyanın (ör. ~/.ssh) kaynaklara bırakılmış ikinci adı arşive alınmaz.
+            let secretLinks = await Self.secretLinks(in: options.sources, followingSymlinks: followsLinks)
+            staged.excludedPaths += secretLinks
 
             // Arşiv hedefle aynı birimdeki bir hazırlık klasöründe oluşturulur, yalnızca başarıda yerine taşınır:
             // aynı adlı eski arşive eklenmez (onun yerini alır), iptal ya da hata hedefte yarım bir dosya bırakmaz.
@@ -1546,7 +1606,7 @@ final class AppModel {
             // Kişisel veri klasörleri, kullanıcı oradan açıkça bir kaynak seçmedikçe okunamaz.
             let writer = self.confined(runner, archive: staged.destination, writable: [staging], readable: options.sources)
 
-            var warnings: [String] = []
+            var warnings: [String] = secretLinks.isEmpty ? [] : [self.t(.warningSkippedSecretLinks, Self.shortList(secretLinks))]
             if isTwoStep {
                 // tar.*: önce ayrı bir klasöre sıkıştırmasız tar, sonra hazırlık klasörüne sıkıştırılmış hâli yazılır.
                 let tarFolder = staging.appendingPathComponent("tar", isDirectory: true)
@@ -1702,7 +1762,7 @@ final class AppModel {
                 }
                 lastOperationOutcome = Task.isCancelled ? .cancelled : .succeeded
             } catch {
-                let cancelled = Task.isCancelled || (error as? SevenZipError) == .cancelled
+                let cancelled = Task.isCancelled || (error as? SevenZipError) == .cancelled || error is CancellationError
                 lastOperationOutcome = cancelled ? .cancelled : .failed
                 handle(error, archive: archive, retry: retry, usedPassword: usedPassword)
             }
@@ -1710,6 +1770,8 @@ final class AppModel {
     }
 
     private func handle(_ error: Error, archive: URL?, retry: PendingAction?, usedPassword: Bool) {
+        // İptal bir hata değildir; hangi katmandan gelirse gelsin uyarı gösterilmez.
+        if error is CancellationError { return }
         if let error = error as? SevenZipError {
             switch error {
             case .cancelled:
@@ -1729,6 +1791,7 @@ final class AppModel {
 
     private func message(for error: Error) -> String {
         if let space = error as? InsufficientSpaceError {
+            if space.stoppedWhileWriting { return t(.errorDiskFilling, settings.bytes(space.available)) }
             return t(.errorDiskSpace, settings.bytes(space.required), settings.bytes(space.available))
         }
         if let duplicate = error as? AddPlan.DuplicateNameError {

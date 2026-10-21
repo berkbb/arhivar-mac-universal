@@ -326,6 +326,7 @@ struct PasswordSheet: View {
             HStack {
                 Button(settings.t(.buttonCancel), role: .cancel) { model.cancelPasswordRequest() }
                     .keyboardShortcut(.cancelAction)
+                    .accessibilityIdentifier("arhivar.password.cancel")
                 Spacer()
                 Button(settings.t(.buttonUnlock), action: submit)
                     .keyboardShortcut(.defaultAction)
@@ -335,6 +336,9 @@ struct PasswordSheet: View {
         }
         .padding(26)
         .frame(width: 400)
+        // Dilden bağımsız kimlik: Scripts/stress-test.sh parola sayfasını bununla tanır.
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("arhivar.password")
     }
 
     private func submit() {

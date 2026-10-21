@@ -198,6 +198,7 @@
 "settingsSandbox" = "Rulează motorul 7-Zip izolat (recomandat)";
 "settingsSandboxNote" = "7zz nu poate folosi rețeaua, poate scrie doar în dosarul țintă și nu poate citi dosare private precum ~/.ssh sau Keychains în timp ce citește o arhivă.";
 "errorDiskSpace" = "Spațiu insuficient pe disc: sunt necesari %1$@, sunt disponibili %2$@. Nu s-a scris nimic.";
+"errorDiskFilling" = "Discul era pe cale să se umple, așa că extragerea a fost oprită (mai rămăseseră %@ liberi). Nu s-a scris nimic în destinație.";
 "appUpdateSection" = "Actualizări Arhivar";
 "appUpdateAvailable" = "Arhivar %1$@ este disponibil (ai %2$@).";
 "appUpdateUpToDate" = "Arhivar este actualizat (%@).";
@@ -246,6 +247,7 @@
 "duplicateNames" = "Elementele cu același nume nu pot fi în același dosar al arhivei: %@";
 "createPasswordConfirmHint" = "Introduceți parola din nou pentru a o confirma.";
 "warningRemovedLinks" = "Legăturile simbolice care indică în afara destinației au fost omise: %@";
+"warningSkippedSecretLinks" = "Nu a fost adăugat în arhivă deoarece este un al doilea nume (legătură fixă) al unui fișier privat, de ex. o cheie din ~/.ssh: %@";
 "renameExists" = "În acest dosar există deja un element numit „%@”.";
 "symbolicLinkItem" = "„%@” este o legătură simbolică. Nu poate fi deschisă, previzualizată, copiată sau trasă singură; extrageți în schimb dosarul care o conține.";
 "nothingToArchive" = "Nu există nimic de arhivat: canalele numite (FIFO), socket-urile și fișierele de dispozitiv sunt omise.";

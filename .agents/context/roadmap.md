@@ -71,10 +71,7 @@ A deterministic seeded fuzz suite (`FuzzTests.swift`) was added over all pure pa
 - **Status:** ✅ Done — `StagedExtraction.removeLinkPlaceholders` now grants temporary owner write/exec on the placeholder's parent (restoring it) so a `7zz` dangerous-link placeholder inside a `0555` folder is deleted; otherwise "Replace it" could zero an existing same-named file. Test `linkPlaceholderRemovedInsideReadOnlyDirectory`.
 - **Location:** `Sources/ArhivarCore/StagedExtraction.swift`
 
-#### S6. ⬜ [P3] Accepted limitations / lower priority (reported by the audit, not fixed)
-- **Hardlink to a secret in a create/add source:** a local process can plant a hardlink to `~/.ssh/id_rsa` inside a tree the user archives; the sandbox denies by *path*, so a second name for the inode outside the denied subpath is read and packed. Inherent to path-based `sandbox-exec`; precondition is local write to the user's source tree. Mitigation (stat sources for `st_nlink > 1` whose realpath resolves under a personal dir and exclude with `-x!`) is possible but deferred.
-- **Decompression bomb with no/under-declared size** (single-stream `.bz2`/raw `.lzma`): `DiskSpace` pre-flight sees `nil`/too-small size and allows extraction, which fills the disk transiently; staging is same-volume and atomic, so the destination is untouched and `7zz` fails. Low.
-- **Benign filename containing "wrong password"/"Cannot open encrypted archive"** can be misclassified as `.wrongPassword`. Niche; tightening risks weakening real wrong-password detection. Low.
+#### S6. ⬜ [P3] Lower priority ideas (reported by the audit, not verified)
 - **Critic-only ideas (unverified):** self-update URL host validation, hardlink *entries inside* an archive on extraction, localization format-string validator gaps, listing TOCTOU between open and operation, and silent fail-open when `sandbox-exec` is unavailable. Tracked for future tests.
 - **Location:** n/a (design notes)
 

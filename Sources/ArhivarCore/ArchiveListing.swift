@@ -74,6 +74,15 @@ public struct ArchiveListing: Sendable, Equatable {
         self.info = info
         self.entries = entries
     }
+
+    /// Parolayı doğrulamak için sınanacak girdi: en küçük şifreli dosya (ham yoluyla). Şifreli dosya yoksa nil.
+    /// Adları açık, içeriği parolalı arşivde (zip, -mhe olmadan 7z) liste yanlış parolayla da okunur; parola ancak
+    /// bir dosya açılınca sınanır.
+    public var passwordProbeItem: String? {
+        entries.lazy.filter { $0.isEncrypted && !$0.isDirectory }
+            .min { ($0.packedSize ?? $0.size ?? .max, $0.path) < ($1.packedSize ?? $1.size ?? .max, $1.path) }?
+            .archivePath
+    }
 }
 
 /// `7zz l -slt` (teknik liste) çıktısını ayrıştırır.

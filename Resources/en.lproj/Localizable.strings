@@ -198,6 +198,7 @@
 "settingsSandbox" = "Run the 7-Zip engine in a sandbox (recommended)";
 "settingsSandboxNote" = "7zz cannot use the network, can write only to the target folder and cannot read private folders such as ~/.ssh or Keychains while reading an archive.";
 "errorDiskSpace" = "Not enough disk space: %1$@ is needed, %2$@ is available. Nothing was written.";
+"errorDiskFilling" = "The disk was about to fill up, so extraction was stopped (%@ was left free). Nothing was written to the destination.";
 "appUpdateSection" = "Arhivar updates";
 "appUpdateAvailable" = "Arhivar %1$@ is available (you have %2$@).";
 "appUpdateUpToDate" = "Arhivar is up to date (%@).";
@@ -246,6 +247,7 @@
 "duplicateNames" = "Items with the same name can't be in the same folder of an archive: %@";
 "createPasswordConfirmHint" = "Enter the password again to confirm it.";
 "warningRemovedLinks" = "Symbolic links pointing outside the destination were skipped: %@";
+"warningSkippedSecretLinks" = "Not added to the archive because it is a second name (hard link) of a private file, such as a key in ~/.ssh: %@";
 "renameExists" = "An item named “%@” already exists in this folder.";
 "symbolicLinkItem" = "“%@” is a symbolic link. It can’t be opened, previewed, copied or dragged on its own; extract the folder that contains it instead.";
 "nothingToArchive" = "There is nothing to archive: named pipes (FIFOs), sockets and device files are skipped.";

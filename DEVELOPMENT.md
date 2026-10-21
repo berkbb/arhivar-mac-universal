@@ -93,13 +93,27 @@ swift Scripts/make_document_icons.swift Resources/DocumentIcons --preview /tmp/d
 
 ```bash
 swift build                      # quick development build
-swift test                       # 285 tests (ArhivarCoreTests + ArhivarAppTests); real-7zz tests use Vendor/7-Zip/7zz
+swift test                       # 351 tests (ArhivarCoreTests + ArhivarAppTests); real-7zz tests use Vendor/7-Zip/7zz
 ./Scripts/build_app.sh           # universal build/Arhivar.app (ARCHS=native for this Mac only)
 ./Scripts/package.sh             # tests + .app + dist/Arhivar-<version>.{dmg,zip,sha256}
 ./Scripts/package.sh --update-7zip   # update Vendor/7-Zip first, then package
 ```
 
 The same tasks can be run from Finder by double-clicking `Paketle.command` and `7-Zip-Guncelle.command`.
+
+### Pre-release stress round
+
+```bash
+./Scripts/stress-test.sh                 # real app: large quarantined extraction, cancel, password archives, Quick Look
+./Scripts/stress-test.sh --skip-app      # Finder Quick Look only (no accessibility permission needed)
+./Scripts/stress-test.sh --files 50000   # larger extraction archive
+```
+
+- It drives the installed app (`--app` to choose another) through accessibility with language-independent identifiers (`arhivar.progress`, `arhivar.progress.cancel`, `arhivar.password`, `arhivar.password.cancel`, `arhivar.browser`) and **never sends keystrokes**, so it is safe to keep working in another app.
+- The app that runs the script needs the Accessibility permission (System Settings › Privacy & Security › Accessibility, called "Aygıt Denetimi ve Veri Erişimi" on macOS 27). When the script runs inside Claude Code, the permission belongs to Claude Code's inner `claude.app`, not to `Claude.app` or `osascript`.
+- macOS only exposes windows on the current desktop to accessibility. Keep Arhivar's window on the current desktop during the app round; otherwise the round is skipped with a clear message.
+- The settings it changes (extract folder, subfolder mode, reveal in Finder) are restored on exit, including on failure or Ctrl-C.
+- Checks: all files extracted with the quarantine flag, worst UI response under 1500 ms during extraction and cancel, "Cancelling…" shown immediately, nothing written on cancel, a password asked for every password-protected archive, the Quick Look extension starting for every fixture, and no new crash report.
 
 The version number is read from `CFBundleShortVersionString` in `Support/Info.plist`. For a new release, update that field and `CHANGELOG.md`.
 

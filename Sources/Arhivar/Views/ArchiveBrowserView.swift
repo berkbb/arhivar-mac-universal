@@ -45,6 +45,7 @@ struct ArchiveBrowserView: View {
             }
             .width(min: 70, ideal: 110)
         }
+        .accessibilityIdentifier("arhivar.browser")
         .contextMenu(forSelectionType: ArchiveNode.ID.self) { ids in
             contextMenu(for: ids)
         } primaryAction: { ids in
@@ -391,6 +392,8 @@ struct ProgressOverlay: View {
                 }
                 Button(settings.t(.buttonCancel), role: .cancel) { model.cancelOperation() }
                     .buttonStyle(.glass)
+                    // Dilden bağımsız kimlik: Scripts/stress-test.sh düğmeyi bununla bulur (VoiceOver okumaz).
+                    .accessibilityIdentifier("arhivar.progress.cancel")
                     .disabled(isFinishing || operation.isCancelling)
             }
             .padding(30)
@@ -398,6 +401,7 @@ struct ProgressOverlay: View {
             // Cam kart zaman zaman erişilebilirlikte tek bir "Vazgeç" düğmesine dönüşüyordu: başlık ("Arşiv okunuyor…")
             // ve ilerleme VoiceOver'da ayrıca okunamıyordu. Başlık, ilerleme ve Vazgeç ayrı öğeler olarak kalsın.
             .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("arhivar.progress")
             // Kart hafifçe büyüyerek yerine oturur; arka plan karartması yalnızca solar.
             .scaleEffect(appeared || reduceMotion ? 1 : 0.92)
             .opacity(appeared || reduceMotion ? 1 : 0)

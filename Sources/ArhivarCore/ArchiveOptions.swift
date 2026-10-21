@@ -248,6 +248,11 @@ public enum SevenZipCommand {
         ["t", "-bsp1", "-bb0", "-spd"] + common + ["--", archive.path]
     }
 
+    /// Yalnızca verilen girdileri sınar (açıp CRC'sini denetler); ör. parolayı en küçük şifreli dosyayla doğrulamak için.
+    public static func test(archive: URL, items: [String]) -> [String] {
+        ["t", "-bb0", "-spd"] + common + ["--", archive.path] + items
+    }
+
     public static func extract(_ options: ExtractOptions) -> [String] {
         // 7zz -o yolundaki "*" karakterini arşiv adıyla değiştirir; böyle bir yolda hedef klasörde çalışılıp "-o." verilir.
         let output = options.workingDirectory == nil ? options.destination.path : "."

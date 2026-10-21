@@ -149,6 +149,66 @@ struct AppModelTests {
         #expect(fixture.model.listing?.entries.isEmpty == false)
     }
 
+    /// Adları açık ama içeriği parolalı arşivlerde de dosya adları parola girilmeden gösterilmez; yanlış parola
+    /// (liste onunla da okunabildiği hâlde) reddedilir.
+    @Test(arguments: ["aes.zip", "zipcrypto.zip", "icerik.7z", "karisik.zip"])
+    func passwordProtectedArchivesHideNamesUntilUnlocked(name: String) async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let archive = fixture.workspace.appendingPathComponent(name)
+        // Zip'lerde ASCII parola: Process bağımsız değişkenleri ayrışık (NFD) biçime çevirdiği için /usr/bin/zip'e verilen
+        // "ğ" başka baytlarla saklanırdı; 7zz de ASCII dışı parolayla AES zip oluşturamaz. 7z Türkçe parolayla sınanır.
+        let secret = name.hasSuffix(".7z") ? "Doğru-1" : "Dogru-1"
+        func zip(_ arguments: [String]) throws {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
+            process.arguments = arguments
+            process.currentDirectoryURL = fixture.workspace
+            try process.run()
+            process.waitUntilExit()
+            try #require(process.terminationStatus == 0)
+        }
+        switch name {
+        case "aes.zip": _ = try await fixture.makeArchive(name, format: .zip, password: secret)
+        case "icerik.7z": _ = try await fixture.makeArchive(name, format: .sevenZip, password: secret, encryptNames: false)
+        case "zipcrypto.zip": try zip(["-qr", "-P", secret, archive.path, "kaynak"])
+        default:
+            try zip(["-qr", archive.path, "kaynak/alt"])
+            try zip(["-q", "-P", secret, archive.path, "kaynak/not.txt"])
+        }
+        let model = fixture.model
+
+        model.openArchive(archive)
+        await fixture.settle()
+        let first = try #require(model.passwordRequest, "\(name): parola sorulmadı")
+        #expect(!first.isRetry)
+        #expect(model.listing == nil && model.archiveURL == nil)
+
+        model.submitPassword("yanlis")
+        await fixture.settle()
+        let second = try #require(model.passwordRequest, "\(name): yanlış parola kabul edildi")
+        #expect(second.isRetry)
+        #expect(model.listing == nil)
+
+        model.submitPassword(secret)
+        await fixture.settle()
+        #expect(model.passwordRequest == nil)
+        #expect(model.archiveURL == archive)
+        #expect(model.listing?.entries.contains { $0.path.hasSuffix("not.txt") } == true)
+    }
+
+    /// Parolasız arşiv eskisi gibi doğrudan açılır.
+    @Test func plainArchiveOpensWithoutPassword() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        fixture.model.openArchive(try await fixture.makeArchive("acik.zip", format: .zip))
+        await fixture.settle()
+        #expect(fixture.model.passwordRequest == nil)
+        #expect(fixture.model.listing?.entries.isEmpty == false)
+    }
+
     /// Hata 14: "Buraya Çıkar" açık arşivin parolasını silmemeli.
     @Test func extractHereKeepsOpenArchivePassword() async throws {
         let fixture = try Fixture()
@@ -221,12 +281,14 @@ struct AppModelTests {
         defer { fixture.cleanUp() }
         await fixture.model.refreshEngine()
         let archive = try await fixture.makeArchive("onizleme.7z", format: .sevenZip, password: "gizli")
+        // Parolalı arşivin adları da parola girilmeden gösterilmez: parola açılışta sorulur.
         fixture.model.openArchive(archive)
+        await fixture.settle()
+        #expect(fixture.model.listing == nil)
+        fixture.model.submitPassword("gizli")
         await fixture.settle()
 
         fixture.model.toggleQuickLook("kaynak/not.txt")
-        await fixture.settle()
-        fixture.model.submitPassword("gizli")
         await fixture.settle()
         let preview = try #require(fixture.model.quickLookURL)
         #expect(FileManager.default.fileExists(atPath: preview.path))
@@ -916,10 +978,12 @@ struct AppModelTests {
         let model = fixture.model
         model.openArchive(outer)
         await fixture.settle()
-        model.primaryAction(["ic.zip"])
-        await fixture.settle()
+        // Parola açılışta sorulur; iç arşive girerken yeniden sorulmaz.
         model.submitPassword("p")
         await fixture.settle()
+        model.primaryAction(["ic.zip"])
+        await fixture.settle()
+        #expect(model.passwordRequest == nil)
         #expect(model.rootArchiveURL == outer)
         #expect(model.archiveStack.count == 1)
 
@@ -1052,6 +1116,133 @@ struct AppModelTests {
         await fixture.settle()
         model.applyProgress(0.5)
         #expect(model.operation == nil)
+    }
+
+    /// Boyutu bilinmeyen içerik diski doldurmak üzereyse çıkarma durur: hedefe hiçbir şey yazılmaz, ayrı bir ileti gösterilir.
+    @Test func extractionStopsWhenTheDiskIsAboutToFill() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        // Sıkıştırılamayan 24 MB: 7zz'nin yazması ilk yoklamadan (1 ms) uzun sürsün.
+        let random = try #require(FileHandle(forReadingAtPath: "/dev/urandom"))
+        defer { try? random.close() }
+        try random.readData(ofLength: 24 << 20).write(to: fixture.workspace.appendingPathComponent("kaynak/gurultu.bin"))
+        let archive = try await fixture.makeArchive("bomba.7z", format: .sevenZip)
+        let destination = fixture.useExtractFolder()
+        let model = fixture.model
+        model.openArchive(archive)
+        await fixture.settle()
+
+        let saved = AppModel.diskSpaceGuard
+        AppModel.diskSpaceGuard = .init(floor: DiskSpaceGuard.floor, interval: .milliseconds(1), available: { 0 })
+        defer { AppModel.diskSpaceGuard = saved }
+        model.extract(items: [])
+        await fixture.settle()
+
+        #expect(model.lastOperationOutcome == .failed)
+        #expect(model.alert?.message == fixture.settings.t(.errorDiskFilling, fixture.settings.bytes(0)))
+        let written = (try? FileManager.default.contentsOfDirectory(atPath: destination.path)) ?? []
+        #expect(written.isEmpty, "hedefe yazıldı: \(written)")
+    }
+
+    /// Kaynaklara bırakılmış, gizli bir dosyanın (geçici "ev"deki .ssh) ikinci adı arşive girmez; kullanıcı uyarılır.
+    /// Oluşturma (zip, 7z) ve ekleme (yerinde ve kopyalayarak) yolları gerçek 7zz ile denenir.
+    @Test(arguments: ["create.zip", "create.7z", "add.inplace", "add.copy"])
+    func hardLinkToASecretNeverEntersTheArchive(mode: String) async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let fm = FileManager.default
+        let sshDirectory = fixture.workspace.appendingPathComponent("ev/.ssh", isDirectory: true)
+        try fm.createDirectory(at: sshDirectory, withIntermediateDirectories: true)
+        let key = sshDirectory.appendingPathComponent("id_test")
+        try "GIZLI-ANAHTAR-ICERIGI".write(to: key, atomically: true, encoding: .utf8)
+        let saved = AppModel.secretLinkRoots
+        AppModel.secretLinkRoots = [sshDirectory]
+        defer { AppModel.secretLinkRoots = saved }
+        let model = fixture.model
+
+        let archive: URL
+        switch mode {
+        case "create.zip", "create.7z":
+            #expect(link(key.path, fixture.workspace.appendingPathComponent("kaynak/alt/anahtar").path) == 0)
+            archive = fixture.workspace.appendingPathComponent(mode == "create.zip" ? "yedek.zip" : "yedek.7z")
+            model.createArchive(CreateOptions(
+                sources: [fixture.workspace.appendingPathComponent("kaynak")], destination: archive,
+                format: mode == "create.zip" ? .zip : .sevenZip, level: .fast
+            ))
+            await fixture.settle()
+        default:
+            archive = try await fixture.makeArchive("hedef.7z", format: .sevenZip)
+            model.openArchive(archive)
+            await fixture.settle()
+            let extras = fixture.workspace.appendingPathComponent("ekler", isDirectory: true)
+            try fm.createDirectory(at: extras, withIntermediateDirectories: true)
+            #expect(link(key.path, extras.appendingPathComponent("anahtar").path) == 0)
+            try "ek".write(to: extras.appendingPathComponent("ek.txt"), atomically: true, encoding: .utf8)
+            var sources = [extras.appendingPathComponent("anahtar"), extras.appendingPathComponent("ek.txt")]
+            if mode == "add.copy" {
+                // Farklı klasörden bir kaynak: ekleme kaynakları geçici bir klasöre kopyalar.
+                let other = fixture.workspace.appendingPathComponent("baska/diger.txt")
+                try fm.createDirectory(at: other.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try "diger".write(to: other, atomically: true, encoding: .utf8)
+                sources.append(other)
+            }
+            model.addRequest = AddRequest(sources: sources)
+            model.confirmAdd()
+            await fixture.settle()
+        }
+
+        // Gizli bağlantı uyarısı gösterildi (test paketinde dil tabloları yoktur; metin anahtarın kendisine düşer,
+        // uygulamada "%@" yerine atlanan dosyaların adları gelir).
+        let warning = try #require(model.alert?.message, "\(mode): uyarı yok")
+        let template = fixture.settings.t(.warningSkippedSecretLinks)
+        #expect(warning.hasPrefix(String(template.prefix { $0 != "%" })), "\(mode): \(warning)")
+        #expect(!template.contains("%@") || warning.contains("anahtar"), "\(mode): \(warning)")
+        // Arşivde ne var? Gerçek 7zz ile listelenir; anahtar adı da içeriği de yok.
+        let listed = try await fixture.runner.run(SevenZipCommand.list(archive: archive))
+        try SevenZipError.check(listed)
+        let names = ListingParser.parse(listed.stdout, fallbackName: "x").entries.map(\.path)
+        #expect(!names.contains { $0.hasSuffix("anahtar") }, "\(mode): \(names)")
+        #expect(names.contains { $0.hasSuffix("not.txt") || $0.hasSuffix("ek.txt") })
+        let extracted = fixture.workspace.appendingPathComponent("kontrol-\(UUID().uuidString)")
+        let check = try await fixture.runner.run(SevenZipCommand.extract(ExtractOptions(archive: archive, destination: extracted, items: [], password: nil, overwrite: .replace)))
+        try SevenZipError.check(check)
+        let leaked = fm.enumerator(atPath: extracted.path)?.compactMap { $0 as? String }.contains {
+            (try? String(contentsOf: extracted.appendingPathComponent($0), encoding: .utf8))?.contains("GIZLI-ANAHTAR") == true
+        } ?? false
+        #expect(!leaked, "\(mode): anahtar içeriği arşive girdi")
+    }
+
+    /// Çıkarma ortasında Vazgeç: uyarı gösterilmez (eskiden boş alan izleyicisinin CancellationError'ı "Bir sorun
+    /// oluştu" diye çıkıyor, sonraki parola sayfalarını da engelliyordu), hedefe bir şey yazılmaz.
+    @Test func cancellingAnExtractionShowsNoErrorAlert() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let random = try #require(FileHandle(forReadingAtPath: "/dev/urandom"))
+        defer { try? random.close() }
+        try random.readData(ofLength: 24 << 20).write(to: fixture.workspace.appendingPathComponent("kaynak/gurultu.bin"))
+        let archive = try await fixture.makeArchive("uzun.7z", format: .sevenZip)
+        let destination = fixture.useExtractFolder()
+        let model = fixture.model
+        model.openArchive(archive)
+        await fixture.settle()
+
+        let saved = AppModel.diskSpaceGuard
+        AppModel.diskSpaceGuard = .init(interval: .milliseconds(1), available: { .max })
+        defer { AppModel.diskSpaceGuard = saved }
+        for _ in 0..<5 {
+            model.extract(items: [])
+            try await Task.sleep(for: .milliseconds(40))
+            model.cancelOperation()
+            await fixture.settle()
+            #expect(model.alert == nil, "\(model.alert?.message ?? "")")
+            #expect(model.lastOperationOutcome == .cancelled)
+            model.alert = nil
+        }
+        let written = (try? FileManager.default.contentsOfDirectory(atPath: destination.path)) ?? []
+        #expect(written.isEmpty)
     }
 
     /// Boştayken Vazgeç hiçbir şey yapmaz.
@@ -1616,18 +1807,20 @@ struct AppModelTests {
         let secret = try await fixture.makeArchive("gizli.7z", format: .sevenZip, password: "p", encryptNames: false)
         let plain = try await fixture.makeArchive("acik.7z", format: .sevenZip)
         let model = fixture.model
-        model.openArchive(secret)
-        await fixture.settle()
-        model.toggleQuickLook("kaynak/not.txt")
-        #expect(model.passwordRequest?.archive == secret)
-
         model.openArchive(plain)
         await fixture.settle()
+        // Parolalı arşiv açılmak istenince parola onun için sorulur; açık arşiv (plain) değişmez, adlar görünmez.
+        model.openArchive(secret)
+        await fixture.settle()
+        #expect(model.passwordRequest?.archive == secret)
         #expect(model.archiveURL == plain)
-        #expect(model.passwordRequest == nil) // eski istek düştü
+        #expect(!(model.listing?.entries.isEmpty ?? true))
+
+        // Girilen parola açık olana değil, istendiği arşive uygulanır.
         model.submitPassword("p")
         await fixture.settle()
-        #expect(model.quickLookURL == nil && model.operation == nil)
+        #expect(model.archiveURL == secret)
+        #expect(model.passwordRequest == nil && model.operation == nil)
     }
 
     /// "Buraya Çıkar" kuyruğunun baş öğesi beklerken iptal edilirse o da çıkarılmaz.
@@ -1726,10 +1919,12 @@ struct AppModelTests {
         let model = fixture.model
         model.openArchive(secret)
         await fixture.settle()
-        model.toggleQuickLook("kaynak/not.txt")
-        #expect(model.passwordRequest != nil)
-        model.closeArchive()
-        #expect(model.passwordRequest == nil && model.archiveURL == nil)
+        #expect(model.passwordRequest?.archive == secret)
+        // Parola sorulurken arşiv henüz açılmamıştır: vazgeçilirse adlar hiç gösterilmez.
+        #expect(model.archiveURL == nil && model.listing == nil)
+        model.cancelPasswordRequest()
+        await fixture.settle()
+        #expect(model.passwordRequest == nil && model.archiveURL == nil && model.listing == nil)
     }
 
     /// sandboxEngine ayarı açıkken AppModel.confined kum havuzunu bağlar; kapalıyken yalın runner döndürür.

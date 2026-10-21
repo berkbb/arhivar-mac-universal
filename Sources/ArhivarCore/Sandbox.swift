@@ -37,6 +37,15 @@ public struct SandboxProfile: Sendable, Equatable {
     }
 
     /// Arşiv okunurken erişilmemesi gereken kişisel veri klasörleri.
+    /// Sabit bağlantı denetiminde (bkz. `SecretLinks`) korunan, kimlik bilgisi taşıyan klasör ve dosyalar.
+    /// Büyük uygulama verisi klasörleri (Containers, tarayıcı profilleri) taranmaz; yalnızca küçük, yüksek değerli konumlar.
+    public static func secretDirectories(home: URL) -> [URL] {
+        [
+            ".ssh", ".gnupg", ".aws", ".config/gh", ".netrc", ".kube", ".docker", ".npmrc", ".pypirc", ".git-credentials",
+            ".config/gcloud", ".azure", ".oci", ".zsh_history", ".bash_history", "Library/Keychains",
+        ].map { home.appendingPathComponent($0) }
+    }
+
     public static func personalDataDirectories(home: URL) -> [URL] {
         [
             // Kimlik bilgileri ve erişim belirteçleri

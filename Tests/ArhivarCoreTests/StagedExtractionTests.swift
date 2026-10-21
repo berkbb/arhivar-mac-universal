@@ -1,3 +1,4 @@
+import Synchronization
 import Foundation
 import Testing
 @testable import ArhivarCore
@@ -162,4 +163,69 @@ private struct Sandbox {
     #expect(leaveOut(always, mode: .always).isEmpty)
     #expect(leaveOut(always, mode: .never).isEmpty)
     #expect(StagedExtraction.isMacMetadata(".DS_Store", in: always) && !StagedExtraction.isMacMetadata("a.DS_Store", in: always))
+}
+
+/// Çıkarma sürerken boş alan tükenirse iş durdurulur (sıkıştırma bombası diski doldurmasın).
+@Suite struct DiskSpaceGuardTests {
+    private final class Flag: Sendable { let value = Mutex(false) }
+
+    @Test func returnsTheResultWhenSpaceIsFine() async throws {
+        let value = try await DiskSpaceGuard.run(watching: URL(fileURLWithPath: "/"), floor: 100, interval: .milliseconds(5), available: { 1_000 }) {
+            try await Task.sleep(for: .milliseconds(30))
+            return 42
+        }
+        #expect(value == 42)
+    }
+
+    @Test func stopsTheOperationWhenSpaceRunsOut() async throws {
+        let cancelled = Flag()
+        let remaining = Mutex<Int64>(10_000)
+        let clock = ContinuousClock()
+        let start = clock.now
+        await #expect(throws: InsufficientSpaceError(required: 500, available: 0, stoppedWhileWriting: true)) {
+            try await DiskSpaceGuard.run(watching: URL(fileURLWithPath: "/"), floor: 500, interval: .milliseconds(5), available: {
+                // Her yoklamada yer azalır; sonunda payın altına iner.
+                remaining.withLock { $0 = max(0, $0 - 3_000); return $0 }
+            }) {
+                do { try await Task.sleep(for: .seconds(30)) } catch { cancelled.value.withLock { $0 = true }; throw error }
+                return 0
+            }
+        }
+        #expect(cancelled.value.withLock { $0 })
+        #expect(clock.now - start < .seconds(5))
+    }
+
+    @Test func unknownFreeSpaceNeverStopsTheOperation() async throws {
+        let value = try await DiskSpaceGuard.run(watching: URL(fileURLWithPath: "/"), floor: .max, interval: .milliseconds(2), available: { nil }) {
+            try await Task.sleep(for: .milliseconds(20))
+            return "tamam"
+        }
+        #expect(value == "tamam")
+    }
+
+    /// Dış iş iptal edilince (Vazgeç) işin kendi hatası gelir; izleyicinin CancellationError'ı onun önüne geçmez.
+    @Test func outerCancellationReportsTheOperationsOwnError() async {
+        struct Stopped: Error, Equatable {}
+        for _ in 0..<50 {
+            let task = Task {
+                try await DiskSpaceGuard.run(watching: URL(fileURLWithPath: "/"), interval: .milliseconds(1), available: { .max }) {
+                    // 7zz'yi taklit eder: iptalde kendi "durduruldu" hatasını verir.
+                    do { try await Task.sleep(for: .seconds(30)) } catch { throw Stopped() }
+                    return 0
+                }
+            }
+            try? await Task.sleep(for: .milliseconds(3))
+            task.cancel()
+            let result = await task.result
+            guard case .failure(let error) = result else { Issue.record("iş tamamlandı sanıldı"); continue }
+            #expect(error is Stopped, "\(error)")
+        }
+    }
+
+    @Test func operationErrorsPropagate() async {
+        struct Boom: Error {}
+        await #expect(throws: Boom.self) {
+            try await DiskSpaceGuard.run(watching: URL(fileURLWithPath: "/"), interval: .milliseconds(5), available: { .max }) { throw Boom() }
+        }
+    }
 }

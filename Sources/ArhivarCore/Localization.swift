@@ -121,10 +121,10 @@ public enum LKey: String, CaseIterable, Sendable {
     case openRiskyTitle, openRiskyMessage, openAnyway, deceptiveNameReason, deceptiveNameHelp
     case appUpdateSection, appUpdateAvailable, appUpdateUpToDate, appUpdateDownload, appUpdateNoReleases, menuCheckAppUpdates
     case consentTitle, consentMessage, consentAllow, consentDeny, aboutRepository
-    case errorDiskSpace
+    case errorDiskSpace, errorDiskFilling
     case settingsSandbox, settingsSandboxNote
     case subfolderSmart, subfolderAlways, subfolderNever, excludeMacMetadata, settingsStoreSymlinks, settingsStoreSymlinksNote
-    case duplicateNames, createPasswordConfirmHint, warningRemovedLinks, renameExists, symbolicLinkItem, nothingToArchive
+    case duplicateNames, createPasswordConfirmHint, warningRemovedLinks, warningSkippedSecretLinks, renameExists, symbolicLinkItem, nothingToArchive
     case editCut, editPaste, editPasteMatchStyle, editSelectAll
     case licenseAppSubtitle, licenseNoticesSubtitle, licenseReadOnly, licensePublisher, licenseLabel
     case licenseCopyText, licenseCopied, buttonClose

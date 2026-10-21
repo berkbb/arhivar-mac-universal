@@ -33,9 +33,7 @@ public enum SevenZipError: Error, Equatable, Sendable {
         // (Kullanıcının iptali CommandRunner'da ayrıca .cancelled olarak ele alınır.)
         let passwordAborted = combined.range(of: "Break signaled", options: .caseInsensitive) != nil
             && combined.range(of: "Enter password", options: .caseInsensitive) != nil
-        if combined.range(of: "wrong password", options: .caseInsensitive) != nil
-            || combined.range(of: "Cannot open encrypted archive", options: .caseInsensitive) != nil
-            || passwordAborted {
+        if passwordAborted || combined.split(whereSeparator: \.isNewline).contains(where: { reportsWrongPassword($0) }) {
             throw SevenZipError.wrongPassword
         }
         // 7zz çıkış kodları: 1 = uyarı, 2 = ölümcül hata, 7 = komut satırı, 8 = bellek, 255 = kullanıcı durdurdu.
@@ -59,6 +57,29 @@ public enum SevenZipError: Error, Equatable, Sendable {
         }
         if result.exitCode == 255 { throw SevenZipError.cancelled }
         throw SevenZipError.failed(code: result.exitCode, message: diagnostic(from: combined))
+    }
+
+    /// Satır 7zz'nin parola iletilerinden biri mi? İfade yalnızca iletinin yerinde aranır, dosya ya da arşiv adında değil:
+    /// "ERROR: CRC Failed : wrong password.txt" bir CRC hatasıdır, parola hatası değil.
+    ///   - "ERROR: Wrong password : a.txt" (zip)
+    ///   - "ERROR: Data Error in encrypted file. Wrong password? : a.txt" (7z)
+    ///   - "ERROR: arşiv.7z : Cannot open encrypted archive. Wrong password?" (adları şifreli 7z; arşiv adı önce gelir)
+    static func reportsWrongPassword<S: StringProtocol>(_ line: S) -> Bool {
+        var message = line.trimmingCharacters(in: .whitespaces)[...]
+        for prefix in ["ERROR:", "WARNING:"] where message.hasPrefix(prefix) {
+            message = message.dropFirst(prefix.count).drop(while: { $0 == " " })
+        }
+        // "Wrong password" ardından yalnızca " :" (dosya adı), "?" ya da satır sonu gelir; "wrong password.7z : …"
+        // gibi adı bu sözle başlayan bir arşivin başka hatası sayılmaz.
+        let lowered = message.lowercased()
+        if lowered.hasPrefix("wrong password") {
+            let rest = lowered.dropFirst("wrong password".count)
+            if rest.isEmpty || rest.hasPrefix("?") || rest.hasPrefix(" :") { return true }
+        }
+        if message.hasPrefix("Data Error in encrypted file. Wrong password?") { return true }
+        // Adları şifreli arşivde ileti, arşiv adından sonra (" : ") ya da tek başına gelir.
+        let encrypted = "Cannot open encrypted archive"
+        return message.hasPrefix(encrypted) || message.contains(" : " + encrypted)
     }
 
     /// Sonuç, parola bilinmediği (ya da yanlış olduğu) için mi başarısız oldu?

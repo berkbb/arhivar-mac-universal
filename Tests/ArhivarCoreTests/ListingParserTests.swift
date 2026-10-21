@@ -147,3 +147,15 @@ Method = LZMA2:24
     #expect(results.map(\.name) == ["resimler/tatil/foto.jpg"])
     #expect(results.first?.children == nil)
 }
+
+/// Parola doğrulaması için sınanacak girdi: en küçük şifreli dosya; klasörler ve şifresiz dosyalar seçilmez.
+@Test func passwordProbePicksTheSmallestEncryptedFile() {
+    let listing = ArchiveListing(info: ArchiveInfo(type: "zip"), entries: [
+        ArchiveEntry(path: "acik.txt", size: 1, packedSize: 1),
+        ArchiveEntry(path: "klasor", isDirectory: true, isEncrypted: true),
+        ArchiveEntry(path: "buyuk.bin", size: 9000, packedSize: 8000, isEncrypted: true),
+        ArchiveEntry(path: "kucuk.txt", archivePath: "./kucuk.txt", size: 40, packedSize: 52, isEncrypted: true),
+    ])
+    #expect(listing.passwordProbeItem == "./kucuk.txt")
+    #expect(ArchiveListing(info: ArchiveInfo(), entries: [ArchiveEntry(path: "a.txt", size: 3)]).passwordProbeItem == nil)
+}

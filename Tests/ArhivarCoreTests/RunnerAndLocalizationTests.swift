@@ -153,3 +153,33 @@ func previewErrorMessagesAreLocalized(code: String) throws {
     #expect(!failed.contains("%ld"))
     #expect(!failed.contains("Headers Error"))
 }
+
+/// Parola hatası yalnızca 7zz'nin iletisinden anlaşılır; adında "wrong password" geçen dosya ya da arşivin başka bir
+/// hatası (CRC, bozuk arşiv) parola hatası sayılmaz, yoksa yanlışlıkla parola sorulur ve gerçek hata gizlenirdi.
+@Test(arguments: [
+    ("ERROR: Wrong password : a.txt", true),
+    ("ERROR: Wrong password : wrong password.txt", true),
+    ("ERROR: Data Error in encrypted file. Wrong password? : b.txt", true),
+    ("ERROR: t.7z : Cannot open encrypted archive. Wrong password?", true),
+    ("ERROR: Cannot open encrypted archive. Wrong password?", true),
+    ("Cannot open encrypted archive. Wrong password?", true),
+    ("ERROR: CRC Failed : wrong password.txt", false),
+    ("ERROR: Data Error : wrong password.txt", false),
+    ("ERROR: wrong password.7z : Cannot open the file as archive", false),
+    ("ERROR: wrong password.7z : Unexpected end of archive", false),
+    ("Path = wrong password.txt", false),
+    ("Wrong password list.txt", false),
+])
+func wrongPasswordIsDetectedOnlyFromTheMessage(line: String, expected: Bool) {
+    #expect(SevenZipError.reportsWrongPassword(line) == expected, "\(line)")
+}
+
+@Test func crcErrorOnFileNamedWrongPasswordIsNotAPasswordError() {
+    let result = ProcessResult(exitCode: 2, stdout: "", stderr: "ERROR: CRC Failed : wrong password.txt\n\nSub items Errors: 1\n")
+    #expect(!SevenZipError.needsPassword(result))
+    #expect(throws: SevenZipError.self) { try SevenZipError.check(result) }
+    #expect((try? SevenZipError.check(result)) == nil)
+    do { try SevenZipError.check(result) } catch let error as SevenZipError {
+        #expect(error != .wrongPassword)
+    } catch { Issue.record("beklenmeyen hata \(error)") }
+}
