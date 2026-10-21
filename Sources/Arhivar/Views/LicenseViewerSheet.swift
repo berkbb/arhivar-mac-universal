@@ -44,7 +44,7 @@ enum LicenseDocument: String, CaseIterable, Identifiable {
 
     var licenseName: String? {
         switch self {
-        case .app: "MIT"
+        case .app: "GPL-3.0"
         case .sevenZip: "GNU LGPL + unRAR"
         case .notices: nil
         }

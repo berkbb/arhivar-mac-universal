@@ -191,7 +191,7 @@
 "aboutPoweredBy" = "Bazat pe 7-Zip %@";
 "aboutEngineCredit" = "7-Zip este © Igor Pavlov, distribuit sub licența GNU LGPL cu restricția de licență unRAR.";
 "aboutLicense" = "Licența 7-Zip";
-"aboutAppLicense" = "Licența Arhivar (MIT)";
+"aboutAppLicense" = "Licența Arhivar (GPL-3.0)";
 "aboutNotices" = "Notificări terți";
 "aboutCopyright" = "© %@ Babadogan Tech and Edu";
 "unknown" = "necunoscut";

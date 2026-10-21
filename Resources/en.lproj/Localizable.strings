@@ -191,7 +191,7 @@
 "aboutPoweredBy" = "Powered by 7-Zip %@";
 "aboutEngineCredit" = "7-Zip is © Igor Pavlov, distributed under the GNU LGPL with the unRAR license restriction.";
 "aboutLicense" = "7-Zip License";
-"aboutAppLicense" = "Arhivar License (MIT)";
+"aboutAppLicense" = "Arhivar License (GPL-3.0)";
 "aboutNotices" = "Third-Party Notices";
 "aboutCopyright" = "© %@ Babadogan Tech and Edu";
 "unknown" = "unknown";

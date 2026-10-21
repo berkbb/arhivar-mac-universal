@@ -191,7 +191,7 @@
 "aboutPoweredBy" = "7-Zip %@ ile güçlendirilmiştir";
 "aboutEngineCredit" = "7-Zip © Igor Pavlov; GNU LGPL ve unRAR lisans kısıtlaması altında dağıtılır.";
 "aboutLicense" = "7-Zip Lisansı";
-"aboutAppLicense" = "Arhivar Lisansı (MIT)";
+"aboutAppLicense" = "Arhivar Lisansı (GPL-3.0)";
 "aboutNotices" = "Üçüncü Taraf Bildirimleri";
 "aboutCopyright" = "© %@ Babadogan Tech and Edu";
 "unknown" = "bilinmiyor";

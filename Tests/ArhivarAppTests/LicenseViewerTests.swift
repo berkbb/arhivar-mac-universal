@@ -40,7 +40,8 @@ struct LicenseViewerTests {
         }
         let app = try #require(LicenseDocument.app.text(resources: workspace.resources, engineDirectory: workspace.engine))
         #expect(app == (try original("LICENSE")))
-        #expect(app.contains("MIT License"))
+        #expect(app.contains("GNU GENERAL PUBLIC LICENSE"))
+        #expect(app.contains("Version 3, 29 June 2007"))
         let notices = try #require(
             LicenseDocument.notices.text(resources: workspace.resources, engineDirectory: workspace.engine))
         #expect(notices == (try original("THIRD_PARTY_NOTICES.md")))

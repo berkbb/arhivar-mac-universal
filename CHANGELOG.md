@@ -5,6 +5,16 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ## [Unreleased]
 
+## [1.4.2] — 2026-10-21
+
+### Changed
+
+- Arhivar is now licensed under the GNU General Public License, version 3 (GPL-3.0) instead of MIT. `LICENSE`, the About window ("Arhivar License (GPL-3.0)"), the license viewer, `README.md` and `THIRD_PARTY_NOTICES.md` were updated; 7-Zip keeps its own LGPL + unRAR terms as a separate program.
+
+### Fixed
+
+- The About window's GitHub button, the release page links and the in-app update check returned "404 Not Found" for everyone but the owner because the repository was private. The repository is now public, so they work for all users.
+
 ## [1.4.1] — 2026-10-21
 
 ### Added

@@ -2,7 +2,7 @@
 
 ## Background
 
-Arhivar is a Swift 6.2 / SwiftUI macOS app (repo `berkbb/arhivar-mac-universal`, local checkout at `/Users/berkbabadogan/Documents/GitHub/arhivar-mac-universal`) that wraps an unmodified `7zz` binary (`Vendor/7-Zip/7zz`) under `sandbox-exec`. `ArhivarCore` is the testable core; tests use Swift Testing (`@Test`, `#expect`).
+Arhivar is a Swift 6.2 / SwiftUI macOS app (repo `berkbb/arhivar-mac-universal`, local checkout at the repository root) that wraps an unmodified `7zz` binary (`Vendor/7-Zip/7zz`) under `sandbox-exec`. `ArhivarCore` is the testable core; tests use Swift Testing (`@Test`, `#expect`).
 
 An adversarially verified audit (2026-10-19) graded `Tests/ArhivarCoreTests/ChaosAndSecurityMatrixTests.swift` discipline by discipline: 9 of 11 disciplines only partially prove the claim they are named after, 04 quarantine proves nothing (string math only), 09 parser fuzz was tautological. The per-discipline strengthening list is recorded in `.agents/context/roadmap.md` under "Open / In Progress > Test-Quality Items > 2."
 

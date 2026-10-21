@@ -71,4 +71,4 @@ Requires Xcode 26 or later. See [DEVELOPMENT.md](DEVELOPMENT.md) for details, [r
 
 ## License
 
-Arhivar's own code is MIT licensed ([LICENSE](LICENSE)). The bundled 7-Zip is distributed under the GNU LGPL with the unRAR restriction ([THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)). Because of that restriction, Arhivar can extract RAR archives but cannot create them.
+Arhivar's own code is licensed under the GNU General Public License, version 3 ([LICENSE](LICENSE)); Copyright (C) 2026 Babadogan Tech and Edu. You may redistribute and modify it under the GPL-3.0; it comes with no warranty. The bundled 7-Zip is distributed under the GNU LGPL with the unRAR restriction ([THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)). Because of that restriction, Arhivar can extract RAR archives but cannot create them.
