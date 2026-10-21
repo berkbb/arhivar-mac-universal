@@ -5,6 +5,8 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-10-21
+
 ### Security
 
 - Password-protected archives no longer reveal their file names. Finder Quick Look shows the lock screen for every password-protected archive (ZipCrypto/AES zip, 7z with encrypted contents or file list, any archive with a single encrypted file), and the app asks for the password before listing such an archive. Because the list of a content-encrypted archive is readable with any password, the password is verified by test-decrypting the smallest encrypted file before names are shown.
