@@ -5,6 +5,12 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ## [Unreleased]
 
+## [1.4.3] — 2026-10-21
+
+### Changed
+
+- The bundled 7-Zip engine is updated from 26.04 to 26.05 (official `ip7z/7zip` release, SHA-256 verified). Upstream notes: improved unpacking of Z archives and Mach-O files, and fixes for some bugs and vulnerabilities. Installations that already updated 7-Zip from inside the app are unaffected.
+
 ## [1.4.2] — 2026-10-21
 
 ### Changed
