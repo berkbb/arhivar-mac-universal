@@ -299,6 +299,7 @@
 "shortcutActionNewArchive" = "New Archive";
 "shortcutActionOpenArchive" = "Open Archive";
 "shortcutActionInfo" = "Show Info";
+"shortcutActionRemoveRecent" = "Remove from Recent Archives (while hovering a row)";
 
 /* Quick Look */
 "qlTitle" = "Arhivar Quick Look";

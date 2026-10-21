@@ -240,7 +240,9 @@ struct AppCommands: Commands {
             Button(settings.t(.menuShowInFinder)) { model.revealArchive() }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
                 .disabled(model.archiveURL == nil)
+            let clearRecents = settings.shortcut(for: .clearRecents)
             Button(settings.t(.menuClearRecents)) { model.clearRecents() }
+                .keyboardShortcut(clearRecents.keyEquivalent, modifiers: clearRecents.eventModifiers)
                 .disabled(model.recentArchives.isEmpty)
         }
 

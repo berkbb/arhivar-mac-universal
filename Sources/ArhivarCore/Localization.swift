@@ -104,7 +104,7 @@ public enum LKey: String, CaseIterable, Sendable {
     case shortcutQuickLookSection, shortcutQuickLookTrigger, shortcutQuickLookBoth, shortcutQuickLookSpaceOnly, shortcutQuickLookCmdYOnly, shortcutQuickLookFooter
     case shortcutReferenceSection, shortcutActionExtract, shortcutActionExtractSelected, shortcutActionTest, shortcutActionOpen, shortcutActionParent
     case shortcutCustomSection, shortcutRecordPrompt, shortcutResetDefault, shortcutResetAll, shortcutRecordHelp, shortcutModifierRequired, shortcutConflictWarning
-    case shortcutActionNewArchive, shortcutActionOpenArchive, shortcutActionInfo
+    case shortcutActionNewArchive, shortcutActionOpenArchive, shortcutActionInfo, shortcutActionRemoveRecent
     case settingsAppearance, appearanceSystem, appearanceLight, appearanceDark
     case settingsExtraction, settingsExtractTo, extractToAsk, extractToNextTo, extractToCustom, settingsCustomFolder
     case settingsSubfolder, settingsReveal, settingsOverwrite, overwriteReplace, overwriteSkip, overwriteRename

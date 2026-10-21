@@ -5,6 +5,14 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ## [Unreleased]
 
+## [1.4.1] — 2026-10-21
+
+### Added
+
+- The sidebar's Recent Archives list has a clear-all button in its header (shown when the list is not empty) and a "Clear Recent Archives" item in each row's context menu. Only the list is cleared; files are not touched.
+- Pressing Delete while the pointer is over a recent archive removes that row. It works even when the file list has keyboard focus, and never while a text field is being edited, a sheet is open or another window is in front.
+- Both actions have customizable shortcuts in Settings › Shortcuts: "Remove from Recent Archives" (default ⌫; the only shortcut that may use a key without modifiers, because it acts only on the hovered row) and "Clear Recent Archives" (default ⇧⌘⌫, also on the Archive menu item). Conflict warnings and reset to default work as for the other shortcuts.
+
 ## [1.4.0] — 2026-10-21
 
 ### Security

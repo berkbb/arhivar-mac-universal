@@ -494,7 +494,8 @@ private struct ShortcutsSettingsView: View {
         default:  specialKey = nil
         }
 
-        // 3. Delete / Backspace ile niteleyicisiz basılırsa varsayılana dön
+        // 3. Delete / Backspace ile niteleyicisiz basılırsa varsayılana dön (niteleyicisiz tuş alabilen eylemde
+        // varsayılan zaten ⌫'dir).
         if event.keyCode == 51 && !hasCommand && !hasOption && !hasControl {
             DispatchQueue.main.async {
                 self.settings.resetShortcut(for: action)
@@ -529,8 +530,9 @@ private struct ShortcutsSettingsView: View {
 
         // 4. Niteleyici denetimi:
         // Standart harf ve sayılar için en az bir komut/seçenek/kontrol tuşu zorunludur.
+        // Kenar çubuğunda bir satırın üzerindeyken çalışan eylem (Listeden Kaldır) niteleyicisiz tuş alabilir.
         let hasPrimaryModifier = hasCommand || hasOption || hasControl
-        if !hasPrimaryModifier {
+        if !hasPrimaryModifier && !action.allowsBareKey {
             NSSound.beep()
             DispatchQueue.main.async {
                 self.recordingWarning = self.settings.t(.shortcutModifierRequired)

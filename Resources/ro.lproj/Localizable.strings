@@ -299,6 +299,7 @@
 "shortcutActionNewArchive" = "Arhivă nouă";
 "shortcutActionOpenArchive" = "Deschide o arhivă";
 "shortcutActionInfo" = "Afișează informații";
+"shortcutActionRemoveRecent" = "Elimină din arhivele recente (cu cursorul pe rând)";
 
 /* Quick Look */
 "qlTitle" = "Previzualizare rapidă Arhivar";

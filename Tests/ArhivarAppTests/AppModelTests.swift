@@ -1245,6 +1245,28 @@ struct AppModelTests {
         #expect(written.isEmpty)
     }
 
+    /// Kenar çubuğundaki "tümünü temizle" düğmesi: son arşivler listesi boşalır ve kalıcı olarak kaydedilir;
+    /// açık arşive ve dosyalara dokunulmaz.
+    @Test func clearingRecentsEmptiesThePersistedList() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let first = try await fixture.makeArchive("bir.7z", format: .sevenZip)
+        let second = try await fixture.makeArchive("iki.zip", format: .zip)
+        let model = fixture.model
+        model.openArchive(first)
+        await fixture.settle()
+        model.openArchive(second)
+        await fixture.settle()
+        #expect(model.recentArchives.count == 2)
+
+        model.clearRecents()
+        #expect(model.recentArchives.isEmpty)
+        #expect((fixture.defaults.stringArray(forKey: "recentArchives") ?? []).isEmpty)
+        #expect(model.archiveURL == second)
+        #expect(FileManager.default.fileExists(atPath: first.path) && FileManager.default.fileExists(atPath: second.path))
+    }
+
     /// Boştayken Vazgeç hiçbir şey yapmaz.
     @Test func cancelWhileIdleIsANoOp() async throws {
         let fixture = try Fixture()

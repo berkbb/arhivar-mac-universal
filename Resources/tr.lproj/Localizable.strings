@@ -299,6 +299,7 @@
 "shortcutActionNewArchive" = "Yeni Arşiv";
 "shortcutActionOpenArchive" = "Arşiv Aç";
 "shortcutActionInfo" = "Bilgi Göster";
+"shortcutActionRemoveRecent" = "Son Arşivlerden Kaldır (satırın üzerindeyken)";
 
 /* Quick Look */
 "qlTitle" = "Arhivar Hızlı Bakış";

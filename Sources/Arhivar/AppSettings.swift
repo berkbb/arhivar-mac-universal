@@ -145,6 +145,20 @@ struct KeyboardShortcutData: Codable, Equatable, Sendable {
         return mods
     }
 
+    /// Klavye olayı bu kısayol mu? Özel tuşlar tuş koduyla, ötekiler niteleyicisiz karakterle karşılaştırılır;
+    /// niteleyiciler (⌘ ⇧ ⌥ ⌃) birebir eşleşmelidir.
+    func matches(keyCode: UInt16, characters: String?, modifiers: NSEvent.ModifierFlags) -> Bool {
+        let flags = modifiers.intersection([.command, .shift, .option, .control])
+        guard flags.contains(.command) == command, flags.contains(.shift) == shift,
+              flags.contains(.option) == option, flags.contains(.control) == control else { return false }
+        if isSpecialKey, let specialKeyCode { return keyCode == specialKeyCode }
+        return characters?.uppercased() == key.uppercased()
+    }
+
+    func matches(_ event: NSEvent) -> Bool {
+        matches(keyCode: event.keyCode, characters: event.charactersIgnoringModifiers, modifiers: event.modifierFlags)
+    }
+
     var displayString: String {
         var str = ""
         if control { str += "⌃" }
@@ -166,8 +180,16 @@ enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
     case open
     case parent
     case info
+    /// Kenar çubuğunda üzerinde durulan son arşivi listeden kaldırır (yalnızca imleç bir satırın üzerindeyken).
+    case removeRecent
+    /// Son arşivler listesinin tamamını temizler.
+    case clearRecents
 
     var id: String { rawValue }
+
+    /// Niteleyicisiz bir tuş (ör. ⌫) atanabilir mi? Yalnızca kenar çubuğunda bir satırın üzerindeyken çalışan eylem;
+    /// ötekiler menü kısayoludur ve yazı yazarken tetiklenmemeleri için ⌘, ⌥ ya da ⌃ ister.
+    var allowsBareKey: Bool { self == .removeRecent }
 
     var titleKey: LKey {
         switch self {
@@ -179,6 +201,8 @@ enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
         case .open: .shortcutActionOpen
         case .parent: .shortcutActionParent
         case .info: .shortcutActionInfo
+        case .removeRecent: .shortcutActionRemoveRecent
+        case .clearRecents: .menuClearRecents
         }
     }
 
@@ -200,6 +224,10 @@ enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
             return KeyboardShortcutData(key: "↑", isSpecialKey: true, specialKeyCode: 126, command: true)
         case .info:
             return KeyboardShortcutData(key: "I", command: true)
+        case .removeRecent:
+            return KeyboardShortcutData(key: "⌫", isSpecialKey: true, specialKeyCode: 51, command: false)
+        case .clearRecents:
+            return KeyboardShortcutData(key: "⌫", isSpecialKey: true, specialKeyCode: 51, command: true, shift: true)
         }
     }
 }
