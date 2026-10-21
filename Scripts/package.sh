@@ -41,7 +41,7 @@ ENGINE="$APP/Contents/MacOS/7zz"
 ENGINE_VERSION="$(perl -e 'alarm shift; exec @ARGV' 10 "$ENGINE" </dev/null 2>/dev/null \
   | awk '/7-Zip/ { for (i = 1; i <= NF; i++) if ($i ~ /^[0-9]+\.[0-9]+$/) { print $i; exit } }' || true)"
 echo "▸ Paketteki 7-Zip: ${ENGINE_VERSION:-okunamadı} ($(lipo -archs "$ENGINE"))"
-codesign --verify --deep --strict "$APP"
+"$ROOT/Scripts/verify_bundle.sh" "$APP"
 
 echo "▸ Dağıtım dosyaları hazırlanıyor…"
 mkdir -p "$DIST"

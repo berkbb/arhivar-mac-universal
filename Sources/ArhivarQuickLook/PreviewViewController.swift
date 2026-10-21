@@ -26,22 +26,8 @@ public final class PreviewViewController: NSViewController, QLPreviewingControll
                 }
             }
             do {
-                let fallbackName = ArchiveNaming.streamItemName(for: url)
-                let listing: ArchiveListing
-                if let result = await runEngineList(for: url) {
-                    if SevenZipError.needsPassword(result) {
-                        presentEncryptedHeaders(for: url)
-                        handler(nil)
-                        return
-                    }
-                    try SevenZipError.check(result)
-                    listing = ListingParser.parse(result.stdout, fallbackName: fallbackName)
-                } else {
-                    // Quick Look kum havuzu ("quicklook-preview") alt süreç başlatmayı yasaklar: liste süreç içinde okunur.
-                    listing = try await Task.detached {
-                        try LibArchiveReader.list(archive: url, fallbackName: fallbackName)
-                    }.value
-                }
+                // Quick Look kum havuzu alt süreç başlatmayı yasaklar: 7zz başlatılamazsa liste süreç içinde okunur.
+                let listing = try await PreviewListing.load(archive: url)
                 let statistics = ArchiveStatistics(listing: listing)
                 let tree = ArchiveTree.build(from: listing.entries)
                 let isEncrypted = listing.entries.contains { $0.isEncrypted }
@@ -63,17 +49,6 @@ public final class PreviewViewController: NSViewController, QLPreviewingControll
                 handler(nil)
             }
         }
-    }
-
-    /// 7zz ile listeler; motor bulunamaz ya da başlatılamazsa (kum havuzu engeli) nil döner.
-    private func runEngineList(for url: URL) async -> ProcessResult? {
-        guard let engineURL = EngineLocator.locate(customPath: nil) else { return nil }
-        let profile = SandboxProfile.forOperation(archive: url, writable: [], protectPersonalData: true)
-        if let result = try? await CommandRunner(executableURL: engineURL, sandbox: profile).run(SevenZipCommand.list(archive: url)) {
-            return result
-        }
-        // Quick Look eklenti ortamında sandbox-exec kısıtlıysa doğrudan 7zz ile çalıştır:
-        return try? await CommandRunner(executableURL: engineURL).run(SevenZipCommand.list(archive: url))
     }
 
     // MARK: - Görünüm Sunumu

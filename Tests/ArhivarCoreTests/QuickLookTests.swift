@@ -103,6 +103,26 @@ import Testing
         #expect(listing.entries.map(\.path) == ["not.txt"])
     }
 
+    /// Tek akışlı biçimlerin "merhaba dünya\n" içeriği; araçları (xz, zstd) her makinede bulunmadığı için gömülüdür.
+    static let singleStreamFixtures: [(fileExtension: String, type: String, base64: String)] = [
+        ("xz", "xz", "/Td6WFoAAATm1rRGBMATDyEBFgAAAAAAAAAAAG75/+kBAA5tZXJoYWJhIGTDvG55YQoAACzNXHazS+P5AAEvD9eQJaIftvN9AQAAAAAEWVo="),
+        ("bz2", "bzip2", "QlpoOTFBWSZTWR8WNaQAAATRjAAQQAA2QxAgAAQIACAAIgANAgGgBSD00WK0b3eLuSKcKEgPixrSAA=="),
+        ("zst", "zstd", "KLUv/SQPeQAAbWVyaGFiYSBkw7xueWEKGezZ/A=="),
+    ]
+
+    /// Hızlı Bakış'ın desteklediği tek akışlı biçimler (.xz, .bz2, .zst) ham akış olarak listelenir.
+    @Test(arguments: singleStreamFixtures.map(\.fileExtension))
+    func listsOtherSingleStreamFormats(fileExtension: String) throws {
+        defer { try? FileManager.default.removeItem(at: workspace) }
+        let fixture = try #require(Self.singleStreamFixtures.first { $0.fileExtension == fileExtension })
+        let archive = workspace.appendingPathComponent("not.txt.\(fileExtension)")
+        try #require(Data(base64Encoded: fixture.base64)).write(to: archive)
+
+        let listing = try LibArchiveReader.list(archive: archive, fallbackName: "not.txt")
+        #expect(listing.info.type == fixture.type)
+        #expect(listing.entries.map(\.path) == ["not.txt"])
+    }
+
     /// 7z arşivleri depodaki 7zz ile oluşturulur; yoksa atlanır.
     static let sevenZip = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
