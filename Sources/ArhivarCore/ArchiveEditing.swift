@@ -388,23 +388,87 @@ public struct ItemExtractor: Sendable {
     }
 }
 
+/// Birlikte sürüklenen öğeler (ör. ⌘A ile seçilip Finder'a bırakılanlar). Finder öğeleri tek tek ister; ilk istekte
+/// hepsi tek 7zz çalıştırmasıyla çıkarılır, sonraki istekler aynı sonucu bekler. Katı bir arşiv öğe başına yeniden
+/// açılmaz, seçim büyüdükçe aynı anda onlarca 7zz süreci de başlamaz.
+public final class DragBatch: Sendable {
+    private struct State {
+        var paths: [String] = []
+        var members: Set<String> = []
+        var task: Task<[URL], any Error>?
+    }
+
+    public let extractor: ItemExtractor
+    /// Çıkarılacak öğelerin (ham yollar) gerektirdiği alan; nil ise denetlenmez.
+    private let requiredBytes: @Sendable ([String]) -> Int64?
+    private let state = Mutex(State())
+
+    public init(extractor: ItemExtractor, requiredBytes: @escaping @Sendable ([String]) -> Int64? = { _ in nil }) {
+        self.extractor = extractor
+        self.requiredBytes = requiredBytes
+    }
+
+    /// Öğeyi topluluğa ekler. Çıkarma başladıysa eklenmez (`false`): sonraki sürükleme yeni bir topluluk kurar.
+    @discardableResult
+    public func add(_ path: String) -> Bool {
+        state.withLock { state in
+            guard state.task == nil else { return false }
+            if state.members.insert(path).inserted { state.paths.append(path) }
+            return true
+        }
+    }
+
+    /// 7zz'nin tanıdığı (ham) yollar, eklenme sırasıyla.
+    public var paths: [String] { state.withLock { $0.paths } }
+
+    public var hasStarted: Bool { state.withLock { $0.task != nil } }
+
+    /// Öğenin çıkarıldığı yer. İlk çağrı topluluğun tamamını çıkarır; sonrakiler aynı çıkarmayı bekler.
+    public func url(for path: String) async throws -> URL {
+        let (task, paths) = state.withLock { state in
+            if let task = state.task { return (task, state.paths) }
+            if state.members.insert(path).inserted { state.paths.append(path) }
+            let extractor = extractor, requiredBytes = requiredBytes, paths = state.paths
+            let task = Task { try await extractor.extract(paths, expectedSize: requiredBytes(paths)) }
+            state.task = task
+            return (task, paths)
+        }
+        let urls = try await task.value
+        // Çıkarma başladıktan sonra eklenmek istenen yol topluluğa girmez; kendi başına çıkarılır.
+        guard let index = paths.firstIndex(of: path) else { return try await extractor.extract(path, expectedSize: requiredBytes([path])) }
+        return urls[index]
+    }
+}
+
 /// Listeden Finder'a sürüklenen öğe; dosya ancak bırakıldığında çıkarılır.
 public struct ArchiveItemTransfer: Transferable, Sendable {
-    public let extractor: ItemExtractor
+    /// nil: öğe çıkarılamaz (bkz. `unavailable(name:)`).
+    public let batch: DragBatch?
     public let path: String
     public let name: String
-    public let size: Int64?
 
-    public init(extractor: ItemExtractor, path: String, name: String, size: Int64? = nil) {
-        self.extractor = extractor
+    public init(batch: DragBatch, path: String, name: String) {
+        batch.add(path)
+        self.batch = batch
         self.path = path
         self.name = name
-        self.size = size
+    }
+
+    private init(unavailableNamed name: String) {
+        batch = nil
+        path = ""
+        self.name = name
+    }
+
+    /// Satır sürüklenebilir görünürken arşiv kapanmış ya da motor kaybolmuşsa: bırakılınca hiçbir şey yazılmaz.
+    public static func unavailable(name: String) -> ArchiveItemTransfer {
+        ArchiveItemTransfer(unavailableNamed: name)
     }
 
     public static var transferRepresentation: some TransferRepresentation {
         FileRepresentation(exportedContentType: .item) { item in
-            SentTransferredFile(try await item.extractor.extract(item.path, expectedSize: item.size))
+            guard let batch = item.batch else { throw SevenZipError.cancelled }
+            return SentTransferredFile(try await batch.url(for: item.path))
         }
         .suggestedFileName { $0.name }
     }

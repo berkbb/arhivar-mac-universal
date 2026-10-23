@@ -190,3 +190,16 @@
   2. In `Scripts/build_app.sh`, pass `--entitlements "$ROOT/Support/QuickLook.entitlements"` when codesigning `ArhivarQuickLook.appex`.
   3. Add complete `UTImportedTypeDeclarations` covering all supported archive formats to both `Support/Info.plist` and `Support/QuickLook-Info.plist`.
   4. Enclose file access in `PreviewViewController` with security-scoped resource access and set `preferredContentSize = NSSize(width: 740, height: 500)`.
+
+---
+
+## Episode 21: Drag to Finder Belongs on `TableRow`, Not Inside a Table Cell
+- **Context:** Dragging archive items from `ArchiveBrowserView` to the Desktop. Single rows worked; a `⌘A` multi-selection could not be dropped, and after one drag, clicks, selection, further drags and the context menu needed several attempts.
+- **Root Causes:**
+  1. `NameCell` applied `.draggable(item)` to its own content. A cell-level SwiftUI drag only carries the row under the pointer, and the table's data source returned no pasteboard writer for any row, so `NSOutlineView` could not drag the selection.
+  2. The cell's drag gesture competed with `NSOutlineView`'s own mouse tracking (selection, double-click, context menu).
+  3. `model.dragItem(for:)` ran in every cell `body`, building an extractor and creating the session folder for each drawn row, with an O(entries) `needsPassword` scan per row.
+- **Verified Facts (macOS 26 SwiftUI):**
+  - `TableRow.itemProvider { NSItemProvider }` yields a pasteboard writer with only `public.item` (file contents). Finder does not turn that into a file.
+  - `TableRow.draggable(Transferable)` with a `FileRepresentation` yields `public.item` **and** a lazily provided `public.file-url`, the same shape as a view-level `.draggable`, which Finder accepts. The autoclosure runs only when the drag starts, once per dragged row, all in the same event loop turn.
+- **Lesson & Guardrail:** Put drag-out on `TableRow` (`Table(of:selection:sortOrder:) { columns } rows: { OutlineGroup(...) { TableRow(node).draggable(...) } }`), never inside a cell. Gate non-draggable rows with a cheap `canDrag` (set lookups only, it runs for every row). Group the rows of one drag in a `DragBatch` (collected in one event loop turn) so a drop runs a single `7zz`. `BrowserViewTests.selectedRowsDragToFinderTogether` asks the table's data source for writers exactly as `NSOutlineView` does and reads `public.file-url` as Finder would; it fails against the cell-level design.

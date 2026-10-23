@@ -102,6 +102,18 @@ private struct Sandbox {
     ]
     #expect(DiskSpace.requiredBytes(for: [], in: entries) == 1000)
     #expect(DiskSpace.requiredBytes(for: ["a"], in: entries) == 600)
+    // Seçimde iç içe öğeler iki kez sayılmaz; adı benzeyen kardeşler ("a/b.bin", "a/bc.bin") alt öğe sayılmaz.
+    let nested = [
+        ArchiveEntry(path: "a/b/x.bin", size: 100),
+        ArchiveEntry(path: "a/bc.bin", size: 200),
+        ArchiveEntry(path: "a/b.bin", size: 50),
+        ArchiveEntry(path: "c.bin", size: 400),
+    ]
+    #expect(DiskSpace.requiredBytes(for: ["a/b"], in: nested) == 100)
+    #expect(DiskSpace.requiredBytes(for: ["a/b", "a/b/x.bin"], in: nested) == 100)
+    #expect(DiskSpace.requiredBytes(for: ["a"], in: nested) == 350)
+    #expect(DiskSpace.requiredBytes(for: ["a/b.bin", "c.bin"], in: nested) == 450)
+    #expect(DiskSpace.requiredBytes(for: ["yok"], in: nested) == 0)
     #expect(DiskSpace.hasRoom(required: 1000, available: 2000, reserve: 500))
     #expect(!DiskSpace.hasRoom(required: 1600, available: 2000, reserve: 500))
     #expect(DiskSpace.hasRoom(required: .max, available: nil))

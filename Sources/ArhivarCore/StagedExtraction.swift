@@ -515,12 +515,25 @@ public enum DiskSpace {
 
     /// Seçili öğelerin (boşsa tüm arşivin) açılmış toplam boyutu. Uydurma boyutlar (zip bombası) taşma yerine Int64.max'ta durur.
     public static func requiredBytes(for items: [String], in entries: [ArchiveEntry]) -> Int64 {
-        entries.reduce(0) { total, entry in
+        // Küme ve üst yol yürüyüşü: ⌘A ile binlerce öğe sürüklenince girdi başına her öğeyle karşılaştırılmaz.
+        let selection = Set(items)
+        return entries.reduce(0) { total, entry in
             guard !entry.isDirectory else { return total }
-            let selected = items.isEmpty || items.contains { entry.path == $0 || entry.path.hasPrefix($0 + "/") }
+            let selected = items.isEmpty || isSelected(entry.path, in: selection)
             // Bozuk ya da uydurma negatif bir boyut gereken alanı azaltmasın.
             return selected ? total.saturatingAdding(max(0, entry.size ?? 0)) : total
         }
+    }
+
+    /// Yolun kendisi ya da "/" ile ayrılan üst yollarından biri seçimde mi? ("a/b/c" için "a/b/c", "a/b", "a")
+    static func isSelected(_ path: String, in selection: Set<String>) -> Bool {
+        if selection.contains(path) { return true }
+        var current = Substring(path)
+        while let slash = current.lastIndex(of: "/") {
+            current = current[..<slash]
+            if selection.contains(String(current)) { return true }
+        }
+        return false
     }
 
     /// Dosya ve klasörlerin (alt öğeleri dahil) diskteki toplam mantıksal boyutu. Sembolik bağlantılar izlenmez.

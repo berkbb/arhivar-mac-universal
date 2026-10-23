@@ -216,4 +216,63 @@ struct BrowserViewTests {
         #expect(model.selection.isSuperset(of: ["Şirket/Dekont1.pdf", "Şirket/EAR2026.pdf"]))
         #expect(!model.selection.contains("Şirket/Ekran Resmi.png"))
     }
+
+    /// Tablonun sürükleme başlarken her sürüklenen satır için istediği yazıcılar (NSTableView'un yaptığı gibi).
+    private func dragWriters(_ outline: NSOutlineView, rows: [Int]) -> [any NSPasteboardWriting] {
+        rows.compactMap { row in
+            outline.item(atRow: row).flatMap { outline.dataSource?.outlineView?(outline, pasteboardWriterForItem: $0) }
+        }
+    }
+
+    /// Finder'ın bırakmada yaptığı gibi sürükleme panosundaki dosya URL'lerini okur (öğeler o anda çıkarılır).
+    private func droppedFiles(_ writers: [any NSPasteboardWriting]) -> [URL] {
+        pasteboard.clearContents()
+        pasteboard.writeObjects(writers)
+        return pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
+    }
+
+    /// ⌘A ile seçilip masaüstüne sürüklenen satırlar: sürükleme hücrede değil satırdaydı, yalnızca tıklanan satır
+    /// taşınabiliyordu; çoklu seçim masaüstüne hiç bırakılamıyor, hücredeki sürükleme hareketi de tıklama, seçim ve
+    /// sağ tık menüsünü geciktiriyordu. Seçili her satır Finder'ın tanıdığı bir dosya URL'si vermeli ve hepsi bırakılınca
+    /// tek 7zz çalıştırmasıyla çıkarılmalı.
+    @Test func selectedRowsDragToFinderTogether() async throws {
+        let zip = try makeFinderZip()
+        let window = showWindow()
+        defer { cleanUp(window) }
+        await model.refreshEngine()
+        model.browserMode = .folders
+        model.openArchive(zip)
+        await settle()
+        model.primaryAction(["Şirket"])
+        model.selectAllCommand()
+        await render(window)
+        let content = try #require(window.contentView)
+        let outline = try #require(table(in: content) as? NSOutlineView)
+        #expect(outline.numberOfRows == 3)
+        // Satırlar çizilirken sürükleme öğesi (çıkarıcı, geçici klasör) kurulmaz; yalnızca sürükleme başlarken.
+        #expect(model.dragItemCount == 0)
+
+        let writers = dragWriters(outline, rows: Array(0..<outline.numberOfRows))
+        #expect(writers.count == 3)
+        // Öğeler sürükleme başlarken, aynı olay döngüsünde kurulur: bırakılınca tek toplulukta çıkarılmalarının koşulu.
+        #expect(model.dragItemCount == 3)
+        for writer in writers {
+            #expect(writer.writableTypes(for: pasteboard).contains(.fileURL))
+        }
+        let urls = droppedFiles(writers)
+        try #require(urls.count == 3)
+        #expect(urls.map(\.lastPathComponent) == ["Dekont1.pdf", "EAR2026.pdf", "Ekran Resmi.png"])
+        #expect(try String(contentsOf: urls[0], encoding: .utf8) == "Dekont1.pdf")
+        #expect(try String(contentsOf: urls[2], encoding: .utf8) == "Ekran Resmi.png")
+        // Tek çıkarma: hepsi aynı geçici klasörde.
+        #expect(Set(urls.map { $0.deletingLastPathComponent().deletingLastPathComponent() }).count == 1)
+
+        // Sonraki sürükleme (tek satır) yeni bir çıkarma kurar; önceki topluluğa eklenmez.
+        await render(window)
+        let single = droppedFiles(dragWriters(outline, rows: [1]))
+        #expect(single.map(\.lastPathComponent) == ["EAR2026.pdf"])
+        #expect(single.first?.deletingLastPathComponent() != urls[1].deletingLastPathComponent())
+        let siblings = try FileManager.default.contentsOfDirectory(atPath: try #require(single.first).deletingLastPathComponent().path)
+        #expect(siblings == ["EAR2026.pdf"])
+    }
 }

@@ -10,10 +10,10 @@ struct ArchiveBrowserView: View {
 
     var body: some View {
         @Bindable var model = model
-        Table(model.displayNodes, children: \.children, selection: $model.selection, sortOrder: $model.sortOrder) {
+        Table(of: ArchiveNode.self, selection: $model.selection, sortOrder: $model.sortOrder) {
             // Finder sıralaması: "dosya2" < "dosya10", büyük/küçük harf duyarsız, yerele uygun ("Çanta" < "Zebra").
             TableColumn(settings.t(.columnName), value: \.name, comparator: .localizedStandard) { node in
-                NameCell(node: node, model: model, settings: settings)
+                NameCell(node: node, settings: settings)
             }
             .width(min: 220, ideal: 380)
 
@@ -44,6 +44,19 @@ struct ArchiveBrowserView: View {
                     .foregroundStyle(.secondary)
             }
             .width(min: 70, ideal: 110)
+        } rows: {
+            // Finder'a sürükleme satır düzeyindedir: tablo seçili satırların hepsini birlikte sürükler (⌘A ile seçip
+            // masaüstüne bırakma), öğeler bırakılınca çıkarılır. Hücreye konan bir sürükleme hareketi yalnızca tek
+            // satırı taşıyor, tıklama, seçim ve sağ tık menüsüyle de yarışıp onları geciktiriyordu.
+            OutlineGroup(model.displayNodes, children: \.children) { node in
+                if model.canDrag(node) {
+                    // Öğe sürükleme başlarken kurulur, bırakılınca çıkarılır.
+                    TableRow(node)
+                        .draggable(model.dragItem(for: node) ?? .unavailable(name: node.name))
+                } else {
+                    TableRow(node)
+                }
+            }
         }
         .accessibilityIdentifier("arhivar.browser")
         .contextMenu(forSelectionType: ArchiveNode.ID.self) { ids in
@@ -125,16 +138,15 @@ struct ArchiveBrowserView: View {
     }
 }
 
-/// Satır hücresi. Model ve ayarlar ortamdan (@Environment) okunmaz, doğrudan verilir: hiyerarşik `Table`, klasörden
+/// Satır hücresi. Ayarlar ortamdan (@Environment) okunmaz, doğrudan verilir: hiyerarşik `Table`, klasörden
 /// çıkınca yeniden eklenen satırların hücrelerini ortam nesneleri olmadan güncelliyor ve uygulama
 /// "No Observable object of type AppModel found" ile çöküyordu.
 private struct NameCell: View {
     let node: ArchiveNode
-    let model: AppModel
     let settings: AppSettings
 
     var body: some View {
-        let content = HStack(spacing: 7) {
+        HStack(spacing: 7) {
             Image(nsImage: FileIcons.icon(for: node))
                 .resizable()
                 .frame(width: 18, height: 18)
@@ -153,19 +165,6 @@ private struct NameCell: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-        }
-        // Finder'a sürükleyince öğe o anda çıkarılır.
-        if let item = model.dragItem(for: node) {
-            content.draggable(item) {
-                Label {
-                    Text((node.id as NSString).lastPathComponent)
-                } icon: {
-                    Image(nsImage: FileIcons.icon(for: node))
-                }
-                .padding(6)
-            }
-        } else {
-            content
         }
     }
 }

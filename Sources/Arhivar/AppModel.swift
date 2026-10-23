@@ -151,7 +151,9 @@ final class AppModel {
     var appUpdateState: AppUpdateState = .idle
 
     private(set) var archiveURL: URL?
-    private(set) var listing: ArchiveListing?
+    private(set) var listing: ArchiveListing? {
+        didSet { encryptedPaths = nil }
+    }
     private(set) var statistics: ArchiveStatistics?
     private(set) var tree: [ArchiveNode] = []
     private(set) var displayNodes: [ArchiveNode] = []
@@ -225,6 +227,10 @@ final class AppModel {
     @ObservationIgnored private var serviceTask: Task<Void, Never>?
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var previewCache: [String: URL] = [:]
+    /// Şifreli girdilerin ve üst klasörlerinin yolları (bkz. `needsPassword`); liste değişince yeniden kurulur.
+    @ObservationIgnored private var encryptedPaths: Set<String>?
+    /// Başlamakta olan sürüklemenin topluluğu: tablo sürüklenen satırların hepsini aynı olay döngüsünde ister.
+    @ObservationIgnored private var pendingDragBatch: DragBatch?
     /// Güncelleme izni, açılışta başka bir işlem ya da uyarı varken sorulamadıysa sonra sorulur.
     @ObservationIgnored private var consentPending = false
     /// Açık arşivdeki sembolik bağlantı girdilerinin yolları (bkz. `ItemExtractor.symbolicLinks`).
@@ -235,6 +241,8 @@ final class AppModel {
     @ObservationIgnored private var displayUpdatesPaused = false
     /// Tablo verisinin kaç kez yeniden hesaplandığı (testler için).
     @ObservationIgnored private(set) var displayRebuildCount = 0
+    /// Kaç sürükleme öğesi kurulduğu (testler için): satırlar çizilirken değil, yalnızca sürükleme başlarken artar.
+    @ObservationIgnored private(set) var dragItemCount = 0
 
     private static let recentsKey = "recentArchives"
     private static let maxRecents = 12
@@ -1120,6 +1128,7 @@ final class AppModel {
         if let sessionRoot { StagedExtraction.removeTree(at: sessionRoot) }
         sessionRoot = nil
         previewCache = [:]
+        pendingDragBatch = nil
         quickLookURL = nil
     }
 
@@ -1129,15 +1138,35 @@ final class AppModel {
         discardAllSessions()
     }
 
-    /// Listeden Finder'a sürüklenecek öğe; parola gerekiyorsa ve bilinmiyorsa sürükleme kapalıdır.
+    /// Satır Finder'a sürüklenebilir mi? Tablonun her satırı için sorulur; küme aramalarıyla yanıtlanır.
+    /// Tek başına bir bağlantı taşındığı yerde dışarıyı gösterir ya da boşa düşer; parola gerekiyorsa ve
+    /// bilinmiyorsa da sürüklenmez.
+    func canDrag(_ node: ArchiveNode) -> Bool {
+        archiveURL != nil && engineURL != nil && !isSymbolicLink(node.id) && !needsPassword(for: [node.id])
+    }
+
+    /// Listeden Finder'a sürüklenecek öğe. Yalnızca sürükleme başlarken, sürüklenen her satır için çağrılır.
+    /// Birlikte sürüklenen satırlar (ör. ⌘A) tek toplulukta toplanır ve bırakılınca tek 7zz çalıştırmasıyla çıkarılır.
     func dragItem(for node: ArchiveNode) -> ArchiveItemTransfer? {
-        // Tek başına bir bağlantı taşındığı yerde dışarıyı gösterir ya da boşa düşer; sürüklenmez.
-        guard let archive = archiveURL, let engineURL, !isSymbolicLink(node.id), !needsPassword(for: [node.id]) else { return nil }
+        guard canDrag(node), let archive = archiveURL, let engineURL else { return nil }
+        dragItemCount += 1
+        let name = (node.id as NSString).lastPathComponent
+        if let batch = pendingDragBatch, batch.add(node.archivePath) {
+            return ArchiveItemTransfer(batch: batch, path: node.archivePath, name: name)
+        }
         let session = sessionDirectory()
         let runner = confined(CommandRunner(executableURL: engineURL), archive: archive, writable: [session])
         let extractor = ItemExtractor(runner: runner, archive: archive, password: password, root: session, symbolicLinks: symbolicLinks, hardLinks: hardLinks)
-        let name = (node.id as NSString).lastPathComponent
-        return ArchiveItemTransfer(extractor: extractor, path: node.archivePath, name: name, size: node.size)
+        let entries = listing?.entries ?? []
+        let batch = DragBatch(extractor: extractor) { paths in
+            DiskSpace.requiredBytes(for: paths.map(ListingParser.normalizedPath), in: entries)
+        }
+        pendingDragBatch = batch
+        // Aynı sürüklemenin satırları bu olay döngüsünde istenir; sonraki sürükleme yeni bir topluluk kurar.
+        Task { @MainActor [weak self, weak batch] in
+            if let self, self.pendingDragBatch === batch { self.pendingDragBatch = nil }
+        }
+        return ArchiveItemTransfer(batch: batch, path: node.archivePath, name: name)
     }
 
     // MARK: - Kopyala, yapıştır, sağlama değerleri
@@ -1521,11 +1550,28 @@ final class AppModel {
         }
     }
 
+    /// Öğelerden biri (boşsa arşivin herhangi bir girdisi) ya da içindekilerden biri şifreli ve parola bilinmiyor mu?
+    /// Tablonun her satırı için sorulduğundan girdiler bir kez taranır, sonra küme aramasıyla yanıtlanır.
     private func needsPassword(for items: [String]) -> Bool {
         guard password == nil, let entries = listing?.entries else { return false }
-        return entries.contains { entry in
-            entry.isEncrypted && (items.isEmpty || items.contains { entry.path == $0 || entry.path.hasPrefix($0 + "/") })
+        let encrypted = encryptedPaths ?? Self.encryptedPaths(in: entries)
+        encryptedPaths = encrypted
+        return items.isEmpty ? !encrypted.isEmpty : items.contains(where: encrypted.contains)
+    }
+
+    /// Şifreli girdilerin yolları ve "/" ile ayrılan üst yolları ("a/b/c.txt" şifreliyse "a/b/c.txt", "a/b", "a").
+    nonisolated static func encryptedPaths(in entries: [ArchiveEntry]) -> Set<String> {
+        var paths = Set<String>()
+        for entry in entries where entry.isEncrypted {
+            var current = Substring(entry.path)
+            // Kümedeki her yolun üst yolları da kümededir; zaten eklenmiş bir yolda yürüyüş biter.
+            guard paths.insert(String(current)).inserted else { continue }
+            while let slash = current.lastIndex(of: "/") {
+                current = current[..<slash]
+                guard paths.insert(String(current)).inserted else { break }
+            }
         }
+        return paths
     }
 
     /// Çıkarma hedefi (alt klasör kuralı uygulanmadan). İç içe açılmış bir arşivde "arşivin yanı",

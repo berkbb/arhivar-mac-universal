@@ -127,6 +127,43 @@ struct EngineIntegrationTests {
         #expect(try String(contentsOf: extracted, encoding: .utf8) == "merhaba dünya\n")
     }
 
+    /// Birlikte sürüklenen öğeler (⌘A ile seçilip masaüstüne bırakılanlar) tek 7zz çalıştırmasıyla aynı klasöre
+    /// çıkarılır; aynı anda gelen istekler aynı çıkarmayı bekler. Çıkarma başladıktan sonra topluluğa öğe eklenmez,
+    /// sonradan istenen öğe kendi başına çıkarılır.
+    @Test func dragBatchExtractsAllItemsInOneRun() async throws {
+        defer { try? FileManager.default.removeItem(at: workspace) }
+        try "ek\n".write(to: workspace.appendingPathComponent("kaynak/ek.txt"), atomically: true, encoding: .utf8)
+        let archive = workspace.appendingPathComponent("surukle.7z")
+        try SevenZipError.check(try await runner.run(SevenZipCommand.create(CreateOptions(
+            sources: [workspace.appendingPathComponent("kaynak")], destination: archive, format: .sevenZip, level: .fast
+        ))))
+        let session = workspace.appendingPathComponent("oturum", isDirectory: true)
+        let requested = PathsBox()
+        let batch = DragBatch(extractor: ItemExtractor(runner: runner, archive: archive, password: nil, root: session)) { paths in
+            requested.append(paths)
+            return 1
+        }
+        #expect(batch.add("kaynak/not.txt"))
+        #expect(batch.add("kaynak/ek.txt"))
+        #expect(batch.add("kaynak/not.txt"))
+        #expect(batch.paths == ["kaynak/not.txt", "kaynak/ek.txt"])
+        #expect(!batch.hasStarted)
+
+        async let first = batch.url(for: "kaynak/not.txt")
+        async let second = batch.url(for: "kaynak/ek.txt")
+        let (note, extra) = try await (first, second)
+        #expect(try String(contentsOf: note, encoding: .utf8) == "merhaba dünya\n")
+        #expect(try String(contentsOf: extra, encoding: .utf8) == "ek\n")
+        #expect(try FileManager.default.contentsOfDirectory(atPath: session.path).count == 1)
+        #expect(requested.calls == [["kaynak/not.txt", "kaynak/ek.txt"]])
+        #expect(batch.hasStarted)
+
+        #expect(!batch.add("kaynak/alt"))
+        let late = try await batch.url(for: "kaynak/alt")
+        #expect(late.lastPathComponent == "alt")
+        #expect(try FileManager.default.contentsOfDirectory(atPath: session.path).count == 2)
+    }
+
     private func listPaths(_ archive: URL) async throws -> [String] {
         let result = try await runner.run(SevenZipCommand.list(archive: archive))
         try SevenZipError.check(result)
@@ -174,4 +211,15 @@ struct EngineIntegrationTests {
 
 private final class ProgressBox: @unchecked Sendable {
     var last: Double = 0
+}
+
+private final class PathsBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var recorded: [[String]] = []
+
+    var calls: [[String]] { lock.withLock { recorded } }
+
+    func append(_ paths: [String]) {
+        lock.withLock { recorded.append(paths) }
+    }
 }

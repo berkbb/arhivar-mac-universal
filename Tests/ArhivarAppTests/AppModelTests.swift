@@ -1553,6 +1553,9 @@ struct AppModelTests {
         #expect(model.isSymbolicLink("kaynak/iyi"))
         #expect(model.dragItem(for: try #require(model.node("kaynak/iyi"))) == nil)
         #expect(model.dragItem(for: try #require(model.node("kaynak/not.txt"))) != nil)
+        // Tablo satırı da buna göre sürüklenebilir ya da sürüklenemez kurulur.
+        #expect(!model.canDrag(try #require(model.node("kaynak/iyi"))))
+        #expect(model.canDrag(try #require(model.node("kaynak/not.txt"))))
         model.selection = ["kaynak/iyi"]
         #expect(model.selectionIsSymbolicLink)
 
@@ -2061,4 +2064,19 @@ struct AppModelTests {
         #expect(settings.quickLookShortcut == .spaceAndCmdY)
         #expect(settings.isAllShortcutsDefault)
     }
+}
+
+/// Parola denetimi tablonun her satırı için sorulur: şifreli girdilerin yolları üst klasörleriyle birlikte bir kez
+/// kümeye alınır. Bir klasör, içinde şifreli bir dosya varsa parola ister; adı benzeyen kardeşler ("a/bc") istemez.
+@Test func encryptedPathsIncludeEveryAncestor() {
+    let entries = [
+        ArchiveEntry(path: "a", isDirectory: true),
+        ArchiveEntry(path: "a/b/gizli.txt", isEncrypted: true),
+        ArchiveEntry(path: "a/bc.txt"),
+        ArchiveEntry(path: "c", isDirectory: true, isEncrypted: true),
+        ArchiveEntry(path: "c/d.txt", isEncrypted: true),
+        ArchiveEntry(path: "acik.txt"),
+    ]
+    #expect(AppModel.encryptedPaths(in: entries) == ["a", "a/b", "a/b/gizli.txt", "c", "c/d.txt"])
+    #expect(AppModel.encryptedPaths(in: [ArchiveEntry(path: "acik.txt")]).isEmpty)
 }

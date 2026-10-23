@@ -5,6 +5,12 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ## [Unreleased]
 
+### Fixed
+
+- Several selected items (for example after ⌘A) can be dragged from the file list to the Desktop or a Finder window again. Dragging used to sit on each row's name cell, so only the row under the pointer could be dragged and a multi-selection did not drop at all; it now belongs to the table rows, so the table drags the whole selection. The dropped items are extracted together with a single 7-Zip run (`DragBatch`), so a solid archive is not reopened for every item.
+- After dragging an item out, clicking, selecting, dragging other rows and opening the context menu no longer take several attempts: the per-cell drag gesture that competed with the table's own mouse handling is gone, and rows no longer build a drag item (extractor, temporary folder) every time they are drawn, only when a drag starts.
+- Checking whether a row can be dragged and how much space a dragged or copied selection needs no longer grows with selection size × archive size: encrypted paths and the selection are looked up in sets.
+
 ## [1.4.3] — 2026-10-21
 
 ### Changed
