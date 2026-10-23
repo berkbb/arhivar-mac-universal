@@ -5,6 +5,8 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ## [Unreleased]
 
+## [1.4.4] — 2026-10-23
+
 ### Fixed
 
 - Several selected items (for example after ⌘A) can be dragged from the file list to the Desktop or a Finder window again. Dragging used to sit on each row's name cell, so only the row under the pointer could be dragged and a multi-selection did not drop at all; it now belongs to the table rows, so the table drags the whole selection. The dropped items are extracted together with a single 7-Zip run (`DragBatch`), so a solid archive is not reopened for every item.
