@@ -260,7 +260,7 @@ private struct PathBar: View {
         .dropDestination(for: URL.self) { urls, _ in
             // Dosyaları yoldaki bir klasörün üzerine bırakınca oraya ekle. Hedef klasör isteğin içinde taşınır;
             // onay penceresinde vazgeçilirse açık klasör değişmemiş olur.
-            let files = urls.filter(\.isFileURL)
+            let files = AppModel.droppedFiles(urls)
             guard model.isEditable, model.operation == nil, !files.isEmpty else { return false }
             model.addRequest = AddRequest(sources: files, folder: path)
             return true

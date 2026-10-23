@@ -161,11 +161,16 @@ public struct CommandRunner: Sendable {
         input: Data? = nil,
         onProgress: (@Sendable (Double) -> Void)? = nil
     ) async throws -> ProcessResult {
+        // ⌘A ile seçilen binlerce öğe argüman sınırını (ARG_MAX) aşmasın: gerekirse liste dosyasıyla verilir.
+        let fitted = try ItemListFile.fitting(arguments)
+        defer { fitted.remove() }
         let launch: (URL, [String])
-        if let sandbox, SandboxProfile.isAvailable {
-            launch = (SandboxProfile.launcher, sandbox.launchArguments(executable: executableURL, arguments: arguments))
+        if var sandbox, SandboxProfile.isAvailable {
+            // Geçici klasör yasaklı bir kişisel klasörün içinde olsa da 7zz liste dosyasını okuyabilsin.
+            if let list = fitted.listFile { sandbox.readableFiles.append(SandboxProfile.resolved(list)) }
+            launch = (SandboxProfile.launcher, sandbox.launchArguments(executable: executableURL, arguments: fitted.arguments))
         } else {
-            launch = (executableURL, arguments)
+            launch = (executableURL, fitted.arguments)
         }
         let box = try ProcessBox(executableURL: launch.0, arguments: launch.1, input: input)
         if let workingDirectory { box.process.currentDirectoryURL = workingDirectory }

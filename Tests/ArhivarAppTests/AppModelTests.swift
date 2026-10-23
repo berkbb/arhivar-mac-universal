@@ -2064,6 +2064,151 @@ struct AppModelTests {
         #expect(settings.quickLookShortcut == .spaceAndCmdY)
         #expect(settings.isAllShortcutsDefault)
     }
+
+    // MARK: - Sürükleme ve büyük seçimler: olası sorunlar
+
+    private func dragItem(_ id: String, in model: AppModel) throws -> ArchiveItemTransfer {
+        let node = try #require(model.node(id))
+        return try #require(model.dragItem(for: node))
+    }
+
+    /// Finder'ın bırakmada okuduğu dosya (öğe o anda çıkarılır).
+    private func dropURL(of id: String, in model: AppModel) async throws -> URL {
+        let item = try dragItem(id, in: model)
+        let batch = try #require(item.batch)
+        return try await batch.url(for: item.path)
+    }
+
+    /// ⌘A ile binlerce öğe: 7zz'nin argümanları 1 MiB'ı aşıyordu ve süreç hiç başlamıyordu; kopyalama, sürükleme,
+    /// seçilenleri çıkarma ve silme "7-Zip motoru bulunamadı" ile bitiyordu.
+    @Test func selectAllWithThousandsOfItemsWorksEverywhere() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let folder = fixture.workspace.appendingPathComponent("kaynak/Fotoğraflar_" + String(repeating: "x", count: 60), isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let padding = String(repeating: "ö", count: 120)
+        for index in 0..<3200 {
+            try Data("\(index)".utf8).write(to: folder.appendingPathComponent("IMG_\(String(format: "%05d", index))_\(padding).jpg"))
+        }
+        let archive = try await fixture.makeArchive("buyuk.zip", format: .zip)
+        let output = fixture.useExtractFolder()
+        let model = fixture.model
+        model.browserMode = .folders
+        model.openArchive(archive)
+        await fixture.settle()
+        let photos = try #require(model.listing?.entries.first { $0.isDirectory && $0.path.hasPrefix("kaynak/Foto") }).path
+        model.enterFolder("kaynak")
+        model.enterFolder(photos)
+        model.selectAllCommand()
+        #expect(model.selection.count == 3200)
+        #expect(model.selection.reduce(0) { $0 + model.archivePath(for: $1).utf8.count + 1 } > 1 << 20)
+
+        // ⌘C
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("ArhivarTests-\(UUID().uuidString)"))
+        defer { pasteboard.releaseGlobally() }
+        model.copyItems(to: pasteboard)
+        await fixture.settle()
+        #expect(model.alert == nil)
+        #expect((pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] ?? []).count == 3200)
+
+        // Sürükleme: hepsi tek toplulukta, tek 7zz çalıştırmasıyla.
+        let items = model.selection.sorted().compactMap { model.node($0).flatMap(model.dragItem(for:)) }
+        #expect(items.count == 3200)
+        var dropped: [URL] = []
+        for item in items {
+            let batch = try #require(item.batch)
+            dropped.append(try await batch.url(for: item.path))
+        }
+        #expect(Set(dropped.map { $0.deletingLastPathComponent() }).count == 1)
+        #expect(try String(contentsOf: dropped[42], encoding: .utf8) == "42")
+
+        // Seçilenleri çıkar.
+        model.extract(items: model.selection.sorted())
+        await fixture.settle()
+        #expect(model.alert == nil)
+        let extracted = FileManager.default.enumerator(atPath: output.path)?.allObjects.compactMap { $0 as? String } ?? []
+        #expect(extracted.filter { ($0 as NSString).lastPathComponent.hasPrefix("IMG_") }.count == 3200)
+
+        // ⌘A + Sil.
+        model.requestDelete()
+        model.confirmDelete()
+        await fixture.settle()
+        #expect(model.alert == nil)
+        #expect(model.listing?.entries.contains { $0.path.contains("IMG_") } == false)
+        #expect(model.node("kaynak/not.txt") != nil)
+    }
+
+    /// Listeden sürüklenen öğe yine bu pencereye (listeye, yol çubuğuna) bırakılırsa arşive yeniden eklenmesi
+    /// önerilmez, ayrı bir arşiv gibi açılmaz, yeni arşiv sayfası açılmaz. Dışarıdan bırakılan dosyalar eskisi gibi.
+    @Test func droppingOwnDraggedItemsBackIsIgnored() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let inner = try await fixture.makeArchive("ic.zip", format: .zip)
+        try FileManager.default.moveItem(at: inner, to: fixture.workspace.appendingPathComponent("kaynak/ic.zip"))
+        let archive = try await fixture.makeArchive("dis.zip", format: .zip)
+        let model = fixture.model
+        model.openArchive(archive)
+        await fixture.settle()
+
+        let note = try await dropURL(of: "kaynak/not.txt", in: model)
+        let zip = try await dropURL(of: "kaynak/ic.zip", in: model)
+        #expect(ItemExtractor.isTemporaryItem(note))
+        // /var ve /private/var aynı yerdir.
+        let privateNote = URL(fileURLWithPath: StagedExtraction.resolvedPath(note.path))
+        #expect(privateNote.path.hasPrefix("/private/"))
+        let outside = fixture.workspace.appendingPathComponent("kaynak/not.txt")
+        let web = try #require(URL(string: "https://example.com/a.zip"))
+        #expect(AppModel.droppedFiles([note, privateNote, zip, outside, web]) == [outside])
+
+        model.handleDrop([note, zip])
+        #expect(model.addRequest == nil)
+        model.handleDrop([outside])
+        #expect(model.addRequest?.sources == [outside])
+        model.addRequest = nil
+
+        // Arşiv kapalıyken geri bırakılan iç arşiv açılmaz, yeni arşiv sayfası da açılmaz.
+        model.closeArchive()
+        model.handleDrop([zip])
+        model.handleDrop([note])
+        await fixture.settle()
+        #expect(model.archiveURL == nil)
+        #expect(model.createRequest == nil)
+    }
+
+    /// Bırakılan öğeler çıkarılamazsa (arşiv diskte silinmiş ya da bozulmuş) bırakılan yerde hiçbir şey belirmez;
+    /// eskiden neden söylenmiyordu, şimdi uyarı gösterilir. Arşiv bırakmadan önce kapatıldıysa uyarı gösterilmez ve
+    /// silinen oturum klasörü yeniden oluşturulmaz.
+    @Test func failedDropShowsAnAlertButClosingTheArchiveStaysQuiet() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let archive = try await fixture.makeArchive("surukle.7z", format: .sevenZip)
+        let copy = fixture.workspace.appendingPathComponent("kopya.7z")
+        try FileManager.default.copyItem(at: archive, to: copy)
+        let model = fixture.model
+        model.openArchive(archive)
+        await fixture.settle()
+
+        let item = try dragItem("kaynak/not.txt", in: model)
+        try FileManager.default.removeItem(at: archive)
+        await #expect(throws: (any Error).self) { try await item.batch!.url(for: item.path) }
+        for _ in 0..<100 where model.alert == nil { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(model.alert?.title == fixture.settings.t(.errorTitle))
+        model.alert = nil
+
+        model.openArchive(copy)
+        await fixture.settle()
+        let closing = try dragItem("kaynak/not.txt", in: model)
+        let session = try #require(closing.batch).extractor.root
+        #expect(FileManager.default.fileExists(atPath: session.path))
+        model.closeArchive()
+        await #expect(throws: SevenZipError.cancelled) { try await closing.batch!.url(for: closing.path) }
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(model.alert == nil)
+        #expect(!FileManager.default.fileExists(atPath: session.path))
+    }
 }
 
 /// Parola denetimi tablonun her satırı için sorulur: şifreli girdilerin yolları üst klasörleriyle birlikte bir kez

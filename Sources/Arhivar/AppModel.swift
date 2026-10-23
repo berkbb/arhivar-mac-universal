@@ -810,7 +810,7 @@ final class AppModel {
 
     /// Bırakılan öğeler: düzenlenebilir bir arşiv açıksa eklemeyi önerir; yoksa tek arşiv → aç, diğerleri → yeni arşiv.
     func handleDrop(_ urls: [URL]) {
-        let files = urls.filter(\.isFileURL)
+        let files = Self.droppedFiles(urls)
         // İşlem sürerken bırakılanlar yok sayılır (yeni arşiv sayfası işlemin üstünde açılmasın).
         guard !files.isEmpty, operation == nil else { return }
         if listing != nil, isEditable {
@@ -1158,15 +1158,30 @@ final class AppModel {
         let runner = confined(CommandRunner(executableURL: engineURL), archive: archive, writable: [session])
         let extractor = ItemExtractor(runner: runner, archive: archive, password: password, root: session, symbolicLinks: symbolicLinks, hardLinks: hardLinks)
         let entries = listing?.entries ?? []
-        let batch = DragBatch(extractor: extractor) { paths in
-            DiskSpace.requiredBytes(for: paths.map(ListingParser.normalizedPath), in: entries)
-        }
+        let batch = DragBatch(
+            extractor: extractor,
+            requiredBytes: { paths in DiskSpace.requiredBytes(for: paths.map(ListingParser.normalizedPath), in: entries) },
+            onFailure: { [weak self] error in Task { @MainActor in self?.dragFailed(error) } }
+        )
         pendingDragBatch = batch
         // Aynı sürüklemenin satırları bu olay döngüsünde istenir; sonraki sürükleme yeni bir topluluk kurar.
         Task { @MainActor [weak self, weak batch] in
             if let self, self.pendingDragBatch === batch { self.pendingDragBatch = nil }
         }
         return ArchiveItemTransfer(batch: batch, path: node.archivePath, name: name)
+    }
+
+    /// Sürüklenen öğeler bırakılınca çıkarılamadı (ör. bozuk bir dosya, yer yok): bırakılan yerde hiçbir şey belirmez,
+    /// nedeni söylenir.
+    private func dragFailed(_ error: Error) {
+        guard alert == nil else { return }
+        handle(error, archive: nil, retry: nil, usedPassword: false)
+    }
+
+    /// Bırakılan dosyalar. Listeden sürüklenip yine bu pencereye bırakılan arşiv öğeleri (uygulamanın geçici dosyaları)
+    /// ayıklanır: geri bırakılan bir öğe arşive yeniden eklenmesin, ayrı bir arşiv gibi açılmasın, yeni arşive kaynak olmasın.
+    nonisolated static func droppedFiles(_ urls: [URL]) -> [URL] {
+        urls.filter { $0.isFileURL && !ItemExtractor.isTemporaryItem($0) }
     }
 
     // MARK: - Kopyala, yapıştır, sağlama değerleri

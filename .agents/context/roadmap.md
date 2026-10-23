@@ -198,7 +198,7 @@ A workflow of 68 agents (recon per discipline → adversarial verification of ev
 
 #### S36. ⬜ [P3] Accepted limitations / deferred (confirmed by the audit, not fixed)
 - **`installArchive` for split archives** deletes the stale `name.7z.00N` volumes before moving the new ones in; a crash in between loses the old split archive. Move-aside + rollback like `mergeItem` is the fix.
-- **Drag export runs outside `perform`:** `dragItem(for:)` extracts in `ArchiveItemTransfer` with no operation state and no cancel path; closing/switching the archive mid-drop runs `discardAllSessions()` under the running 7-Zip (it fails with `errno=2`, nothing escapes). Needs a drag lifecycle tied to the operation state.
+- **Drag export runs outside `perform`:** `dragItem(for:)` extracts through a shared `DragBatch` with no operation state and no cancel path; closing/switching the archive mid-drop runs `discardAllSessions()` under the running 7-Zip (it fails with `errno=2`, nothing escapes). Partly addressed: a drop that starts after the archive was closed is refused without recreating the session folder, and a failed drop shows an alert. Still needs a drag lifecycle tied to the operation state for a close that lands while 7-Zip is already running.
 - **LF in an entry name:** 7-Zip prints it as `_` in listings, so the deceptive-name badge cannot see it and per-item extract/open/delete match nothing (S17 reports the error instead of success); whole-archive extraction works. 7-Zip limitation.
 - **Grace-period SIGKILL** targets only the child pid; 7-Zip spawns no children and `process-exec` is denied in the sandbox, so no grandchild can hold the pipe.
 - **Merge is not interruptible** once started (S31 checks before it); a cancel during a very large merge finishes the merge.

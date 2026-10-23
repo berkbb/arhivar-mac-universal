@@ -203,3 +203,16 @@
   - `TableRow.itemProvider { NSItemProvider }` yields a pasteboard writer with only `public.item` (file contents). Finder does not turn that into a file.
   - `TableRow.draggable(Transferable)` with a `FileRepresentation` yields `public.item` **and** a lazily provided `public.file-url`, the same shape as a view-level `.draggable`, which Finder accepts. The autoclosure runs only when the drag starts, once per dragged row, all in the same event loop turn.
 - **Lesson & Guardrail:** Put drag-out on `TableRow` (`Table(of:selection:sortOrder:) { columns } rows: { OutlineGroup(...) { TableRow(node).draggable(...) } }`), never inside a cell. Gate non-draggable rows with a cheap `canDrag` (set lookups only, it runs for every row). Group the rows of one drag in a `DragBatch` (collected in one event loop turn) so a drop runs a single `7zz`. `BrowserViewTests.selectedRowsDragToFinderTogether` asks the table's data source for writers exactly as `NSOutlineView` does and reads `public.file-url` as Finder would; it fails against the cell-level design.
+
+---
+
+## Episode 22: ⌘A Over Thousands of Items Hit ARG_MAX and Was Reported as "Engine Not Found"
+- **Context:** Hunting potential problems after the multi-row drag fix. ⌘A in a folder with ~3,000+ long-named files, then drag, ⌘C, "Extract Selected" or delete; also compressing thousands of Finder files.
+- **Root Cause:** Every item name was a `7zz` command-line argument. macOS caps arguments plus environment at `ARG_MAX` = 1 MiB, so `Process.run()` failed with `E2BIG`, and `CommandRunner` mapped every launch failure to `SevenZipError.engineNotFound`.
+- **Verified 7-Zip 26.05 Behavior:**
+  - `@listfile` after `--` is taken literally (nothing extracted, exit 0). `-i@listfile` placed before `--` works for `x`, `d`, `t` and `a`, matches exactly like direct arguments (folders include children; `-spd` keeps `*` literal) and handles absolute source paths.
+  - List lines are trimmed (leading and trailing whitespace), a fully quoted line loses its quotes, and an empty list file is a command-line error (exit 7). `-scsUTF-8` makes the encoding explicit.
+  - 25,000 items through a list file extract in about 6 s; direct arguments cannot start at all.
+- **Test Trap:** Foundation writes file names to disk decomposed (NFD), so an archive built from them stores NFD names, and 7-Zip matches names byte for byte. Test item names must come from the 7-Zip listing (as the app's do), not from NFC string literals.
+- **Lesson & Guardrail:** Never pass an unbounded list of names on a command line. `CommandRunner.run` routes every command through `ItemListFile.fitting` and adds the list file to the sandbox `readableFiles`. `ItemListFileIntegrationTests` and `AppModelTests.selectAllWithThousandsOfItemsWorksEverywhere` exceed 1 MiB on purpose and fail with `.engineNotFound` without the fix.
+

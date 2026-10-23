@@ -303,6 +303,15 @@ public struct ItemExtractor: Sendable {
         FileManager.default.temporaryDirectory.appendingPathComponent("Arhivar", isDirectory: true)
     }
 
+    /// Dosya uygulamanın geçici klasöründe mi (ör. listeden sürüklenip çıkarılmış bir öğe)? `/var` ile `/private/var`
+    /// aynı yer sayılsın diye iki yol da gerçek yoluna çözülür.
+    public static func isTemporaryItem(_ url: URL, root: URL = temporaryRoot) -> Bool {
+        guard url.isFileURL else { return false }
+        let base = StagedExtraction.resolvedPath(root.path)
+        let path = StagedExtraction.resolvedPath(url.path)
+        return path == base || path.hasPrefix(base + "/")
+    }
+
     /// Önceki çalıştırmalardan kalan, `age` saniyeden eski geçici klasörleri siler.
     @discardableResult
     public static func sweepStale(olderThan age: TimeInterval, root: URL = temporaryRoot, now: Date = Date()) -> Int {
@@ -394,18 +403,31 @@ public struct ItemExtractor: Sendable {
 public final class DragBatch: Sendable {
     private struct State {
         var paths: [String] = []
-        var members: Set<String> = []
+        /// Yolun `paths` içindeki sırası: binlerce öğeli bir sürüklemede her istek sabit sürede yanıtlanır.
+        var index: [String: Int] = [:]
         var task: Task<[URL], any Error>?
+
+        mutating func insert(_ path: String) {
+            guard index[path] == nil else { return }
+            index[path] = paths.count
+            paths.append(path)
+        }
     }
 
     public let extractor: ItemExtractor
     /// Çıkarılacak öğelerin (ham yollar) gerektirdiği alan; nil ise denetlenmez.
     private let requiredBytes: @Sendable ([String]) -> Int64?
+    /// Çıkarma iptal dışında bir nedenle başarısız olunca bir kez çağrılır: bırakma sessizce boşa gitmesin.
+    private let onFailure: @Sendable (any Error) -> Void
     private let state = Mutex(State())
 
-    public init(extractor: ItemExtractor, requiredBytes: @escaping @Sendable ([String]) -> Int64? = { _ in nil }) {
+    public init(
+        extractor: ItemExtractor, requiredBytes: @escaping @Sendable ([String]) -> Int64? = { _ in nil },
+        onFailure: @escaping @Sendable (any Error) -> Void = { _ in }
+    ) {
         self.extractor = extractor
         self.requiredBytes = requiredBytes
+        self.onFailure = onFailure
     }
 
     /// Öğeyi topluluğa ekler. Çıkarma başladıysa eklenmez (`false`): sonraki sürükleme yeni bir topluluk kurar.
@@ -413,7 +435,7 @@ public final class DragBatch: Sendable {
     public func add(_ path: String) -> Bool {
         state.withLock { state in
             guard state.task == nil else { return false }
-            if state.members.insert(path).inserted { state.paths.append(path) }
+            state.insert(path)
             return true
         }
     }
@@ -425,18 +447,29 @@ public final class DragBatch: Sendable {
 
     /// Öğenin çıkarıldığı yer. İlk çağrı topluluğun tamamını çıkarır; sonrakiler aynı çıkarmayı bekler.
     public func url(for path: String) async throws -> URL {
-        let (task, paths) = state.withLock { state in
-            if let task = state.task { return (task, state.paths) }
-            if state.members.insert(path).inserted { state.paths.append(path) }
-            let extractor = extractor, requiredBytes = requiredBytes, paths = state.paths
-            let task = Task { try await extractor.extract(paths, expectedSize: requiredBytes(paths)) }
+        let (task, index) = state.withLock { state in
+            if let task = state.task { return (task, state.index[path]) }
+            state.insert(path)
+            let paths = state.paths
+            let task = Task { try await self.extract(paths) }
             state.task = task
-            return (task, paths)
+            return (task, state.index[path])
         }
         let urls = try await task.value
         // Çıkarma başladıktan sonra eklenmek istenen yol topluluğa girmez; kendi başına çıkarılır.
-        guard let index = paths.firstIndex(of: path) else { return try await extractor.extract(path, expectedSize: requiredBytes([path])) }
+        guard let index else { return try await extract([path])[0] }
         return urls[index]
+    }
+
+    private func extract(_ paths: [String]) async throws -> [URL] {
+        do {
+            // Arşiv bırakmadan önce kapandıysa oturum klasörü silinmiştir: yeniden oluşturulup sahipsiz kalmasın.
+            guard FileManager.default.fileExists(atPath: extractor.root.path) else { throw SevenZipError.cancelled }
+            return try await extractor.extract(paths, expectedSize: requiredBytes(paths))
+        } catch {
+            if (error as? SevenZipError) != .cancelled, !(error is CancellationError) { onFailure(error) }
+            throw error
+        }
     }
 }
 

@@ -138,6 +138,7 @@ struct EngineIntegrationTests {
             sources: [workspace.appendingPathComponent("kaynak")], destination: archive, format: .sevenZip, level: .fast
         ))))
         let session = workspace.appendingPathComponent("oturum", isDirectory: true)
+        try FileManager.default.createDirectory(at: session, withIntermediateDirectories: true)
         let requested = PathsBox()
         let batch = DragBatch(extractor: ItemExtractor(runner: runner, archive: archive, password: nil, root: session)) { paths in
             requested.append(paths)
@@ -162,6 +163,38 @@ struct EngineIntegrationTests {
         let late = try await batch.url(for: "kaynak/alt")
         #expect(late.lastPathComponent == "alt")
         #expect(try FileManager.default.contentsOfDirectory(atPath: session.path).count == 2)
+    }
+
+    /// Bırakılan öğeler çıkarılamazsa (bozuk ya da bulunamayan öğe) hata bir kez bildirilir; aynı anda gelen istekler
+    /// aynı hatayı alır. Arşiv bırakmadan önce kapandıysa (oturum klasörü silinmiş) hiçbir şey çıkarılmaz, klasör yeniden
+    /// oluşturulup sahipsiz kalmaz ve bu bir hata olarak bildirilmez.
+    @Test func dragBatchReportsFailureOnceAndSkipsClosedSessions() async throws {
+        defer { try? FileManager.default.removeItem(at: workspace) }
+        let archive = workspace.appendingPathComponent("surukle.7z")
+        try SevenZipError.check(try await runner.run(SevenZipCommand.create(CreateOptions(
+            sources: [workspace.appendingPathComponent("kaynak")], destination: archive, format: .sevenZip, level: .fast
+        ))))
+        let session = workspace.appendingPathComponent("oturum", isDirectory: true)
+        try FileManager.default.createDirectory(at: session, withIntermediateDirectories: true)
+        let failures = PathsBox()
+        let extractor = ItemExtractor(runner: runner, archive: archive, password: nil, root: session)
+        let broken = DragBatch(extractor: extractor, onFailure: { failures.append(["\($0)"]) })
+        broken.add("kaynak/not.txt")
+        broken.add("kaynak/yok.txt")
+        async let first = Result { try await broken.url(for: "kaynak/not.txt") }
+        async let second = Result { try await broken.url(for: "kaynak/yok.txt") }
+        let results = await [first, second]
+        #expect(results.allSatisfy { if case .failure = $0 { true } else { false } })
+        #expect(failures.calls.count == 1)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: session.path).isEmpty)
+
+        // Arşiv kapandı: oturum klasörü silindi.
+        try FileManager.default.removeItem(at: session)
+        let closed = DragBatch(extractor: extractor, onFailure: { failures.append(["\($0)"]) })
+        closed.add("kaynak/not.txt")
+        await #expect(throws: SevenZipError.cancelled) { try await closed.url(for: "kaynak/not.txt") }
+        #expect(!FileManager.default.fileExists(atPath: session.path))
+        #expect(failures.calls.count == 1)
     }
 
     private func listPaths(_ archive: URL) async throws -> [String] {

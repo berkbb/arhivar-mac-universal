@@ -275,4 +275,135 @@ struct BrowserViewTests {
         let siblings = try FileManager.default.contentsOfDirectory(atPath: try #require(single.first).deletingLastPathComponent().path)
         #expect(siblings == ["EAR2026.pdf"])
     }
+
+    /// Klasördeki dosyalardan arşiv kurar (yol → içerik); `links` sembolik bağlantılardır (ad → hedef).
+    private func makeArchive(
+        _ name: String, files: [String: String], links: [String: String] = [:], password: String? = nil
+    ) async throws -> URL {
+        let source = workspace.appendingPathComponent("kaynak-\(UUID().uuidString)", isDirectory: true)
+        for (path, text) in files {
+            let url = source.appendingPathComponent(path)
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data(text.utf8).write(to: url)
+        }
+        for (path, target) in links {
+            try FileManager.default.createSymbolicLink(atPath: source.appendingPathComponent(path).path, withDestinationPath: target)
+        }
+        let archive = workspace.appendingPathComponent(name)
+        let tops = Set(files.keys.map { String($0.split(separator: "/")[0]) }).union(links.keys).sorted()
+        let options = CreateOptions(
+            sources: tops.map { source.appendingPathComponent($0) }, destination: archive, format: .sevenZip, level: .fast, password: password
+        )
+        let runner = CommandRunner(executableURL: try #require(engineURL))
+        try SevenZipError.check(try await runner.run(SevenZipCommand.create(options), input: options.input))
+        return archive
+    }
+
+    /// Sürüklenen satırların Finder'a bırakılınca verdiği dosyalar: ad → içerik (klasörse içindeki dosya sayısı).
+    private func dropped(_ outline: NSOutlineView, rows: [Int]) throws -> [(name: String, content: String)] {
+        try droppedFiles(dragWriters(outline, rows: rows)).map { url in
+            var isDirectory: ObjCBool = false
+            #expect(FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory))
+            if isDirectory.boolValue {
+                let count = FileManager.default.enumerator(atPath: url.path)?.allObjects.count ?? 0
+                return (url.lastPathComponent.precomposedStringWithCanonicalMapping, "\(count) öğe")
+            }
+            return (url.lastPathComponent.precomposedStringWithCanonicalMapping, try String(contentsOf: url, encoding: .utf8))
+        }
+    }
+
+    /// Ağaç görünümü, açılmış klasörün alt satırları, klasör satırları ve arama sonuçları da Finder'a sürüklenir.
+    /// ⌘A içindeki tek başına bir sembolik bağlantı sürüklenmez, kalanlar sürüklenir. Aramada farklı klasörlerdeki aynı
+    /// adlı dosyalar birbirine karışmaz.
+    @Test func rowsDragToFinderInEveryBrowserMode() async throws {
+        let archive = try await makeArchive(
+            "kipler.7z",
+            files: ["A/oku.txt": "A", "A/alt/derin.txt": "derin", "B/oku.txt": "B", "kök.txt": "kök"],
+            links: ["bağ": "kök.txt"]
+        )
+        let window = showWindow()
+        defer { cleanUp(window) }
+        await model.refreshEngine()
+        model.browserMode = .tree
+        model.openArchive(archive)
+        await settle()
+        await render(window)
+        let content = try #require(window.contentView)
+        let outline = try #require(table(in: content) as? NSOutlineView)
+        #expect(model.isSymbolicLink("bağ"))
+
+        // ⌘A (ağaç): bağlantı dışındaki her satır sürüklenir; klasörler içerikleriyle gelir.
+        model.selectAllCommand()
+        await render(window)
+        let rows = Array(0..<outline.numberOfRows)
+        #expect(rows.count == 4)
+        #expect(dragWriters(outline, rows: rows).count == 3)
+        let all = try dropped(outline, rows: rows)
+        #expect(Dictionary(uniqueKeysWithValues: all.map { ($0.name, $0.content) }) == ["A": "3 öğe", "B": "1 öğe", "kök.txt": "kök"])
+
+        // Açılmış klasörün alt satırları da tek tek sürüklenir.
+        await render(window)
+        let folderRow = try #require(rows.first { (try? dropped(outline, rows: [$0]).first?.name) == "A" })
+        outline.expandItem(outline.item(atRow: folderRow))
+        await render(window)
+        #expect(outline.numberOfRows == 6)
+        let expanded = try (0..<outline.numberOfRows).flatMap { try dropped(outline, rows: [$0]) }
+        #expect(expanded.contains { $0.name == "oku.txt" && $0.content == "A" })
+        #expect(expanded.contains { $0.name == "alt" && $0.content == "1 öğe" })
+        // Klasör ve içindeki bir dosya birlikte (⇧ ile aralık seçimi): ikisi de tek çıkarmayla gelir.
+        await render(window)
+        let child = try #require(expanded.firstIndex { $0.name == "oku.txt" && $0.content == "A" })
+        let parentAndChild = try dropped(outline, rows: [folderRow, child])
+        #expect(parentAndChild.map(\.name) == ["A", "oku.txt"])
+        #expect(parentAndChild.map(\.content) == ["3 öğe", "A"])
+
+        // Arama: iki ayrı "oku.txt" birlikte sürüklenir, içerikleri karışmaz.
+        model.searchText = "oku"
+        await settle()
+        await render(window)
+        #expect(outline.numberOfRows == 2)
+        let found = try dropped(outline, rows: [0, 1])
+        #expect(found.map(\.name) == ["oku.txt", "oku.txt"])
+        #expect(Set(found.map(\.content)) == ["A", "B"])
+    }
+
+    /// Parolalı arşivde (parola girildikten sonra) ve iç içe açılmış arşivde de seçili satırlar Finder'a sürüklenir.
+    @Test func protectedAndNestedArchivesDragToFinder() async throws {
+        let protected = try await makeArchive("gizli.7z", files: ["gizli/bir.txt": "bir", "gizli/iki.txt": "iki"], password: "Parola-1")
+        let window = showWindow()
+        defer { cleanUp(window) }
+        await model.refreshEngine()
+        model.browserMode = .folders
+        model.openArchive(protected)
+        await settle()
+        #expect(model.passwordRequest != nil)
+        model.submitPassword("Parola-1")
+        await settle()
+        model.primaryAction(["gizli"])
+        model.selectAllCommand()
+        await render(window)
+        let content = try #require(window.contentView)
+        var outline = try #require(table(in: content) as? NSOutlineView)
+        let secret = try dropped(outline, rows: [0, 1])
+        #expect(secret.map(\.name) == ["bir.txt", "iki.txt"])
+        #expect(secret.map(\.content) == ["bir", "iki"])
+
+        // İç içe: dış arşivdeki zip açılır, içindeki dosyalar sürüklenir.
+        let zip = try makeFinderZip()
+        let outer = workspace.appendingPathComponent("dis.7z")
+        let runner = CommandRunner(executableURL: try #require(engineURL))
+        try SevenZipError.check(try await runner.run(SevenZipCommand.create(CreateOptions(sources: [zip], destination: outer, format: .sevenZip, level: .fast))))
+        model.openArchive(outer)
+        await settle()
+        model.primaryAction(["Şirket.zip"])
+        await settle()
+        #expect(model.archiveStack.count == 1)
+        model.primaryAction(["Şirket"])
+        model.selectAllCommand()
+        await render(window)
+        outline = try #require(table(in: content) as? NSOutlineView)
+        let inner = try dropped(outline, rows: Array(0..<outline.numberOfRows))
+        #expect(inner.map(\.name) == ["Dekont1.pdf", "EAR2026.pdf", "Ekran Resmi.png"])
+        #expect(inner.map(\.content) == ["Dekont1.pdf", "EAR2026.pdf", "Ekran Resmi.png"])
+    }
 }
