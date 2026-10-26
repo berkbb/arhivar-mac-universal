@@ -5,6 +5,8 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ## [Unreleased]
 
+## [1.5.1] — 2026-10-26
+
 ### Security
 
 - When the 7-Zip sandbox is enabled (the default) but `/usr/bin/sandbox-exec` cannot be run, Arhivar no longer starts 7-Zip without it. The operation stops, the error is logged, and the alert explains how to turn the sandbox off in Settings › Advanced if you still want to run the engine.
