@@ -5,6 +5,10 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ## [Unreleased]
 
+### Changed
+
+- Routine log entries (launches, 7-Zip runs, drag-and-drop steps) are written to the macOS unified log at the Info level. The Console app shows them only with **Action › Include Info Messages**, and macOS keeps them only briefly in memory, so they no longer add to Console's stored log. Errors and warnings are logged as before, and Arhivar's own Log window and log file still keep every entry.
+
 ## [1.5.1] — 2026-10-26
 
 ### Security

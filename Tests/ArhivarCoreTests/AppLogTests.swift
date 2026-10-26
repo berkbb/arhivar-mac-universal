@@ -1,4 +1,5 @@
 import Foundation
+import os
 import Synchronization
 import Testing
 @testable import ArhivarCore
@@ -118,6 +119,18 @@ struct AppLogTests {
     }
 
     /// Konsol'da açık görünen tür dosya adı içermez; adlar ve 7zz iletisi gizli ayrıntıdadır.
+    /// Rutin kayıtlar Konsol'u doldurmasın: bilgi `.info` düzeyinde (Konsol'da varsayılan olarak gizli, kalıcı değil),
+    /// uyarı ve hata `.error` düzeyinde gider. Uygulamanın kendi kayıtları düzeyden etkilenmez.
+    @Test func routineEntriesUseTheInfoLevelInConsole() {
+        #expect(AppLog.Level.info.osLogType == .info)
+        #expect(AppLog.Level.warning.osLogType == .error)
+        #expect(AppLog.Level.error.osLogType == .error)
+        let log = AppLog(directory: directory)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        log.info(.engine, "7zz exited with code 0 in 50 ms")
+        #expect(AppLog(directory: directory).entries.map(\.message) == ["7zz exited with code 0 in 50 ms"])
+    }
+
     @Test func errorKindsKeepNamesInTheDetail() {
         let failed = AppLog.describe(SevenZipError.failed(code: 2, message: "ERROR: gizli-belge.pdf"))
         #expect(failed.kind == "7zz failed with exit code 2")

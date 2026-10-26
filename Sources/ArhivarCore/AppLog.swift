@@ -20,7 +20,10 @@ public final class AppLog: Sendable {
         /// "Hatalar ve Sorunlar" süzgecine giren düzeyler.
         public var isProblem: Bool { self != .info }
 
-        var osLogType: OSLogType { self == .info ? .default : .error }
+        /// Konsol'daki düzey. Rutin kayıtlar (açılış, 7zz çalıştırmaları, sürükleme adımları) `.info`: Konsol onları ancak
+        /// "Bilgi İletilerini Dahil Et" açıkken gösterir, macOS da kalıcı olarak saklamaz. Hatalar ve uyarılar `.error`.
+        /// Uygulamanın Günlük penceresi ve dosyası düzeyden bağımsız olarak her kaydı tutar.
+        var osLogType: OSLogType { self == .info ? .info : .error }
     }
 
     public enum Category: String, Sendable, CaseIterable {
