@@ -16,6 +16,14 @@
 - ⬜ **Remaining:** Zstandard (`.zst` and `.tar.zst`) creation is currently **blocked upstream**: the official 7-Zip `7zz` (26.04) extracts `.zst` / `.tzst` (`K` flag in `7zz i`) but does not implement `zstd` archive creation (`7zz a -tzstd` fails with `E_NOTIMPL`).
 - **Next steps:** Offer `.zst` and `.tar.zst` in `ArchiveFormat` (`Sources/ArhivarCore/ArchiveOptions.swift`) once upstream `7zz` enables `C` (Create) support for `zstd`, or dynamically when the active engine reports `zstd` creation capability. `.tar.zst` will directly reuse `SevenZipCommand.tarStage` and `compressTarStage`.
 
+### Distribution
+
+#### 2. ⬜ [Medium] Developer ID Signing & Notarization (blocked: needs a paid Apple Developer Program membership)
+- **Status:** ⬜ Not started. Releases are ad-hoc signed; on another Mac Gatekeeper requires **Open Anyway** (or `xattr -dr com.apple.quarantine /Applications/Arhivar.app`) on first launch. The free Xcode Personal Team only issues an "Apple Development" certificate: Gatekeeper treats a downloaded app signed with it like an ad-hoc one, and it cannot be notarized. A "Developer ID Application" certificate is required.
+- **Already in place:** `build_app.sh` accepts `SIGN_IDENTITY="Developer ID Application: …"` and then signs `7zz`, the Quick Look extension and the app with `--options runtime --timestamp`.
+- ⬜ **Prerequisite — in-app 7-Zip updater must stop modifying the app bundle:** when run from inside the app, `Scripts/update-7zip.sh` writes the new `7zz` into `Arhivar.app/Contents/MacOS/` and ad-hoc re-signs both `7zz` and the app bundle (`codesign --force --sign -`). On a Developer ID signed, notarized app this breaks the signature and the notarization seal. Before switching, the in-app updater must write only to the fallback folder `~/Library/Application Support/Arhivar/engine` (already searched by `EngineLocator`, where the newest version wins) and never touch the bundle; the bundled `7zz` is then updated only by shipping a new release.
+- ⬜ **Remaining:** notarize in `package.sh` / `release.sh` (`xcrun notarytool submit --wait`, then `xcrun stapler staple`) before computing `SHA256SUMS.txt` and the Ed25519 `.dmg.sig`; verify with `codesign --verify --deep --strict` and `spctl -a -vv`; update the README installation steps and the release notes footer in `release.sh`.
+
 ---
 
 ## Done
