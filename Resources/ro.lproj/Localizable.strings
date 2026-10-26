@@ -132,6 +132,7 @@
 "errorTitle" = "A apărut o problemă";
 "warningTitle" = "Finalizat cu avertismente";
 "errorEngineNotFound" = "Programul 7zz nu a putut fi găsit sau pornit.";
+"errorSandboxUnavailable" = "Motorul 7-Zip nu a putut fi rulat izolat (/usr/bin/sandbox-exec nu poate fi folosit). În loc să-l ruleze neprotejat, Arhivar a oprit operația. Pentru a-l rula totuși, dezactivați „%2$@” în Configurări › %1$@.";
 "errorEngineTimeout" = "7zz nu a răspuns la timp. Este posibil ca macOS să-l blocheze; permite-l în Configurări sistem › Confidențialitate și securitate.";
 "errorCancelled" = "Operațiunea a fost anulată.";
 "errorWrongPassword" = "Parola este greșită.";

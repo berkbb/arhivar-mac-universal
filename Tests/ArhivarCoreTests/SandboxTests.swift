@@ -83,3 +83,27 @@ func sandboxedEngineWritesOnlyWhereAllowed() async throws {
     try SevenZipError.check(listed)
     #expect(ListingParser.parse(listed.stdout).entries.contains { $0.path == "kaynak/a.txt" })
 }
+
+/// Kum havuzu istenip sandbox-exec çalıştırılamıyorsa program korumasız başlatılmaz (eskiden sessizce doğrudan
+/// çalışırdı). Kullanıcı kum havuzunu ayarlardan kapattıysa (profil yok) program her zamanki gibi çalışır.
+@Test func missingSandboxLauncherFailsClosed() async throws {
+    let folder = FileManager.default.temporaryDirectory.appendingPathComponent("ArhivarSandboxClosed-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let marker = folder.appendingPathComponent("calisti")
+    let touch = URL(fileURLWithPath: "/usr/bin/touch")
+    let missing = folder.appendingPathComponent("sandbox-exec-yok")
+    let profile = SandboxProfile.forOperation(archive: folder.appendingPathComponent("a.zip"), writable: [folder])
+
+    let confined = CommandRunner(executableURL: touch, sandbox: nil, sandboxLauncher: missing).sandboxed(profile)
+    #expect(confined.sandbox != nil)
+    await #expect(throws: SevenZipError.sandboxUnavailable) { try await confined.run([marker.path]) }
+    #expect(!FileManager.default.fileExists(atPath: marker.path))
+    #expect(AppLog.shared.entries.contains { $0.level == .error && $0.message.hasPrefix("touch: 7zz was not started because its sandbox") })
+
+    // Kum havuzu kapalı: profil yok, program çalışır.
+    let open = CommandRunner(executableURL: touch, sandbox: nil, sandboxLauncher: missing).sandboxed(nil)
+    #expect(open.sandbox == nil)
+    #expect(try await open.run([marker.path]).exitCode == 0)
+    #expect(FileManager.default.fileExists(atPath: marker.path))
+}

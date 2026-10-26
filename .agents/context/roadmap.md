@@ -5,6 +5,8 @@
 
 **Status legend:** ✅ Done · 🟡 Partially done · ⬜ Open.
 
+**Security findings** are no longer recorded here: they are tracked privately as draft GitHub Security Advisories (Security › Advisories) and published with the release that fixes them. This file keeps feature plans and non-security limitations.
+
 ---
 
 ## Open / In Progress
@@ -80,7 +82,8 @@ A deterministic seeded fuzz suite (`FuzzTests.swift`) was added over all pure pa
 - **Location:** `Sources/ArhivarCore/StagedExtraction.swift`
 
 #### S6. ⬜ [P3] Lower priority ideas (reported by the audit, not verified)
-- **Critic-only ideas (unverified):** self-update URL host validation, hardlink *entries inside* an archive on extraction, localization format-string validator gaps, listing TOCTOU between open and operation, and silent fail-open when `sandbox-exec` is unavailable. Tracked for future tests.
+- **Critic-only ideas (unverified):** hardlink *entries inside* an archive on extraction, localization format-string validator gaps, and listing TOCTOU between open and operation. Tracked for future tests.
+- **Resolved after verification (2026-10-26):** the `sandbox-exec` fallback and the update-check address handling; see `CHANGELOG.md` (Unreleased › Security).
 - **Location:** n/a (design notes)
 
 #### S7. ✅ [P1] Archive Opened Through a Symlink Propagated No Quarantine

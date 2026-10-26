@@ -296,6 +296,7 @@ extension AppLog {
             case .cancelled: ("cancelled", nil)
             case .wrongPassword: ("wrong or missing password", nil)
             case .notArchive: ("not an archive", nil)
+            case .sandboxUnavailable: ("7zz was not started because its sandbox (sandbox-exec) cannot be run", nil)
             }
         case let error as InsufficientSpaceError:
             ("not enough disk space (required \(error.required) bytes, available \(error.available) bytes)", nil)

@@ -30,24 +30,47 @@ public enum AppUpdateChecker {
     }
 
     /// GitHub API yanıtını okur. Taslak ve ön sürümler yok sayılır.
-    public static func parse(_ data: Data) throws -> AppRelease {
+    ///
+    /// "İndir" bağlantısı `NSWorkspace` ile açıldığı için sayfa ve indirme adresi yalnızca bu deponun GitHub sürümlerini
+    /// gösterebilir (`https://github.com/<depo>/releases/…`). Yanıttaki başka bir site, `file://` ya da bir uygulamayı
+    /// açan özel URL şeması kabul edilmez: sayfa geçersizse yanıt reddedilir, indirme adresi geçersizse sayfa açılır.
+    public static func parse(_ data: Data, repository: String) throws -> AppRelease {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let tag = object["tag_name"] as? String,
               let page = (object["html_url"] as? String).flatMap(URL.init(string:)),
               object["draft"] as? Bool != true, object["prerelease"] as? Bool != true else {
             throw CheckError.invalidData
         }
+        guard isReleaseURL(page, repository: repository, download: false) else {
+            AppLog.shared.warning(.update, "Ignored a release page outside the GitHub releases of \(repository)", detail: page.absoluteString)
+            throw CheckError.invalidData
+        }
         let assets = (object["assets"] as? [[String: Any]]) ?? []
         func asset(withSuffix suffix: String) -> URL? {
-            assets.first { ($0["name"] as? String)?.lowercased().hasSuffix(suffix) == true }
-                .flatMap { $0["browser_download_url"] as? String }
-                .flatMap(URL.init(string:))
+            guard let url = assets.first(where: { ($0["name"] as? String)?.lowercased().hasSuffix(suffix) == true })
+                .flatMap({ $0["browser_download_url"] as? String })
+                .flatMap(URL.init(string:)) else { return nil }
+            guard isReleaseURL(url, repository: repository, download: true) else {
+                AppLog.shared.warning(.update, "Ignored a download address outside the GitHub releases of \(repository)", detail: url.absoluteString)
+                return nil
+            }
+            return url
         }
         return AppRelease(
             version: normalizedVersion(tag),
             pageURL: page,
             downloadURL: asset(withSuffix: ".dmg") ?? asset(withSuffix: ".zip")
         )
+    }
+
+    /// Adres bu deponun GitHub sürümlerinden biri mi? Yalnızca `https`, ana makine tam olarak `github.com` (kullanıcı adı,
+    /// parola, başka bağlantı noktası yok) ve yol `/<depo>/releases/` (indirmede `/<depo>/releases/download/`) ile başlar;
+    /// ".." bileşenleri önce çözülür.
+    static func isReleaseURL(_ url: URL, repository: String, download: Bool) -> Bool {
+        guard url.scheme?.lowercased() == "https", url.host?.lowercased() == "github.com",
+              url.user == nil, url.password == nil, url.port == nil || url.port == 443 else { return false }
+        let prefix = "/" + repository.lowercased() + (download ? "/releases/download/" : "/releases/")
+        return url.standardized.path.lowercased().hasPrefix(prefix)
     }
 
     /// "v1.2.3" → "1.2.3"
@@ -78,7 +101,7 @@ public enum AppUpdateChecker {
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         if status == 404 { throw CheckError.noReleases }
         guard (200..<300).contains(status) else { throw CheckError.badResponse(status) }
-        return try parse(data)
+        return try parse(data, repository: repository)
     }
 }
 

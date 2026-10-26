@@ -132,6 +132,7 @@
 "errorTitle" = "Bir sorun oluştu";
 "warningTitle" = "Uyarılarla tamamlandı";
 "errorEngineNotFound" = "7zz programı bulunamadı ya da başlatılamadı.";
+"errorSandboxUnavailable" = "7-Zip motoru yalıtılmış olarak çalıştırılamadı (/usr/bin/sandbox-exec kullanılamıyor). Arhivar, motoru korumasız çalıştırmak yerine işlemi durdurdu. Yine de çalıştırmak isterseniz Ayarlar › %1$@ bölümünde “%2$@” seçeneğini kapatın.";
 "errorEngineTimeout" = "7zz zamanında yanıt vermedi. macOS onu engelliyor olabilir; Sistem Ayarları › Gizlilik ve Güvenlik bölümünden izin verin.";
 "errorCancelled" = "İşlem iptal edildi.";
 "errorWrongPassword" = "Parola yanlış.";

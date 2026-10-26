@@ -20,6 +20,8 @@ public enum SevenZipError: Error, Equatable, Sendable {
     case cancelled
     case wrongPassword
     case notArchive
+    /// Kum havuzu istendi ama `sandbox-exec` çalıştırılamıyor: 7zz korumasız başlatılmadı.
+    case sandboxUnavailable
     case failed(code: Int32, message: String)
 
     /// 7zz sonucunu sınıflandırır. Başarıda, varsa uyarı metnini döndürür.
@@ -136,10 +138,17 @@ public struct CommandRunner: Sendable {
     public let executableURL: URL
     /// Doluysa program sandbox-exec altında bu kurallarla çalıştırılır.
     public let sandbox: SandboxProfile?
+    /// Kum havuzu başlatıcısı (`/usr/bin/sandbox-exec`); testler çalıştırılamayan bir yol verebilir.
+    let sandboxLauncher: URL
 
     public init(executableURL: URL, sandbox: SandboxProfile? = nil) {
+        self.init(executableURL: executableURL, sandbox: sandbox, sandboxLauncher: SandboxProfile.launcher)
+    }
+
+    init(executableURL: URL, sandbox: SandboxProfile?, sandboxLauncher: URL) {
         self.executableURL = executableURL
         self.sandbox = sandbox
+        self.sandboxLauncher = sandboxLauncher
     }
 
     /// Süreci çalıştırır. Sıfırdan farklı çıkış kodu hata sayılmaz; sınıflandırma çağırana aittir.
@@ -199,10 +208,12 @@ public struct CommandRunner: Sendable {
         let fitted = try ItemListFile.fitting(arguments)
         defer { fitted.remove() }
         let launch: (URL, [String])
-        if var sandbox, SandboxProfile.isAvailable {
+        if var sandbox {
+            // Kum havuzu istenip uygulanamıyorsa 7zz korumasız başlatılmaz: kullanıcı ayarı kapatmadıkça yalıtım hep vardır.
+            guard FileManager.default.isExecutableFile(atPath: sandboxLauncher.path) else { throw SevenZipError.sandboxUnavailable }
             // Geçici klasör yasaklı bir kişisel klasörün içinde olsa da 7zz liste dosyasını okuyabilsin.
             if let list = fitted.listFile { sandbox.readableFiles.append(SandboxProfile.resolved(list)) }
-            launch = (SandboxProfile.launcher, sandbox.launchArguments(executable: executableURL, arguments: fitted.arguments))
+            launch = (sandboxLauncher, sandbox.launchArguments(executable: executableURL, arguments: fitted.arguments))
         } else {
             launch = (executableURL, fitted.arguments)
         }

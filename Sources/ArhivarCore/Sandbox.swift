@@ -180,9 +180,10 @@ public struct SandboxProfile: Sendable, Equatable {
 }
 
 extension CommandRunner {
-    /// Bu çalıştırıcının kum havuzunda çalışan kopyası (sandbox-exec yoksa olduğu gibi döner).
+    /// Bu çalıştırıcının kum havuzunda çalışan kopyası. sandbox-exec çalıştırılamıyorsa çalıştırma
+    /// `SevenZipError.sandboxUnavailable` ile durur; 7zz korumasız başlatılmaz.
     public func sandboxed(_ profile: SandboxProfile?) -> CommandRunner {
-        guard let profile, SandboxProfile.isAvailable else { return self }
-        return CommandRunner(executableURL: executableURL, sandbox: profile)
+        guard let profile else { return self }
+        return CommandRunner(executableURL: executableURL, sandbox: profile, sandboxLauncher: sandboxLauncher)
     }
 }

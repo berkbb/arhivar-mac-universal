@@ -132,6 +132,7 @@
 "errorTitle" = "Something went wrong";
 "warningTitle" = "Finished with warnings";
 "errorEngineNotFound" = "The 7zz program could not be found or started.";
+"errorSandboxUnavailable" = "The 7-Zip engine could not be run in its sandbox (/usr/bin/sandbox-exec cannot be used). Instead of running it unprotected, Arhivar stopped the operation. To run it anyway, turn off “%2$@” in Settings › %1$@.";
 "errorEngineTimeout" = "7zz did not respond in time. macOS may be blocking it; allow it in System Settings › Privacy & Security.";
 "errorCancelled" = "The operation was cancelled.";
 "errorWrongPassword" = "The password is wrong.";

@@ -98,7 +98,7 @@ public enum LKey: String, CaseIterable, Sendable {
     case toastExtracted, toastCreated, toastTestPassed
     case passwordTitle, passwordMessage, passwordWrong
     case errorTitle, warningTitle, errorEngineNotFound, errorEngineTimeout, errorCancelled
-    case errorWrongPassword, errorNotArchive, errorFailed
+    case errorWrongPassword, errorNotArchive, errorFailed, errorSandboxUnavailable
     case settingsGeneral, settingsCompression, settingsAdvanced, settingsShortcuts, settingsLanguage, settingsLanguageNote, languageSystem
     case restartWarningTitle, restartMenuBarNotice
     case shortcutQuickLookSection, shortcutQuickLookTrigger, shortcutQuickLookBoth, shortcutQuickLookSpaceOnly, shortcutQuickLookCmdYOnly, shortcutQuickLookFooter

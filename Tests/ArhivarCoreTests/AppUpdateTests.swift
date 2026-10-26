@@ -3,39 +3,83 @@ import Foundation
 import Testing
 @testable import ArhivarCore
 
-private func releaseJSON(tag: String, draft: Bool = false, prerelease: Bool = false, assets: [String]) -> Data {
+private let repository = "berkbb/arhivar-mac-universal"
+
+private func releaseJSON(
+    tag: String, draft: Bool = false, prerelease: Bool = false, assets: [String], page: String? = nil, download: String? = nil
+) -> Data {
     let assetObjects = assets.map {
-        ["name": $0, "browser_download_url": "https://github.com/berkbb/arhivar-mac-universal/releases/download/\(tag)/\($0)"]
+        ["name": $0, "browser_download_url": download ?? "https://github.com/\(repository)/releases/download/\(tag)/\($0)"]
     }
     let object: [String: Any] = [
-        "tag_name": tag, "html_url": "https://github.com/berkbb/arhivar-mac-universal/releases/tag/\(tag)",
+        "tag_name": tag, "html_url": page ?? "https://github.com/\(repository)/releases/tag/\(tag)",
         "draft": draft, "prerelease": prerelease, "assets": assetObjects,
     ]
     return try! JSONSerialization.data(withJSONObject: object)
 }
 
 @Test func parsesLatestRelease() throws {
-    let release = try AppUpdateChecker.parse(releaseJSON(tag: "v1.2.0", assets: ["Arhivar-1.2.0.zip", "Arhivar-1.2.0.dmg", "Arhivar-1.2.0.sha256"]))
+    let release = try AppUpdateChecker.parse(releaseJSON(tag: "v1.2.0", assets: ["Arhivar-1.2.0.zip", "Arhivar-1.2.0.dmg", "Arhivar-1.2.0.sha256"]), repository: repository)
     #expect(release.version == "1.2.0")
     #expect(release.pageURL.absoluteString.hasSuffix("/releases/tag/v1.2.0"))
     // .dmg tercih edilir.
     #expect(release.downloadURL?.lastPathComponent == "Arhivar-1.2.0.dmg")
 
-    let zipOnly = try AppUpdateChecker.parse(releaseJSON(tag: "1.3.0", assets: ["Arhivar-1.3.0.zip"]))
+    let zipOnly = try AppUpdateChecker.parse(releaseJSON(tag: "1.3.0", assets: ["Arhivar-1.3.0.zip"]), repository: repository)
     #expect(zipOnly.downloadURL?.lastPathComponent == "Arhivar-1.3.0.zip")
-    #expect(try AppUpdateChecker.parse(releaseJSON(tag: "v2.0.0", assets: [])).downloadURL == nil)
+    #expect(try AppUpdateChecker.parse(releaseJSON(tag: "v2.0.0", assets: []), repository: repository).downloadURL == nil)
 }
 
 @Test func ignoresDraftsPrereleasesAndGarbage() {
     #expect(throws: AppUpdateChecker.CheckError.invalidData) {
-        try AppUpdateChecker.parse(releaseJSON(tag: "v9.0.0", draft: true, assets: []))
+        try AppUpdateChecker.parse(releaseJSON(tag: "v9.0.0", draft: true, assets: []), repository: repository)
     }
     #expect(throws: AppUpdateChecker.CheckError.invalidData) {
-        try AppUpdateChecker.parse(releaseJSON(tag: "v9.0.0-beta", prerelease: true, assets: []))
+        try AppUpdateChecker.parse(releaseJSON(tag: "v9.0.0-beta", prerelease: true, assets: []), repository: repository)
     }
     #expect(throws: AppUpdateChecker.CheckError.invalidData) {
-        try AppUpdateChecker.parse(Data("{\"message\":\"Not Found\"}".utf8))
+        try AppUpdateChecker.parse(Data("{\"message\":\"Not Found\"}".utf8), repository: repository)
     }
+}
+
+/// "İndir" bağlantısı NSWorkspace ile açılır: yanıttaki sayfa ve indirme adresi yalnızca bu deponun GitHub sürümlerini
+/// gösterebilir. Başka site, http, file:// ya da özel URL şeması, başka depo, kullanıcı adı hilesi ve ".." kabul edilmez.
+@Test func rejectsReleaseAddressesOutsideTheRepository() throws {
+    let badPages = [
+        "https://evil.example/berkbb/arhivar-mac-universal/releases/tag/v9.0.0",
+        "http://github.com/berkbb/arhivar-mac-universal/releases/tag/v9.0.0",
+        "file:///Applications/Calculator.app",
+        "x-apple.systempreferences:com.apple.preference.security",
+        "https://github.com.evil.example/berkbb/arhivar-mac-universal/releases/tag/v9.0.0",
+        "https://github.com@evil.example/berkbb/arhivar-mac-universal/releases/tag/v9.0.0",
+        "https://github.com:8443/berkbb/arhivar-mac-universal/releases/tag/v9.0.0",
+        "https://github.com/attacker/arhivar-mac-universal/releases/tag/v9.0.0",
+        "https://github.com/berkbb/arhivar-mac-universal/releases/../../../attacker/repo/releases/tag/v9.0.0",
+    ]
+    for page in badPages {
+        #expect(throws: AppUpdateChecker.CheckError.invalidData, "\(page)") {
+            try AppUpdateChecker.parse(releaseJSON(tag: "v9.0.0", assets: ["Arhivar-9.0.0.dmg"], page: page), repository: repository)
+        }
+    }
+    let badDownloads = [
+        "https://evil.example/Arhivar-9.0.0.dmg",
+        "file:///Applications/Calculator.app",
+        "https://github.com/attacker/repo/releases/download/v9.0.0/Arhivar-9.0.0.dmg",
+        "https://github.com/berkbb/arhivar-mac-universal/releases/tag/v9.0.0",
+        "https://github.com/berkbb/arhivar-mac-universal/releases/download/../../../../attacker/x.dmg",
+    ]
+    for download in badDownloads {
+        let release = try AppUpdateChecker.parse(releaseJSON(tag: "v9.0.0", assets: ["Arhivar-9.0.0.dmg"], download: download), repository: repository)
+        #expect(release.downloadURL == nil, "\(download)")
+        #expect(release.pageURL.absoluteString == "https://github.com/berkbb/arhivar-mac-universal/releases/tag/v9.0.0")
+    }
+    // GitHub depo adlarında büyük/küçük harf ayırmaz.
+    let mixedCase = try AppUpdateChecker.parse(releaseJSON(
+        tag: "v9.0.0", assets: ["Arhivar-9.0.0.dmg"],
+        page: "https://github.com/BerkBB/Arhivar-Mac-Universal/releases/tag/v9.0.0",
+        download: "https://GitHub.com/BerkBB/Arhivar-Mac-Universal/releases/download/v9.0.0/Arhivar-9.0.0.dmg"
+    ), repository: repository)
+    #expect(mixedCase.downloadURL?.lastPathComponent == "Arhivar-9.0.0.dmg")
 }
 
 @Test func comparesAppVersions() {

@@ -1919,6 +1919,7 @@ final class AppModel {
         guard let error = error as? SevenZipError else { return error.localizedDescription }
         switch error {
         case .engineNotFound: return t(.errorEngineNotFound)
+        case .sandboxUnavailable: return t(.errorSandboxUnavailable, t(.settingsAdvanced), t(.settingsSandbox))
         case .timedOut: return t(.errorEngineTimeout)
         case .cancelled: return t(.errorCancelled)
         case .wrongPassword: return t(.errorWrongPassword)
