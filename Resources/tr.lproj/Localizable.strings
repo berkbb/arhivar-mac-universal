@@ -311,3 +311,29 @@
 "qlEncryptedHeadersTitle" = "Parola Korumalı Arşiv";
 "qlEncryptedHeadersMessage" = "Bu arşiv parola ile korunuyor; dosyaları burada gösterilmez.\nİçeriği görüntülemek için arşivi Arhivar ile açın.";
 "qlErrorTitle" = "Arşiv Okunamadı";
+
+/* Günlük */
+"menuShowLog" = "Günlüğü Göster";
+"logTitle" = "Günlük";
+"logMessageCount" = "İleti: %ld";
+"logAllMessages" = "Tüm İletiler";
+"logProblems" = "Hatalar ve Sorunlar";
+"logSearchPrompt" = "Günlükte ara";
+"logClear" = "Temizle";
+"logOpenInConsole" = "Konsol'da Aç";
+"logEmptyTitle" = "İleti Yok";
+"logEmptyMessage" = "Hatalar, 7zz çalıştırmaları ve sürükle-bırak adımları burada görünür. Konsol uygulamasında da “%@” alt sistemiyle izlenebilir.";
+"logSelectHint" = "Ayrıntısını görmek için bir ileti seçin.";
+"logColumnTime" = "Saat";
+"logColumnType" = "Tür";
+"logColumnCategory" = "Kategori";
+"logColumnProcess" = "Süreç";
+"logColumnMessage" = "İleti";
+"logLevelInfo" = "Bilgi";
+"logLevelWarning" = "Uyarı";
+"logLevelError" = "Hata";
+"logCategoryApp" = "Uygulama";
+"logCategoryEngine" = "Motor";
+"logCategoryArchive" = "Arşiv";
+"logCategoryDrag" = "Sürükle-bırak";
+"logCategoryUpdate" = "Güncelleme";

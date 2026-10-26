@@ -5,6 +5,14 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ## [Unreleased]
 
+### Added
+
+- A Console-style **Log** window (Window › Show Log, ⌥⌘L). It lists errors, every 7-Zip run (command, exit code, duration) and each drag-and-drop step, with "All Messages" / "Errors and Problems" tabs, search, a detail pane, Copy, Clear, Show in Finder and Open in Console. Entries are also written to `~/Library/Logs/Arhivar/Arhivar.log` (user-only, rotated at 1 MiB), so the previous session can still be read after the app was quit, and mirrored live to the macOS Console app under the `net.babadogan.arhivar` subsystem. Console shows the summary openly; details that may contain file names (7-Zip messages, alert text) stay `<private>` there and are visible only in the app and the log file. Passwords are never logged.
+
+### Fixed
+
+- Dragging items one by one into another app (for example images into Microsoft Word) no longer stops working after a few drops until Arhivar is restarted. The item used to be extracted only when the target app asked for the file during the drop, and SwiftUI answers that request by blocking Arhivar's main thread, so 7-Zip ran in the middle of the drag-and-drop exchange. Extraction now starts as soon as the drag begins (`DragBatch.prefetch`), so the file is usually ready before the drop and the request is answered at once. Selections larger than 512 MiB still wait for the drop, so a cancelled drag does not fill the disk. If this early extraction fails, the error is shown only when the items are actually dropped somewhere.
+
 ## [1.4.4] — 2026-10-23
 
 ### Fixed

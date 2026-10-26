@@ -33,6 +33,15 @@ struct ArhivarApp: App {
         .restorationBehavior(.disabled)
         .commandsRemoved()
 
+        // Konsol benzeri günlük; Pencere menüsündeki "Günlüğü Göster" (⌥⌘L) ile açılır.
+        Window(settings.t(.logTitle), id: WindowID.log) {
+            LogView(store: LogStore.shared)
+                .environment(settings)
+        }
+        .defaultSize(width: 960, height: 560)
+        .restorationBehavior(.disabled)
+        .commandsRemoved()
+
         Settings {
             SettingsView()
                 .environment(model)
@@ -251,6 +260,12 @@ struct AppCommands: Commands {
                 .keyboardShortcut("1")
             Button(settings.t(.viewTree)) { model.browserMode = .tree }
                 .keyboardShortcut("2")
+            Divider()
+        }
+
+        CommandGroup(before: .windowList) {
+            Button(settings.t(.menuShowLog)) { openWindow(id: WindowID.log) }
+                .keyboardShortcut("l", modifiers: [.command, .option])
             Divider()
         }
 

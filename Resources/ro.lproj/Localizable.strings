@@ -311,3 +311,29 @@
 "qlEncryptedHeadersTitle" = "Arhivă protejată prin parolă";
 "qlEncryptedHeadersMessage" = "Această arhivă este protejată prin parolă; fișierele ei nu sunt afișate aici.\nDeschideți arhiva în Arhivar pentru a-i vedea conținutul.";
 "qlErrorTitle" = "Arhiva nu a putut fi citită";
+
+/* Jurnal */
+"menuShowLog" = "Afișează jurnalul";
+"logTitle" = "Jurnal";
+"logMessageCount" = "Mesaje: %ld";
+"logAllMessages" = "Toate mesajele";
+"logProblems" = "Erori și probleme";
+"logSearchPrompt" = "Caută în jurnal";
+"logClear" = "Golește";
+"logOpenInConsole" = "Deschide în Consolă";
+"logEmptyTitle" = "Niciun mesaj";
+"logEmptyMessage" = "Erorile, rulările 7zz și pașii de glisare și plasare apar aici. Pot fi urmărite și în aplicația Consolă, la subsistemul „%@”.";
+"logSelectHint" = "Selectați un mesaj pentru a-i vedea detaliile.";
+"logColumnTime" = "Ora";
+"logColumnType" = "Tip";
+"logColumnCategory" = "Categorie";
+"logColumnProcess" = "Proces";
+"logColumnMessage" = "Mesaj";
+"logLevelInfo" = "Informație";
+"logLevelWarning" = "Avertisment";
+"logLevelError" = "Eroare";
+"logCategoryApp" = "Aplicație";
+"logCategoryEngine" = "Motor";
+"logCategoryArchive" = "Arhivă";
+"logCategoryDrag" = "Glisare și plasare";
+"logCategoryUpdate" = "Actualizare";

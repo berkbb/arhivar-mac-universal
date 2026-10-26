@@ -13,7 +13,7 @@ A native archive manager for macOS 26+, built with SwiftUI and Liquid Glass on t
   - Tree view; switch between views with ⌘1 and ⌘2
   - Sorting, search, Finder icons, status bar, archive info
 - **Quick Look:** press Space
-- **Drag to Finder:** a file or folder is extracted the moment it is dropped
+- **Drag out:** drag files or folders (one or a whole ⌘A selection) to Finder, the Desktop or another app such as Word; extraction starts as soon as the drag begins, so the files are ready when you drop them
 - **Open:** 7z, ZIP, RAR, TAR, GZ, XZ, ISO, DMG and every other format 7-Zip can read
 - **Create:** 7z, ZIP, TAR, WIM, GZIP, BZIP2, XZ; compression level, AES-256, file name encryption, split volumes
 - **Edit (7z, ZIP, TAR, WIM):** add files (including drag and drop), delete, rename
@@ -21,7 +21,7 @@ A native archive manager for macOS 26+, built with SwiftUI and Liquid Glass on t
 - **Document icons:** when Arhivar is the default app for a type, archives get Arhivar icons (ZIP, 7Z, RAR, TAR family, disk images, other archives)
 - **Languages:** Turkish (default), English, Romanian
 - **Appearance:** Automatic, Light, Dark
-- **Windows:** Settings and About
+- **Windows:** Settings, About and a Console-style Log (⌥⌘L) that also mirrors to the macOS Console app
 - **7-Zip updater:** downloads from [github.com/ip7z/7zip](https://github.com/ip7z/7zip/releases), verifies with SHA-256, and updates the 7-Zip copy in the project and inside the app.
 
 ## Installation

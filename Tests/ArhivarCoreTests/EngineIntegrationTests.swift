@@ -197,6 +197,85 @@ struct EngineIntegrationTests {
         #expect(failures.calls.count == 1)
     }
 
+    /// Word'e art arda tek tek sürüklenen resimlerden birkaçından sonra sürükleme duruyordu: dosya bırakılınca
+    /// isteniyor, SwiftUI isteği ana iş parçacığını durdurarak yanıtlıyor, 7zz o anda çalışıyordu. Çıkarma sürükleme
+    /// başlarken başlamalı; bırakma isteği hazır dosyayı yeni bir 7zz çalıştırmadan, beklemeden almalı. Çok büyük
+    /// seçimler önceden çıkarılmaz; önceden başlayan çıkarmanın hatası ancak bir bırakma isteğinde (bir kez) bildirilir.
+    @Test func dragBatchExtractsBeforeTheDrop() async throws {
+        defer { try? FileManager.default.removeItem(at: workspace) }
+        try "ek\n".write(to: workspace.appendingPathComponent("kaynak/ek.txt"), atomically: true, encoding: .utf8)
+        let archive = workspace.appendingPathComponent("surukle.7z")
+        try SevenZipError.check(try await runner.run(SevenZipCommand.create(CreateOptions(
+            sources: [workspace.appendingPathComponent("kaynak")], destination: archive, format: .sevenZip, level: .fast
+        ))))
+        let session = workspace.appendingPathComponent("oturum", isDirectory: true)
+        try FileManager.default.createDirectory(at: session, withIntermediateDirectories: true)
+        let extractor = ItemExtractor(runner: runner, archive: archive, password: nil, root: session)
+        let log = AppLog(directory: nil)
+        let requested = PathsBox()
+        let failures = PathsBox()
+        let batch = DragBatch(extractor: extractor, requiredBytes: { paths in
+            requested.append(paths)
+            return 16
+        }, onFailure: { failures.append(["\($0)"]) }, log: log)
+        batch.add("kaynak/not.txt")
+        batch.add("kaynak/ek.txt")
+        #expect(batch.prefetch())
+        #expect(batch.hasStarted)
+        #expect(!batch.prefetch())
+        #expect(!batch.add("kaynak/alt"))
+
+        // Bırakma isteği gelmeden dosyalar diske çıkar.
+        let extracted = try await waitFor(log, "extracted 2 item(s)")
+        #expect(extracted.category == .drag)
+        let folders = try FileManager.default.contentsOfDirectory(atPath: session.path)
+        #expect(folders.count == 1)
+        #expect(FileManager.default.fileExists(atPath: session.appendingPathComponent(folders[0]).appendingPathComponent("kaynak/ek.txt").path))
+
+        let clock = ContinuousClock.now
+        let note = try await batch.url(for: "kaynak/not.txt")
+        let extra = try await batch.url(for: "kaynak/ek.txt")
+        #expect(ContinuousClock.now - clock < .milliseconds(200))
+        #expect(try String(contentsOf: note, encoding: .utf8) == "merhaba dünya\n")
+        #expect(try String(contentsOf: extra, encoding: .utf8) == "ek\n")
+        // Önceden başlayan çıkarma tek 7zz çalıştırmasıydı; istekler yenisini başlatmadı.
+        #expect(try FileManager.default.contentsOfDirectory(atPath: session.path).count == 1)
+        #expect(requested.calls.filter { $0 == ["kaynak/not.txt", "kaynak/ek.txt"] }.count == 2)
+        #expect(log.entries.contains { $0.message.contains("extracting before the drop") })
+        #expect(log.entries.filter { $0.message.contains("drop target requested") }.count == 1)
+        #expect(!log.entries.contains { $0.level.isProblem })
+        #expect(failures.calls.isEmpty)
+
+        // Çok büyük seçim: bırakma isteği gelene kadar çıkarılmaz.
+        let large = DragBatch(extractor: extractor, requiredBytes: { _ in DragBatch.prefetchLimit + 1 }, log: log)
+        large.add("kaynak/not.txt")
+        #expect(!large.prefetch())
+        #expect(!large.hasStarted)
+        #expect(log.entries.contains { $0.message.contains("extraction waits for the drop") })
+        #expect(try String(contentsOf: try await large.url(for: "kaynak/not.txt"), encoding: .utf8) == "merhaba dünya\n")
+
+        // Önceden başlayıp başarısız olan çıkarma: vazgeçilen bir sürükleme uyarı göstermez, bırakma isteği bir kez bildirir.
+        let broken = DragBatch(extractor: extractor, onFailure: { failures.append(["\($0)"]) }, log: log)
+        broken.add("kaynak/yok.txt")
+        #expect(broken.prefetch())
+        let failed = try await waitFor(log, "extraction 7zz failed")
+        #expect(failed.level == .error)
+        #expect(failures.calls.isEmpty)
+        await #expect(throws: (any Error).self) { try await broken.url(for: "kaynak/yok.txt") }
+        await #expect(throws: (any Error).self) { try await broken.url(for: "kaynak/yok.txt") }
+        #expect(failures.calls.count == 1)
+    }
+
+    /// Günlükte iletisi `text` içeren kaydı bekler (en çok 20 sn).
+    private func waitFor(_ log: AppLog, _ text: String) async throws -> AppLog.Entry {
+        for _ in 0..<400 {
+            if let entry = log.entries.first(where: { $0.message.contains(text) }) { return entry }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        Issue.record("Günlükte bulunamadı: \(text)")
+        throw CancellationError()
+    }
+
     private func listPaths(_ archive: URL) async throws -> [String] {
         let result = try await runner.run(SevenZipCommand.list(archive: archive))
         try SevenZipError.check(result)

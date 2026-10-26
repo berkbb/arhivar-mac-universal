@@ -397,15 +397,24 @@ public struct ItemExtractor: Sendable {
     }
 }
 
-/// Birlikte sürüklenen öğeler (ör. ⌘A ile seçilip Finder'a bırakılanlar). Finder öğeleri tek tek ister; ilk istekte
-/// hepsi tek 7zz çalıştırmasıyla çıkarılır, sonraki istekler aynı sonucu bekler. Katı bir arşiv öğe başına yeniden
-/// açılmaz, seçim büyüdükçe aynı anda onlarca 7zz süreci de başlamaz.
+/// Birlikte sürüklenen öğeler (ör. ⌘A ile seçilip Finder'a bırakılanlar). Hepsi tek 7zz çalıştırmasıyla çıkarılır,
+/// her istek aynı sonucu bekler. Katı bir arşiv öğe başına yeniden açılmaz, seçim büyüdükçe aynı anda onlarca 7zz
+/// süreci de başlamaz.
+///
+/// Çıkarma sürükleme başlarken başlar (`prefetch()`). Bırakılan uygulama (Finder, Word…) dosyayı ister; SwiftUI bu
+/// isteği uygulamanın ana iş parçacığını durdurarak yanıtlar. 7zz ancak o anda çalışsaydı uygulama sürükle-bırak
+/// görüşmesinin ortasında yüzlerce milisaniye (büyük öğelerde saniyelerce) donardı; Word'e art arda birkaç bırakmadan
+/// sonra sürükleme yeniden açılana kadar hiç başlamaz olabiliyordu. Dosyalar çoğunlukla bırakmadan önce hazırdır.
 public final class DragBatch: Sendable {
     private struct State {
         var paths: [String] = []
         /// Yolun `paths` içindeki sırası: binlerce öğeli bir sürüklemede her istek sabit sürede yanıtlanır.
         var index: [String: Int] = [:]
         var task: Task<[URL], any Error>?
+        /// İlk bırakma isteği günlüğe yazıldı mı?
+        var requested = false
+        /// Başarısızlık kullanıcıya bildirildi mi? (Bir kez.)
+        var reported = false
 
         mutating func insert(_ path: String) {
             guard index[path] == nil else { return }
@@ -414,20 +423,35 @@ public final class DragBatch: Sendable {
         }
     }
 
+    /// Sürükleme başlarken çıkarılacak en büyük toplam boyut. Daha büyük seçimler ilk bırakma isteğinde çıkarılır:
+    /// vazgeçilen bir sürükleme diski gigabaytlarca boşuna doldurmasın.
+    public static let prefetchLimit: Int64 = 512 << 20
+    /// Bırakma isteği bundan uzun beklerse (uygulama o sırada yanıt vermez) günlüğe uyarı yazılır.
+    static let slowRequest: Duration = .milliseconds(500)
+    /// Çıkarma sürdükçe bu aralıklarla günlüğe yazılır: takılan bir çıkarma Günlük penceresinde görünür.
+    static let watchdogInterval: Duration = .seconds(10)
+    private static let counter = Atomic<Int>(0)
+
     public let extractor: ItemExtractor
+    /// Günlükte sürüklemeleri birbirinden ayıran sıra numarası.
+    public let number: Int
     /// Çıkarılacak öğelerin (ham yollar) gerektirdiği alan; nil ise denetlenmez.
     private let requiredBytes: @Sendable ([String]) -> Int64?
-    /// Çıkarma iptal dışında bir nedenle başarısız olunca bir kez çağrılır: bırakma sessizce boşa gitmesin.
+    /// Bırakılan öğeler iptal dışında bir nedenle çıkarılamayınca bir kez çağrılır: bırakma sessizce boşa gitmesin.
+    /// Önceden başlayan çıkarmanın hatası ancak bir bırakma isteği gelince bildirilir; vazgeçilen sürükleme uyarı göstermez.
     private let onFailure: @Sendable (any Error) -> Void
+    private let log: AppLog
     private let state = Mutex(State())
 
     public init(
         extractor: ItemExtractor, requiredBytes: @escaping @Sendable ([String]) -> Int64? = { _ in nil },
-        onFailure: @escaping @Sendable (any Error) -> Void = { _ in }
+        onFailure: @escaping @Sendable (any Error) -> Void = { _ in }, log: AppLog = .shared
     ) {
         self.extractor = extractor
         self.requiredBytes = requiredBytes
         self.onFailure = onFailure
+        self.log = log
+        number = Self.counter.add(1, ordering: .relaxed).newValue
     }
 
     /// Öğeyi topluluğa ekler. Çıkarma başladıysa eklenmez (`false`): sonraki sürükleme yeni bir topluluk kurar.
@@ -445,31 +469,98 @@ public final class DragBatch: Sendable {
 
     public var hasStarted: Bool { state.withLock { $0.task != nil } }
 
-    /// Öğenin çıkarıldığı yer. İlk çağrı topluluğun tamamını çıkarır; sonrakiler aynı çıkarmayı bekler.
-    public func url(for path: String) async throws -> URL {
-        let (task, index) = state.withLock { state in
-            if let task = state.task { return (task, state.index[path]) }
-            state.insert(path)
-            let paths = state.paths
-            let task = Task { try await self.extract(paths) }
-            state.task = task
-            return (task, state.index[path])
+    /// Çıkarmayı hemen başlatır: sürükleme başlarken, sürüklenen satırların hepsi eklenince çağrılır. Seçim
+    /// `prefetchLimit`'ten büyükse ya da çıkarma zaten başladıysa başlatmaz (`false`).
+    @discardableResult
+    public func prefetch() -> Bool {
+        let paths = self.paths
+        guard !paths.isEmpty, !hasStarted else { return false }
+        if let size = requiredBytes(paths), size > Self.prefetchLimit {
+            log.info(.drag, "Drag #\(number) started with \(paths.count) item(s) (\(size) bytes): extraction waits for the drop")
+            return false
         }
-        let urls = try await task.value
-        // Çıkarma başladıktan sonra eklenmek istenen yol topluluğa girmez; kendi başına çıkarılır.
-        guard let index else { return try await extract([path])[0] }
-        return urls[index]
+        let started = state.withLock { state in
+            guard state.task == nil else { return false }
+            start(&state)
+            return true
+        }
+        if started { log.info(.drag, "Drag #\(number) started with \(paths.count) item(s): extracting before the drop") }
+        return started
+    }
+
+    /// Öğenin çıkarıldığı yer. Çıkarma başlamadıysa topluluğun tamamı şimdi çıkarılır; her istek aynı çıkarmayı bekler.
+    public func url(for path: String) async throws -> URL {
+        let clock = ContinuousClock.now
+        let (task, index, first, count) = state.withLock { state in
+            if state.task == nil {
+                state.insert(path)
+                start(&state)
+            }
+            defer { state.requested = true }
+            return (state.task!, state.index[path], !state.requested, state.paths.count)
+        }
+        if first { log.info(.drag, "Drag #\(number): drop target requested the files (\(count) item(s))") }
+        do {
+            let urls = try await task.value
+            let url: URL
+            if let index {
+                url = urls[index]
+            } else {
+                // Çıkarma başladıktan sonra eklenmek istenen yol topluluğa girmez; kendi başına çıkarılır.
+                url = try await extract([path])[0]
+            }
+            if ContinuousClock.now - clock > Self.slowRequest {
+                log.warning(.drag, "Drag #\(number): drop request waited \(AppLog.milliseconds(since: clock)) ms for the extraction")
+            }
+            return url
+        } catch {
+            report(error)
+            throw error
+        }
+    }
+
+    /// Topluluğun çıkarmasını başlatır (kilit altında çağrılır). Süre, sonuç ve uzun süren çıkarma günlüğe yazılır.
+    private func start(_ state: inout State) {
+        let paths = state.paths
+        let number = number
+        let log = log
+        state.task = Task {
+            let clock = ContinuousClock.now
+            let watchdog = Task {
+                var waited = Duration.zero
+                while true {
+                    try await Task.sleep(for: Self.watchdogInterval)
+                    waited += Self.watchdogInterval
+                    log.warning(.drag, "Drag #\(number): extraction of \(paths.count) item(s) still running after \(waited.components.seconds) s")
+                }
+            }
+            defer { watchdog.cancel() }
+            do {
+                let urls = try await self.extract(paths)
+                log.info(.drag, "Drag #\(number): extracted \(paths.count) item(s) in \(AppLog.milliseconds(since: clock)) ms")
+                return urls
+            } catch {
+                let (kind, detail) = AppLog.describe(error)
+                log.log(AppLog.isCancellation(error) ? .info : .error, .drag, "Drag #\(number): extraction \(kind)", detail: detail)
+                throw error
+            }
+        }
+    }
+
+    /// Başarısızlığı bir kez bildirir; iptal bildirilmez.
+    private func report(_ error: any Error) {
+        guard !AppLog.isCancellation(error) else { return }
+        let first = state.withLock { state in
+            defer { state.reported = true }
+            return !state.reported
+        }
+        if first { onFailure(error) }
     }
 
     private func extract(_ paths: [String]) async throws -> [URL] {
-        do {
-            // Arşiv bırakmadan önce kapandıysa oturum klasörü silinmiştir: yeniden oluşturulup sahipsiz kalmasın.
-            guard FileManager.default.fileExists(atPath: extractor.root.path) else { throw SevenZipError.cancelled }
-            return try await extractor.extract(paths, expectedSize: requiredBytes(paths))
-        } catch {
-            if (error as? SevenZipError) != .cancelled, !(error is CancellationError) { onFailure(error) }
-            throw error
-        }
+        // Arşiv bırakmadan önce kapandıysa oturum klasörü silinmiştir: yeniden oluşturulup sahipsiz kalmasın.
+        guard FileManager.default.fileExists(atPath: extractor.root.path) else { throw SevenZipError.cancelled }
+        return try await extractor.extract(paths, expectedSize: requiredBytes(paths))
     }
 }
 

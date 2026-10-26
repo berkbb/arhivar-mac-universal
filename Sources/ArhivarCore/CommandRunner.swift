@@ -161,6 +161,40 @@ public struct CommandRunner: Sendable {
         input: Data? = nil,
         onProgress: (@Sendable (Double) -> Void)? = nil
     ) async throws -> ProcessResult {
+        let label = Self.logLabel(executable: executableURL, arguments: arguments)
+        let clock = ContinuousClock.now
+        do {
+            let result = try await launch(
+                arguments, label: label, timeout: timeout, maxOutputBytes: maxOutputBytes,
+                workingDirectory: workingDirectory, input: input, onProgress: onProgress
+            )
+            AppLog.shared.info(.engine, "\(label) exited with code \(result.exitCode) in \(AppLog.milliseconds(since: clock)) ms")
+            return result
+        } catch {
+            // Başlatılamama nedeniyle birlikte `launch` içinde yazıldı.
+            if (error as? SevenZipError) != .engineNotFound {
+                let (kind, detail) = AppLog.describe(error)
+                let level: AppLog.Level = AppLog.isCancellation(error) ? .info : (error as? SevenZipError) == .timedOut ? .warning : .error
+                AppLog.shared.log(level, .engine, "\(label): \(kind) after \(AppLog.milliseconds(since: clock)) ms", detail: detail)
+            }
+            throw error
+        }
+    }
+
+    /// Günlükteki ad: programın adı ve (7zz için) alt komut, ör. "7zz x". Yollar, parola ve öğe adları yazılmaz;
+    /// yalnızca kısa harf dizisi olan ilk argüman (7zz'nin "l", "x", "a", "rn" gibi komutları) eklenir.
+    static func logLabel(executable: URL, arguments: [String]) -> String {
+        let name = executable.lastPathComponent
+        guard let command = arguments.first, (1...3).contains(command.count), command.allSatisfy({ $0.isASCII && $0.isLetter }) else {
+            return name
+        }
+        return name + " " + command
+    }
+
+    private func launch(
+        _ arguments: [String], label: String, timeout: TimeInterval?, maxOutputBytes: Int, workingDirectory: URL?,
+        input: Data?, onProgress: (@Sendable (Double) -> Void)?
+    ) async throws -> ProcessResult {
         // ⌘A ile seçilen binlerce öğe argüman sınırını (ARG_MAX) aşmasın: gerekirse liste dosyasıyla verilir.
         let fitted = try ItemListFile.fitting(arguments)
         defer { fitted.remove() }
@@ -196,6 +230,10 @@ public struct CommandRunner: Sendable {
                     try box.process.run()
                 } catch {
                     box.process.terminationHandler = nil
+                    // Asıl neden (ör. POSIX 7 "Argument list too long", 2 "No such file") uyarıda "motor bulunamadı"
+                    // diye görünür; günlükte kodu açık, iletisi (yol içerebilir) gizli yazılır.
+                    let cause = error as NSError
+                    AppLog.shared.error(.engine, "\(label) could not be started (\(cause.domain) \(cause.code))", detail: cause.localizedDescription)
                     continuation.resume(throwing: SevenZipError.engineNotFound)
                     return
                 }

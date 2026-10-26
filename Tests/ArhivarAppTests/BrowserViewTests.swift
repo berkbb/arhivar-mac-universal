@@ -276,6 +276,97 @@ struct BrowserViewTests {
         #expect(siblings == ["EAR2026.pdf"])
     }
 
+    /// Günlükte iletisi `text` içeren kaydı bekler (en çok 20 sn).
+    private func waitForLog(_ text: String) async -> AppLog.Entry? {
+        for _ in 0..<400 {
+            if let entry = AppLog.shared.entries.last(where: { $0.message.contains(text) }) { return entry }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        return nil
+    }
+
+    /// Word'e resimler tek tek sürüklenince 3-4 bırakmadan sonra sürükleme duruyordu: her bırakmada Word dosyayı istiyor,
+    /// SwiftUI isteği ana iş parçacığını durdurarak yanıtlıyor, 7zz ancak o anda çalışıyordu. Çıkarma sürükleme
+    /// başlarken başlamalı; art arda tek satırlık sürüklemelerin her birinde dosya bırakmadan önce hazır olmalı ve
+    /// bırakma isteği beklemeden yanıtlanmalı. Adımlar günlüğe yazılır.
+    @Test func singleRowDragsExtractBeforeEachDrop() async throws {
+        let zip = try makeFinderZip()
+        let window = showWindow()
+        defer { cleanUp(window) }
+        await model.refreshEngine()
+        model.browserMode = .folders
+        model.openArchive(zip)
+        await settle()
+        model.primaryAction(["Şirket"])
+        await render(window)
+        let content = try #require(window.contentView)
+        let outline = try #require(table(in: content) as? NSOutlineView)
+        #expect(outline.numberOfRows == 3)
+
+        var folders: Set<URL> = []
+        var numbers: [Int] = []
+        for round in 0..<8 {
+            let row = round % 3
+            let writers = dragWriters(outline, rows: [row])
+            #expect(writers.count == 1)
+            let batch = try #require(model.lastDragBatch)
+            numbers.append(batch.number)
+            // Satır eklenince (sonraki olay turunda) çıkarma kendiliğinden başlar ve bırakmadan önce biter.
+            let extracted = await waitForLog("Drag #\(batch.number): extracted 1 item(s)")
+            #expect(extracted != nil)
+            #expect(batch.hasStarted)
+
+            let clock = ContinuousClock.now
+            let urls = droppedFiles(writers)
+            #expect(ContinuousClock.now - clock < .milliseconds(300))
+            try #require(urls.count == 1)
+            let name = ["Dekont1.pdf", "EAR2026.pdf", "Ekran Resmi.png"][row]
+            #expect(urls[0].lastPathComponent == name)
+            #expect(try String(contentsOf: urls[0], encoding: .utf8) == name)
+            folders.insert(urls[0].deletingLastPathComponent())
+            await render(window)
+        }
+        // Her sürükleme kendi çıkarmasıdır; hiçbiri hata ya da uyarı bırakmadı.
+        #expect(folders.count == 8)
+        #expect(Set(numbers).count == 8)
+        #expect(model.alert == nil)
+        // Başka testler de ortak günlüğe yazar: yalnızca bu sürüklemelerin kayıtlarına bakılır.
+        let own = AppLog.shared.entries.filter { entry in numbers.contains { entry.message.hasPrefix("Drag #\($0)") } }
+        #expect(own.filter { $0.message.contains("extracting before the drop") }.count == 8)
+        #expect(!own.contains { $0.level.isProblem })
+    }
+
+    /// Önceden başlayan çıkarma başarısız olursa (ör. arşiv dosyası bu arada silindi) vazgeçilen bir sürükleme uyarı
+    /// göstermez; hata günlükte görünür. Öğe bir yere bırakılınca neden söylenir.
+    @Test func failedEarlyExtractionAlertsOnlyOnDrop() async throws {
+        let zip = try makeFinderZip()
+        let window = showWindow()
+        defer { cleanUp(window) }
+        await model.refreshEngine()
+        model.browserMode = .folders
+        model.openArchive(zip)
+        await settle()
+        model.primaryAction(["Şirket"])
+        await render(window)
+        let content = try #require(window.contentView)
+        let outline = try #require(table(in: content) as? NSOutlineView)
+        try FileManager.default.removeItem(at: zip)
+
+        let writers = dragWriters(outline, rows: [0])
+        let batch = try #require(model.lastDragBatch)
+        let failed = await waitForLog("Drag #\(batch.number): extraction")
+        #expect(failed?.level == .error)
+        await render(window)
+        #expect(model.alert == nil)
+
+        // SwiftUI dışa aktarma hata verince boş bir URL bırakır; hiçbir dosya bırakılmaz.
+        #expect(droppedFiles(writers).allSatisfy { !FileManager.default.fileExists(atPath: $0.path) })
+        #expect(AppLog.shared.entries.contains { $0.message == "Drag #\(batch.number): drop target requested the files (1 item(s))" })
+        await render(window)
+        #expect(model.alert != nil)
+        #expect(AppLog.shared.entries.contains { $0.level == .error && $0.message.hasPrefix("Alert shown") })
+    }
+
     /// Klasördeki dosyalardan arşiv kurar (yol → içerik); `links` sembolik bağlantılardır (ad → hedef).
     private func makeArchive(
         _ name: String, files: [String: String], links: [String: String] = [:], password: String? = nil

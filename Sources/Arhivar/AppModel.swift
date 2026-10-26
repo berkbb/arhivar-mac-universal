@@ -187,7 +187,12 @@ final class AppModel {
     /// Son biten işlemin sonucu; `operation` nil olmadan önce yazılır.
     private(set) var lastOperationOutcome: OperationOutcome?
     var toast: Toast?
-    var alert: AlertItem? { didSet { if alert == nil { schedulePendingConsent() } } }
+    var alert: AlertItem? {
+        didSet {
+            if let alert, alert.id != oldValue?.id { logAlert(alert) }
+            if alert == nil { schedulePendingConsent() }
+        }
+    }
     var passwordRequest: PasswordRequest? { didSet { if passwordRequest == nil { schedulePendingConsent() } } }
     var createRequest: CreateRequest?
     var isDropTargeted = false
@@ -243,6 +248,8 @@ final class AppModel {
     @ObservationIgnored private(set) var displayRebuildCount = 0
     /// Kaç sürükleme öğesi kurulduğu (testler için): satırlar çizilirken değil, yalnızca sürükleme başlarken artar.
     @ObservationIgnored private(set) var dragItemCount = 0
+    /// Son sürüklemenin topluluğu (testler için); sürükleme bitip öğeler bırakılınca kendiliğinden düşer.
+    @ObservationIgnored private(set) weak var lastDragBatch: DragBatch?
 
     private static let recentsKey = "recentArchives"
     private static let maxRecents = 12
@@ -325,6 +332,14 @@ final class AppModel {
     func launch() async {
         guard !didLaunch else { return }
         didLaunch = true
+        // Oturumun ilk satırı: başka bir Mac'te görülen sorunun ortamı (sürüm, mimari, çekirdek sayısı) günlükte kalsın.
+        let system = ProcessInfo.processInfo
+        let os = system.operatingSystemVersion
+        AppLog.shared.info(
+            .app,
+            "Arhivar \(AppInfo.version) (\(AppInfo.build)) started on macOS \(os.majorVersion).\(os.minorVersion).\(os.patchVersion), "
+                + "\(AppInfo.architecture), \(system.activeProcessorCount) processors, engine sandbox \(settings.sandboxEngine ? "on" : "off")"
+        )
         settings.applyAppearance()
         // Önceki çalıştırmalardan (ör. çökme sonrası) kalan geçici klasörleri temizle.
         ItemExtractor.sweepStale(olderThan: 6 * 3600)
@@ -397,6 +412,7 @@ final class AppModel {
             }
         } catch {
             let message = (error as? AppUpdateChecker.CheckError) == .noReleases ? t(.appUpdateNoReleases) : error.localizedDescription
+            AppLog.shared.warning(.update, "Arhivar update check failed: \(AppLog.describe(error).kind)", detail: message)
             appUpdateState = .failed(message: message)
             if interactive { alert = AlertItem(title: t(.updateFailed), message: message) }
         }
@@ -443,6 +459,7 @@ final class AppModel {
         let candidates = EngineLocator.candidates(customPath: settings.customEnginePath)
             .filter { fileManager.isExecutableFile(atPath: $0.path) }
         guard !candidates.isEmpty else {
+            AppLog.shared.error(.engine, "No executable 7zz found")
             engineURL = nil
             engineStatus = .missing
             return
@@ -463,9 +480,11 @@ final class AppModel {
             }
         }
         if let best = EngineLocator.newest(probed), let version = probed.first(where: { $0.url == best })?.version {
+            AppLog.shared.info(.engine, "7zz \(version) ready (\(best == custom ? "custom" : "bundled or system") engine)")
             engineURL = best
             engineStatus = .ready(version: version)
         } else {
+            AppLog.shared.error(.engine, blocked ? "7zz is blocked: it did not answer within 10 s" : "7zz could not be run")
             engineURL = probeList.first
             engineStatus = blocked ? .blocked : .missing
         }
@@ -503,6 +522,7 @@ final class AppModel {
                 }
             }
         } catch {
+            AppLog.shared.warning(.update, "7-Zip update check failed: \(AppLog.describe(error).kind)", detail: message(for: error))
             updateState = .failed(message: message(for: error))
             if interactive { alert = AlertItem(title: t(.updateFailed), message: message(for: error)) }
         }
@@ -523,6 +543,7 @@ final class AppModel {
                 showToast(t(.updateInstalled, version), systemImage: "arrow.down.circle.fill")
             }
         } catch {
+            AppLog.shared.error(.update, "7-Zip update failed: \(AppLog.describe(error).kind)", detail: message(for: error))
             updateState = .failed(message: message(for: error))
             alert = AlertItem(title: t(.updateFailed), message: message(for: error))
         }
@@ -648,6 +669,14 @@ final class AppModel {
 
     private func apply(_ loaded: LoadedListing, keepFolder: Bool) {
         let folder = currentFolder
+        if loaded.url != archiveURL || !keepFolder {
+            AppLog.shared.info(
+                .archive,
+                "Opened \(loaded.listing.info.type ?? "unknown") archive with \(loaded.listing.entries.count) entries"
+                    + (archiveStack.isEmpty ? "" : " (nested, depth \(archiveStack.count))"),
+                detail: loaded.url.lastPathComponent
+            )
+        }
         archiveURL = loaded.url
         password = loaded.password
         listing = loaded.listing
@@ -1164,9 +1193,14 @@ final class AppModel {
             onFailure: { [weak self] error in Task { @MainActor in self?.dragFailed(error) } }
         )
         pendingDragBatch = batch
-        // Aynı sürüklemenin satırları bu olay döngüsünde istenir; sonraki sürükleme yeni bir topluluk kurar.
+        lastDragBatch = batch
+        // Aynı sürüklemenin satırları bu olay döngüsünde istenir; sonraki sürükleme yeni bir topluluk kurar. Satırların
+        // hepsi eklenince çıkarma hemen (ana iş parçacığı dışında) başlar: bırakılan uygulama dosyayı isterken uygulama
+        // 7zz'yi beklemesin (bkz. `DragBatch`).
         Task { @MainActor [weak self, weak batch] in
             if let self, self.pendingDragBatch === batch { self.pendingDragBatch = nil }
+            guard let batch else { return }
+            Task.detached(priority: .userInitiated) { batch.prefetch() }
         }
         return ArchiveItemTransfer(batch: batch, path: node.archivePath, name: name)
     }
@@ -1833,12 +1867,14 @@ final class AppModel {
     private func handle(_ error: Error, archive: URL?, retry: PendingAction?, usedPassword: Bool) {
         // İptal bir hata değildir; hangi katmandan gelirse gelsin uyarı gösterilmez.
         if error is CancellationError { return }
+        let (kind, detail) = AppLog.describe(error)
         if let error = error as? SevenZipError {
             switch error {
             case .cancelled:
                 return
             case .wrongPassword:
                 if let archive, let retry {
+                    AppLog.shared.info(.archive, usedPassword ? "Password was wrong; asking again" : "Archive needs a password")
                     if archive == archiveURL { password = nil }
                     passwordRequest = PasswordRequest(archive: archive, isRetry: usedPassword, action: retry)
                     return
@@ -1847,7 +1883,19 @@ final class AppModel {
                 break
             }
         }
+        AppLog.shared.error(.archive, "Operation failed: \(kind)", detail: detail)
         alert = AlertItem(title: t(.errorTitle), message: message(for: error))
+    }
+
+    /// Gösterilen her uyarı günlüğe yazılır: hatalar ve uyarılar "Hatalar ve Sorunlar" altında, bilgi iletileri (güncel
+    /// sürüm, izin sorusu) bilgi olarak. Başlık açık, metin (dosya adı içerebilir) Konsol'da gizlidir.
+    private func logAlert(_ alert: AlertItem) {
+        let level: AppLog.Level = switch alert.title {
+        case t(.errorTitle), t(.updateFailed), t(.engineMissingTitle): .error
+        case t(.warningTitle), t(.openRiskyTitle): .warning
+        default: .info
+        }
+        AppLog.shared.log(level, .app, "Alert shown: \(alert.title)", detail: alert.message)
     }
 
     private func message(for error: Error) -> String {
@@ -2023,9 +2071,17 @@ enum AppInfo {
         Bundle.main.object(forInfoDictionaryKey: "ArhivarRepository") as? String ?? "berkbb/arhivar-mac-universal"
     }
     static var currentYear: String { String(Calendar.current.component(.year, from: .now)) }
+    static var architecture: String {
+        #if arch(arm64)
+        "arm64"
+        #else
+        "x86_64"
+        #endif
+    }
 }
 
 enum WindowID {
     static let main = "main"
     static let about = "about"
+    static let log = "log"
 }

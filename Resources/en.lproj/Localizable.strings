@@ -311,3 +311,29 @@
 "qlEncryptedHeadersTitle" = "Password-Protected Archive";
 "qlEncryptedHeadersMessage" = "This archive is password-protected; its files are not shown here.\nOpen the archive in Arhivar to view its contents.";
 "qlErrorTitle" = "Archive Could Not Be Read";
+
+/* Log */
+"menuShowLog" = "Show Log";
+"logTitle" = "Log";
+"logMessageCount" = "Messages: %ld";
+"logAllMessages" = "All Messages";
+"logProblems" = "Errors and Problems";
+"logSearchPrompt" = "Search log";
+"logClear" = "Clear";
+"logOpenInConsole" = "Open in Console";
+"logEmptyTitle" = "No Messages";
+"logEmptyMessage" = "Errors, 7zz runs and drag-and-drop steps appear here. They can also be followed in the Console app under the “%@” subsystem.";
+"logSelectHint" = "Select a message to see its details.";
+"logColumnTime" = "Time";
+"logColumnType" = "Type";
+"logColumnCategory" = "Category";
+"logColumnProcess" = "Process";
+"logColumnMessage" = "Message";
+"logLevelInfo" = "Info";
+"logLevelWarning" = "Warning";
+"logLevelError" = "Error";
+"logCategoryApp" = "App";
+"logCategoryEngine" = "Engine";
+"logCategoryArchive" = "Archive";
+"logCategoryDrag" = "Drag and drop";
+"logCategoryUpdate" = "Update";
