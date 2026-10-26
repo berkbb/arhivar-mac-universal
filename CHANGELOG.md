@@ -5,6 +5,8 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ## [Unreleased]
 
+## [1.5.0] — 2026-10-26
+
 ### Added
 
 - A Console-style **Log** window (Window › Show Log, ⌥⌘L). It lists errors, every 7-Zip run (command, exit code, duration) and each drag-and-drop step, with "All Messages" / "Errors and Problems" tabs, search, a detail pane, Copy, Clear, Show in Finder and Open in Console. Entries are also written to `~/Library/Logs/Arhivar/Arhivar.log` (user-only, rotated at 1 MiB), so the previous session can still be read after the app was quit, and mirrored live to the macOS Console app under the `net.babadogan.arhivar` subsystem. Console shows the summary openly; details that may contain file names (7-Zip messages, alert text) stay `<private>` there and are visible only in the app and the log file. Passwords are never logged.
