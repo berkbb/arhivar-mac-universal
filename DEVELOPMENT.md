@@ -96,7 +96,7 @@ swift Scripts/make_document_icons.swift Resources/DocumentIcons --preview /tmp/d
 swift build                      # quick development build
 swift test                       # 351 tests (ArhivarCoreTests + ArhivarAppTests); real-7zz tests use Vendor/7-Zip/7zz
 ./Scripts/build_app.sh           # universal build/Arhivar.app (ARCHS=native for this Mac only)
-./Scripts/package.sh             # tests + .app + dist/Arhivar-<version>.{dmg,zip,sha256}
+./Scripts/package.sh             # tests + .app + dist/Arhivar-<version>.dmg, .dmg.sig, SHA256SUMS.txt
 ./Scripts/package.sh --update-7zip   # update Vendor/7-Zip first, then package
 ```
 
@@ -131,7 +131,7 @@ Releases are distributed only through GitHub Releases. GitHub Actions is not use
 - checks that the working copy is clean, that you are on `main`, that the local branch matches `origin/main` and that the tag has not been used yet;
 - runs `package.sh`;
 - creates and pushes the `v<version>` tag;
-- uploads the `.dmg`, `.zip` and `.sha256` files with `gh release create`.
+- uploads the `.dmg`, its Ed25519 signature (`.dmg.sig`) and `SHA256SUMS.txt` with `gh release create`.
 
 The single source of the repository name is the `ArhivarRepository` key in Info.plist. The About window and the app's update check use it too.
 

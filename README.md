@@ -29,14 +29,18 @@ A native archive manager for macOS 26+, built with SwiftUI and Liquid Glass on t
 **Requires:** macOS 26 (Tahoe) or later. Runs on Apple Silicon and Intel Macs.
 
 1. Download the latest `Arhivar-<version>.dmg` from the [Releases](https://github.com/berkbb/arhivar-mac-universal/releases) page.
-2. Optionally verify the download. Run this in the folder you downloaded it to:
+2. Optionally verify the download. Download `SHA256SUMS.txt` from the same release and run this in the folder you downloaded both files to:
    ```bash
-   shasum -a 256 -c Arhivar-<version>.sha256 --ignore-missing
+   shasum -a 256 -c SHA256SUMS.txt
    ```
 3. Open the `.dmg` and drag **Arhivar** into the **Applications** folder.
 4. **First launch:** Arhivar is ad-hoc signed rather than signed with an Apple Developer ID, so macOS shows an "Arhivar can't be opened" warning the first time.
    - Close the warning with **Done**.
    - Go to **System Settings › Privacy & Security**, click **Open Anyway** next to "Arhivar was blocked", and confirm with your password.
+   - Or, instead of the two steps above, remove the quarantine flag in Terminal. Only do this for a copy you downloaded from the Releases page above:
+     ```bash
+     xattr -dr com.apple.quarantine /Applications/Arhivar.app
+     ```
    - You only need to do this once, although macOS may ask again after an update.
 5. On first launch, Arhivar asks for permission to check GitHub for updates automatically. You can change this later in **Settings › Advanced**.
 

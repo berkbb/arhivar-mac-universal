@@ -62,7 +62,7 @@ awk -v heading="## [$VERSION]" '
 cat >> "$NOTES" <<'EOF'
 
 ---
-**Installation:** open the `.dmg` and drag Arhivar into the Applications folder. The app is ad-hoc signed; if macOS blocks it on first launch, allow it in System Settings › Privacy & Security › **Open Anyway**. You can verify the files with the `.sha256` file.
+**Installation:** open the `.dmg` and drag Arhivar into the Applications folder. The app is ad-hoc signed; if macOS blocks it on first launch, allow it in System Settings › Privacy & Security › **Open Anyway**, or run `xattr -dr com.apple.quarantine /Applications/Arhivar.app` in Terminal. To verify the download, run `shasum -a 256 -c SHA256SUMS.txt` in the folder that holds the `.dmg` and `SHA256SUMS.txt`.
 EOF
 
 # --- Paketleme ---------------------------------------------------------------
