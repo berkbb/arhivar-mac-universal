@@ -3,6 +3,12 @@
 This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format and
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- Default app choices made before 1.5.2 (Finder › Get Info › Open with › Change All) were lost after the bundle identifier change, because macOS still stored them under `net.babadogan.arhivar`. ZIP, 7z, gzip and other archives opened in Archive Utility again, and Finder stopped showing Arhivar's document icons. At launch, Arhivar now moves every file type still assigned to the old identifier back to itself; types you later gave to another app are left alone.
+
 ## [1.5.3] — 2026-11-02
 
 ### Fixed
