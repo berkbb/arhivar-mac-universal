@@ -710,6 +710,27 @@ struct AppModelTests {
         #expect(target.string(forKey: "language") == "ro")
     }
 
+    /// net.babadogan.arhivar'a bağlı varsayılan uygulama seçimleri bulunur; başka uygulamalara verilmiş türlere dokunulmaz.
+    @Test func legacyDefaultHandlersAreFound() throws {
+        let handlers: [[String: Any]] = [
+            ["LSHandlerContentType": "public.zip-archive", "LSHandlerRoleAll": "net.babadogan.arhivar"],
+            ["LSHandlerContentType": "org.gnu.gnu-zip-archive", "LSHandlerRoleAll": "NET.BABADOGAN.ARHIVAR"],
+            ["LSHandlerContentType": "org.7-zip.7-zip-archive", "LSHandlerRoleViewer": "net.babadogan.arhivar"],
+            ["LSHandlerContentType": "public.zip-archive", "LSHandlerRoleViewer": "net.babadogan.arhivar"],
+            ["LSHandlerContentType": "com.rarlab.rar-archive", "LSHandlerRoleAll": "com.babadogantech.arhivar"],
+            ["LSHandlerContentType": "public.tar-archive", "LSHandlerRoleAll": "com.apple.archiveutility"],
+            ["LSHandlerURLScheme": "arhivar", "LSHandlerRoleAll": "net.babadogan.arhivar"],
+        ]
+        let plist = try PropertyListSerialization.data(fromPropertyList: ["LSHandlers": handlers], format: .binary, options: 0)
+
+        #expect(DefaultHandlerMigration.legacyContentTypes(in: plist) == [
+            "org.7-zip.7-zip-archive", "org.gnu.gnu-zip-archive", "public.zip-archive",
+        ])
+        #expect(DefaultHandlerMigration.legacyContentTypes(in: Data()).isEmpty)
+        let empty = try PropertyListSerialization.data(fromPropertyList: ["LSHandlers": [[String: Any]]()], format: .xml, options: 0)
+        #expect(DefaultHandlerMigration.legacyContentTypes(in: empty).isEmpty)
+    }
+
     /// Hızlı Bakış kısayol ayarı (Boşluk ve ⌘Y, Yalnızca Boşluk, Yalnızca ⌘Y) tetikleyicileri doğru kısıtlar.
     @Test func quickLookShortcutPreferencesConfigureTriggers() {
         let fixture = try! Fixture()
