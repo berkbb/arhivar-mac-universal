@@ -5,23 +5,15 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ## [1.5.4] — 2026-11-02
 
-### Fixed
+### Changed
 
-- Default app choices made before 1.5.2 (Finder › Get Info › Open with › Change All) were lost after the bundle identifier change, because macOS still stored them under `net.babadogan.arhivar`. ZIP, 7z, gzip and other archives opened in Archive Utility again, and Finder stopped showing Arhivar's document icons. At launch, Arhivar now moves every file type still assigned to the old identifier back to itself; types you later gave to another app are left alone.
-
-## [1.5.3] — 2026-11-02
+- Bundle identifier changed from `net.babadogan.arhivar` to `com.babadogantech.arhivar` (`com.babadogantech.arhivar.QuickLook` for the Quick Look extension) and the macOS unified log subsystem updated accordingly. On first launch, Arhivar carries over everything stored under the old identifier: your preferences, and the default app choices made in Finder (Get Info › Open with › Change All), so ZIP, 7z, gzip and other archives keep opening in Arhivar and Finder keeps showing its document icons. File types you later gave to another app are left alone. Arhivar then deletes the old identifier's leftovers (its preferences file and its `Caches`, `HTTPStorages`, `Saved Application State`, `WebKit` and `Application Support` items) in the background, once. The old Quick Look extension's container is left in place, since removing another app's container makes macOS ask for permission.
+- Routine log entries (launches, 7-Zip runs, drag-and-drop steps) are written to the macOS unified log at the Info level. The Console app shows them only with **Action › Include Info Messages**, and macOS keeps them only briefly in memory, so they no longer add to Console's stored log. Errors and warnings are logged as before, and Arhivar's own Log window and log file still keep every entry.
 
 ### Fixed
 
 - **macOS Archive Utility Collision Safety (Keep Both):** When extracting an archive whose target subfolder or root items already exist on disk, Arhivar no longer silently merges into or overwrites existing directories and files under the default "Rename" (`.rename`) collision policy. Duplicate folders (including macOS `.app` bundles) and files are automatically extracted with a unique numeric suffix (`Folder_1`, `file_1.txt`), preserving both the existing items and the newly extracted files completely intact without mixing or data loss.
 - Target subfolder destination resolution (`StagedExtraction.destination`) now checks for existing directories on disk and automatically generates collision-free destinations (`archive_1`) before staging merge begins.
-
-## [1.5.2] — 2026-11-02
-
-### Changed
-
-- Bundle identifier changed from `net.babadogan.arhivar` to `com.babadogantech.arhivar` (`com.babadogantech.arhivar.QuickLook` for the Quick Look extension) and the macOS unified log subsystem updated accordingly. Existing user preferences are seamlessly migrated upon launch.
-- Routine log entries (launches, 7-Zip runs, drag-and-drop steps) are written to the macOS unified log at the Info level. The Console app shows them only with **Action › Include Info Messages**, and macOS keeps them only briefly in memory, so they no longer add to Console's stored log. Errors and warnings are logged as before, and Arhivar's own Log window and log file still keep every entry.
 
 ## [1.5.1] — 2026-10-26
 
