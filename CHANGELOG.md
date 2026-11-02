@@ -3,7 +3,7 @@
 This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format and
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.5.4] — 2026-11-02
 
 ### Fixed
 
