@@ -59,8 +59,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.servicesProvider = services
         NSUpdateDynamicServices()
         setupSpaceKeyMonitor()
-        // Eski paket kimliğinde kalan varsayılan uygulama seçimleri (ve onlarla gelen belge simgeleri) geri alınır.
-        Task { await DefaultHandlerMigration.run() }
+        // Eski paket kimliğinin varsayılan uygulama seçimleri taşınır, Mac'te kalan kayıtları bir kez silinir.
+        Task { await LegacyIdentityMigration.run() }
     }
 
     private func setupSpaceKeyMonitor() {

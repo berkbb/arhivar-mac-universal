@@ -315,7 +315,7 @@ final class AppSettings {
     }
 
     init(defaults: UserDefaults = .standard, bundle: Bundle = .main) {
-        if defaults == .standard {
+        if defaults == .standard, !defaults.bool(forKey: LegacyIdentityMigration.doneKey) {
             Self.migrateLegacyDefaults(to: defaults)
         }
         self.defaults = defaults
