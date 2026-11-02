@@ -83,7 +83,7 @@ A deterministic seeded fuzz suite (`FuzzTests.swift`) was added over all pure pa
 
 #### S6. ⬜ [P3] Lower priority ideas (reported by the audit, not verified)
 - **Critic-only ideas (unverified):** localization format-string validator gaps. Tracked for future tests.
-- **Resolved after verification (2026-10-26):** the `sandbox-exec` fallback and the update-check address handling; see `CHANGELOG.md` (Unreleased › Security).
+- **Resolved after verification (2026-10-26):** the `sandbox-exec` fallback and the update-check address handling; see `CHANGELOG.md` (1.5.1 › Security).
 - **Location:** n/a (design notes)
 
 #### S7. ✅ [P1] Archive Opened Through a Symlink Propagated No Quarantine

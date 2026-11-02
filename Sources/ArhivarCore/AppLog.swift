@@ -5,7 +5,7 @@ import Synchronization
 /// Uygulama günlüğü: hatalar, motor çalıştırmaları ve sürükle-bırak adımları.
 ///
 /// Her kayıt üç yere gider:
-/// - macOS birleşik günlüğü: Konsol uygulamasında `net.babadogan.arhivar` alt sistemiyle canlı izlenir. Özet açık
+/// - macOS birleşik günlüğü: Konsol uygulamasında `com.babadogantech.arhivar` alt sistemiyle canlı izlenir. Özet açık
 ///   (`public`), ayrıntı gizlidir (`<private>`): ayrıntıda dosya adları ve 7zz iletileri olabilir.
 /// - Kullanıcıya özel günlük dosyası (`~/Library/Logs/Arhivar/Arhivar.log`, 0600): uygulama yeniden açıldıktan sonra
 ///   önceki oturumun kayıtları da okunur (ör. ⌘Q ile kapatmayı gerektiren bir takılma). Konsol'un "Günlük Raporları"
@@ -57,7 +57,7 @@ public final class AppLog: Sendable {
         public var text: String { detail.map { message + "\n" + $0 } ?? message }
     }
 
-    public static let subsystem = "net.babadogan.arhivar"
+    public static let subsystem = "com.babadogantech.arhivar"
     public static let fileName = "Arhivar.log"
     public static let previousFileName = "Arhivar.1.log"
 

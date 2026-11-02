@@ -27,7 +27,7 @@
 | `Engine.swift` | `EngineLocator`, `EngineUpdateResult`, `EngineUpdater`, `ArchiveNaming` | Discovering and version-ranking `7zz` binaries, wrapping `update-7zip.sh`, split volume resolution (`firstVolume`, incl. old-style RAR `.r00`…`.r99` and split ZIP `.z01`…`.z99`), archive base/suggested naming (strips `.part01` multi-part suffixes) |
 | `AppUpdate.swift` | `AppRelease`, `AppUpdateChecker` (`parse(_:repository:)`, `isReleaseURL`), `UpdateSignature`, `UpdateChecksums` | GitHub Releases API parser, semantic version comparison, Ed25519 signature verification (`CryptoKit`), and SHA-256 checksum validation for Arhivar self-update releases |
 | `Localization.swift` | `AppLanguage`, `StringTable`, `LKey` | Runtime-switchable localization engine and exhaustive key enumeration (`tr`, `en`, `ro`) |
-| `AppLog.swift` | `AppLog` (`Level`, `Category`, `Entry`, `shared`, `observe`, `clear`, `describe`, `isCancellation`, `milliseconds(since:)`) | Single logging entry point: unified log (`Logger`, subsystem `net.babadogan.arhivar`, public summary / private detail), user-only rotating file `~/Library/Logs/Arhivar/Arhivar.log` (+ `Arhivar.1.log`, 1 MiB), in-memory ring (2,000) reloaded from the files at launch; memory-only under `swift test` |
+| `AppLog.swift` | `AppLog` (`Level`, `Category`, `Entry`, `shared`, `observe`, `clear`, `describe`, `isCancellation`, `milliseconds(since:)`) | Single logging entry point: unified log (`Logger`, subsystem `com.babadogantech.arhivar`, public summary / private detail), user-only rotating file `~/Library/Logs/Arhivar/Arhivar.log` (+ `Arhivar.1.log`, 1 MiB), in-memory ring (2,000) reloaded from the files at launch; memory-only under `swift test` |
 
 ---
 

@@ -17,7 +17,7 @@
 import AppKit
 import ApplicationServices
 
-let bundleID = "net.babadogan.arhivar"
+let bundleID = "com.babadogantech.arhivar"
 let args = Array(CommandLine.arguments.dropFirst())
 
 func fail(_ message: String) -> Never {

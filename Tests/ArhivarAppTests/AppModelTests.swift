@@ -683,6 +683,33 @@ struct AppModelTests {
         #expect(AppSettings(defaults: fixture.defaults, bundle: .main).subfolderMode == .smart)
     }
 
+    /// net.babadogan.arhivar altında kalmış eski kullanıcı tercihleri com.babadogantech.arhivar alanına aktarılır.
+    @Test func legacyPreferencesMigrateSeamlessly() {
+        let legacySuite = "test.legacy.arhivar.\(UUID().uuidString)"
+        let targetSuite = "test.target.arhivar.\(UUID().uuidString)"
+        guard let legacy = UserDefaults(suiteName: legacySuite),
+              let target = UserDefaults(suiteName: targetSuite) else { return }
+        defer {
+            legacy.removePersistentDomain(forName: legacySuite)
+            target.removePersistentDomain(forName: targetSuite)
+        }
+
+        legacy.set("en", forKey: "language")
+        legacy.set("dark", forKey: "appearance")
+        legacy.set(false, forKey: "storeSymlinks")
+
+        AppSettings.migrateLegacyDefaults(from: legacySuite, to: target)
+
+        #expect(target.string(forKey: "language") == "en")
+        #expect(target.string(forKey: "appearance") == "dark")
+        #expect(target.bool(forKey: "storeSymlinks") == false)
+
+        // Hedefte önceden ayarlanmış değerler eski değerle ezilmemeli
+        target.set("ro", forKey: "language")
+        AppSettings.migrateLegacyDefaults(from: legacySuite, to: target)
+        #expect(target.string(forKey: "language") == "ro")
+    }
+
     /// Hızlı Bakış kısayol ayarı (Boşluk ve ⌘Y, Yalnızca Boşluk, Yalnızca ⌘Y) tetikleyicileri doğru kısıtlar.
     @Test func quickLookShortcutPreferencesConfigureTriggers() {
         let fixture = try! Fixture()

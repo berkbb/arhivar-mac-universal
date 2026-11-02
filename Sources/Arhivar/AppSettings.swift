@@ -315,6 +315,9 @@ final class AppSettings {
     }
 
     init(defaults: UserDefaults = .standard, bundle: Bundle = .main) {
+        if defaults == .standard {
+            Self.migrateLegacyDefaults(to: defaults)
+        }
         self.defaults = defaults
         strings = StringTable(bundle: bundle)
         language = AppLanguage(rawValue: defaults.string(forKey: Key.language) ?? "") ?? .tr
@@ -339,6 +342,16 @@ final class AppSettings {
             customShortcuts = decoded
         } else {
             customShortcuts = [:]
+        }
+    }
+
+    /// net.babadogan.arhivar altında saklanmış eski tercihleri ilk açılışta yeni com.babadogantech.arhivar alanına aktarır.
+    static func migrateLegacyDefaults(from legacySuiteName: String = "net.babadogan.arhivar", to defaults: UserDefaults) {
+        guard let legacy = UserDefaults(suiteName: legacySuiteName) else { return }
+        for key in Key.all {
+            if defaults.object(forKey: key) == nil, let value = legacy.object(forKey: key) {
+                defaults.set(value, forKey: key)
+            }
         }
     }
 

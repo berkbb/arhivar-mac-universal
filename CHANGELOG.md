@@ -3,10 +3,11 @@
 This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format and
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.5.2] — 2026-11-02
 
 ### Changed
 
+- Bundle identifier changed from `net.babadogan.arhivar` to `com.babadogantech.arhivar` (`com.babadogantech.arhivar.QuickLook` for the Quick Look extension) and the macOS unified log subsystem updated accordingly. Existing user preferences are seamlessly migrated upon launch.
 - Routine log entries (launches, 7-Zip runs, drag-and-drop steps) are written to the macOS unified log at the Info level. The Console app shows them only with **Action › Include Info Messages**, and macOS keeps them only briefly in memory, so they no longer add to Console's stored log. Errors and warnings are logged as before, and Arhivar's own Log window and log file still keep every entry.
 
 ## [1.5.1] — 2026-10-26
@@ -20,7 +21,7 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ### Added
 
-- A Console-style **Log** window (Window › Show Log, ⌥⌘L). It lists errors, every 7-Zip run (command, exit code, duration) and each drag-and-drop step, with "All Messages" / "Errors and Problems" tabs, search, a detail pane, Copy, Clear, Show in Finder and Open in Console. Entries are also written to `~/Library/Logs/Arhivar/Arhivar.log` (user-only, rotated at 1 MiB), so the previous session can still be read after the app was quit, and mirrored live to the macOS Console app under the `net.babadogan.arhivar` subsystem. Console shows the summary openly; details that may contain file names (7-Zip messages, alert text) stay `<private>` there and are visible only in the app and the log file. Passwords are never logged.
+- A Console-style **Log** window (Window › Show Log, ⌥⌘L). It lists errors, every 7-Zip run (command, exit code, duration) and each drag-and-drop step, with "All Messages" / "Errors and Problems" tabs, search, a detail pane, Copy, Clear, Show in Finder and Open in Console. Entries are also written to `~/Library/Logs/Arhivar/Arhivar.log` (user-only, rotated at 1 MiB), so the previous session can still be read after the app was quit, and mirrored live to the macOS Console app under the `com.babadogantech.arhivar` subsystem. Console shows the summary openly; details that may contain file names (7-Zip messages, alert text) stay `<private>` there and are visible only in the app and the log file. Passwords are never logged.
 
 ### Fixed
 

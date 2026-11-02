@@ -9,7 +9,7 @@
 	<key>CFBundleExecutable</key>
 	<string>ArhivarQuickLook</string>
 	<key>CFBundleIdentifier</key>
-	<string>net.babadogan.arhivar.QuickLook</string>
+	<string>com.babadogantech.arhivar.QuickLook</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleLocalizations</key>
@@ -23,13 +23,13 @@
 	<key>CFBundlePackageType</key>
 	<string>XPC!</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.5.1</string>
+	<string>1.5.2</string>
 	<key>CFBundleSupportedPlatforms</key>
 	<array>
 		<string>MacOSX</string>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>16</string>
+	<string>17</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>NSExtension</key>

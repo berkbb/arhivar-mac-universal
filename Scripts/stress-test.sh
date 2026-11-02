@@ -34,7 +34,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-BUNDLE=net.babadogan.arhivar
+BUNDLE=com.babadogantech.arhivar
 ENGINE="$ROOT/Vendor/7-Zip/7zz"
 [ -x "$ENGINE" ] || { echo "HATA: $ENGINE yok (./Scripts/update-7zip.sh install)" >&2; exit 2; }
 [ -d "$APP" ] || { echo "HATA: $APP yok" >&2; exit 2; }
@@ -126,7 +126,7 @@ if [ "$RUN_APP" = 1 ]; then
   defaults write "$BUNDLE" customExtractFolder "$OUT"
   defaults write "$BUNDLE" subfolderMode never
   defaults write "$BUNDLE" revealAfterOperation -bool false
-  osascript -e 'tell application id "net.babadogan.arhivar" to quit' >/dev/null 2>&1; sleep 2; pkill -x Arhivar; sleep 1
+  osascript -e 'tell application id "com.babadogantech.arhivar" to quit' >/dev/null 2>&1; sleep 2; pkill -x Arhivar; sleep 1
 
   open_archive() {
     open -a "$APP" "$1"
