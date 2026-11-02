@@ -823,3 +823,7 @@ All 13 items were reproduced against the bundled `7zz` 26.04 before the fix; the
 
 #### 7. ✅ [Nice-to-Have] Custom Finder Document Icons (Six Archive Families)
 - **Status:** ✅ Done — `Scripts/make_document_icons.swift` draws six CoreGraphics document icon families (`zip`, `7z`, `rar`, `tar`, `disk`, `archive`, up to 512 px, ~1.7 MB total without SF Symbols) bundled into `Resources/DocumentIcons/*.icns`; `Support/Info.plist` maps all supported UTIs across the six families with `LSHandlerRank = Alternate`; tests `everyDocumentTypeHasItsIcon`, `documentTypesCoverEveryArchiveTypeOnce` (`Tests/ArhivarCoreTests/DocumentIconTests.swift`).
+
+#### 8. ✅ [High] macOS Archive Utility Collision Safety (Keep Both)
+- **Status:** ✅ Done — Under the default `.rename` policy, extracting archives whose target subfolder, root directory, or root file already exists will never overwrite or silently merge into existing folders. Target subfolder resolution (`StagedExtraction.destination`) and extraction merge (`StagedExtraction.mergeItem`) automatically assign a collision-free unique suffix (`Folder_1`, `file_1.txt`), ensuring both old and newly extracted items remain completely intact; tests `mergeRenameKeepsBoth`, `mergeRenameRootFileKeepsBoth`, `destinationAvoidsCollisionWhenSubfolderExists`.
+- **Location:** `Sources/ArhivarCore/StagedExtraction.swift`, `Sources/Arhivar/AppModel.swift`, `Tests/ArhivarCoreTests/StagedExtractionTests.swift`.

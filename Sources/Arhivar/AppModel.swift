@@ -986,7 +986,7 @@ final class AppModel {
                     let placeholders = StagedExtraction.removeLinkPlaceholders(in: staging, links: links)
                     let escaping = StagedExtraction.secureSymlinks(in: content, extractionRoot: staging).map { prefix + $0 }
                     Quarantine.propagate(from: archive, to: staging, since: .distantPast)
-                    let destination = StagedExtraction.destination(for: content, base: base, archiveName: archiveName, mode: subfolderMode)
+                    let destination = StagedExtraction.destination(for: content, base: base, archiveName: archiveName, mode: subfolderMode, policy: policy)
                     if items.isEmpty {
                         StagedExtraction.leaveOutRootMetadata(in: content, destination: destination, base: base, mode: subfolderMode)
                     }

@@ -50,21 +50,32 @@ public enum StagedExtraction {
     /// İçeriğin taşınacağı klasör: alt klasör kuralına göre hedefin kendisi ya da arşiv adıyla bir alt klasörü.
     /// "Akıllı" kural, tek kök öğeli arşivlerde "Ad/Ad/…" iç içe klasörünü önler; çok öğeli arşivlerin
     /// ("tarbomb") içeriği hedefe dağılmaz, arşiv adıyla bir klasörde toplanır.
+    /// Yeniden adlandırma politikasında hedef alt klasör zaten varsa çakışmayı önlemek için benzersiz bir ad döndürür ("ad_1").
     public static func destination(
-        for content: URL, base: URL, archiveName: String, mode: SubfolderMode, fileManager: FileManager = .default
+        for content: URL,
+        base: URL,
+        archiveName: String,
+        mode: SubfolderMode,
+        policy: OverwriteMode = .rename,
+        fileManager: FileManager = .default
     ) -> URL {
         let subfolder = base.appendingPathComponent(archiveName, isDirectory: true)
+        let target: URL
         switch mode {
-        case .always: return subfolder
-        case .never: return base
+        case .always: target = subfolder
+        case .never: target = base
         case .smart:
             let roots = (try? entries(ofDirectory: content.path)) ?? []
             // .DS_Store, __MACOSX ve AppleDouble (._*) üst verileri sayılmaz: Finder'ın "Sıkıştır" ile yaptığı
             // tek klasörlü arşivlerin kökündeki __MACOSX, "akıllı" kipin "Ad/Ad/…" iç içe klasörü oluşturmasına yol açmasın.
             let meaningful = roots.filter { !isMacMetadata($0, in: content) }
             let count = meaningful.isEmpty ? roots.count : meaningful.count
-            return count > 1 ? subfolder : base
+            target = count > 1 ? subfolder : base
         }
+        if target != base, policy == .rename, itemType(target, fileManager: fileManager) != nil {
+            return uniqueURL(for: target, fileManager: fileManager)
+        }
+        return target
     }
 
     /// `directory` içindeki `name` bir macOS üst veri öğesi mi: Finder görünüm ayarları (.DS_Store), Arşiv İzlencesi'nin
@@ -116,7 +127,9 @@ public enum StagedExtraction {
     }
 
     /// Hazırlık klasöründeki öğeleri hedefe taşır ve üzerine yazma politikasını uygular.
-    /// Klasörler birleştirilir. Hedefteki sembolik bağlantıların içine yazılmaz; bunlar çakışma sayılır.
+    /// Yeniden adlandırma politikasında (.rename) çakışan klasörler birleştirilmez, yeni bir adla (klasor_1) oluşturulur.
+    /// .replace ve .skip politikalarında ise alt klasörler birleştirilir.
+    /// Hedefteki sembolik bağlantıların içine yazılmaz; bunlar çakışma sayılır.
     /// - Returns: Hedefte oluşan ya da değişen üst düzey öğeler.
     @discardableResult
     public static func merge(
@@ -152,7 +165,7 @@ public enum StagedExtraction {
             try fileManager.moveItem(at: source, to: target)
             return target
         }
-        if itemType(source, fileManager: fileManager) == .typeDirectory, targetType == .typeDirectory {
+        if policy != .rename, itemType(source, fileManager: fileManager) == .typeDirectory, targetType == .typeDirectory {
             // Önceki bir çıkarmadan kalan salt okunur (0555) ya da içine girilemeyen (0444, 0000) hedef klasöre yazılabilmesi,
             // hazırlıktaki okunamayan (0311) ya da salt okunur (0555) klasörün listelenip boşaltılabilmesi için izinler
             // geçici olarak açılır.

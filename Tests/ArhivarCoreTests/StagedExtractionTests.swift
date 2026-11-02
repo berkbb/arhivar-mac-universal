@@ -57,7 +57,41 @@ private struct Sandbox {
     defer { box.cleanUp() }
     try StagedExtraction.merge(from: box.staging, into: box.destination, policy: .rename)
     #expect(box.read("klasor/ortak.txt") == "eski")
-    #expect(box.read("klasor/ortak_1.txt") == "yeni")
+    #expect(box.read("klasor/sadece-eski.txt") == "eski-ek")
+    #expect(box.read("klasor_1/ortak.txt") == "yeni")
+    #expect(box.read("klasor_1/sadece-yeni.txt") == "yeni-ek")
+    #expect(box.read("kok.txt") == "yeni-kok")
+}
+
+@Test func mergeRenameRootFileKeepsBoth() throws {
+    let box = try Sandbox()
+    defer { box.cleanUp() }
+    try box.write("eski-kok", to: box.destination.appendingPathComponent("kok.txt"))
+    try StagedExtraction.merge(from: box.staging, into: box.destination, policy: .rename)
+    #expect(box.read("kok.txt") == "eski-kok")
+    #expect(box.read("kok_1.txt") == "yeni-kok")
+}
+
+@Test func destinationAvoidsCollisionWhenSubfolderExists() throws {
+    let box = try Sandbox()
+    defer { box.cleanUp() }
+    let staging = box.root.appendingPathComponent("subfolder-staging", isDirectory: true)
+    let base = box.root.appendingPathComponent("subfolder-base", isDirectory: true)
+    try FileManager.default.createDirectory(at: staging.appendingPathComponent("Item1"), withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: staging.appendingPathComponent("Item2"), withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+
+    // "subfolder-base/Proje" zaten varsa, smart / always kipinde "Proje_1" döndürmeli.
+    try FileManager.default.createDirectory(at: base.appendingPathComponent("Proje"), withIntermediateDirectories: true)
+    #expect(StagedExtraction.destination(for: staging, base: base, archiveName: "Proje", mode: .smart, policy: .rename).lastPathComponent == "Proje_1")
+    #expect(StagedExtraction.destination(for: staging, base: base, archiveName: "Proje", mode: .always, policy: .rename).lastPathComponent == "Proje_1")
+
+    // "Proje_1" de varsa "Proje_2" olmalı
+    try FileManager.default.createDirectory(at: base.appendingPathComponent("Proje_1"), withIntermediateDirectories: true)
+    #expect(StagedExtraction.destination(for: staging, base: base, archiveName: "Proje", mode: .smart, policy: .rename).lastPathComponent == "Proje_2")
+
+    // policy: .replace iken var olan klasör adı korunmalı
+    #expect(StagedExtraction.destination(for: staging, base: base, archiveName: "Proje", mode: .smart, policy: .replace).lastPathComponent == "Proje")
 }
 
 @Test func mergeNeverWritesThroughSymlinks() throws {

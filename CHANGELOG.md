@@ -3,6 +3,13 @@
 This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format and
 [Semantic Versioning](https://semver.org/).
 
+## [1.5.3] — 2026-11-02
+
+### Fixed
+
+- **macOS Archive Utility Collision Safety (Keep Both):** When extracting an archive whose target subfolder or root items already exist on disk, Arhivar no longer silently merges into or overwrites existing directories and files under the default "Rename" (`.rename`) collision policy. Duplicate folders (including macOS `.app` bundles) and files are automatically extracted with a unique numeric suffix (`Folder_1`, `file_1.txt`), preserving both the existing items and the newly extracted files completely intact without mixing or data loss.
+- Target subfolder destination resolution (`StagedExtraction.destination`) now checks for existing directories on disk and automatically generates collision-free destinations (`archive_1`) before staging merge begins.
+
 ## [1.5.2] — 2026-11-02
 
 ### Changed
