@@ -723,12 +723,49 @@ struct AppModelTests {
         ]
         let plist = try PropertyListSerialization.data(fromPropertyList: ["LSHandlers": handlers], format: .binary, options: 0)
 
-        #expect(DefaultHandlerMigration.legacyContentTypes(in: plist) == [
+        #expect(LegacyIdentityMigration.legacyContentTypes(in: plist) == [
             "org.7-zip.7-zip-archive", "org.gnu.gnu-zip-archive", "public.zip-archive",
         ])
-        #expect(DefaultHandlerMigration.legacyContentTypes(in: Data()).isEmpty)
+        #expect(LegacyIdentityMigration.legacyContentTypes(in: Data()).isEmpty)
         let empty = try PropertyListSerialization.data(fromPropertyList: ["LSHandlers": [[String: Any]]()], format: .xml, options: 0)
-        #expect(DefaultHandlerMigration.legacyContentTypes(in: empty).isEmpty)
+        #expect(LegacyIdentityMigration.legacyContentTypes(in: empty).isEmpty)
+    }
+
+    /// Eski kimliğin tercih alanı ve ~/Library kayıtları silinir; yeni kimliğin kayıtlarına ve eski kapsayıcıya dokunulmaz.
+    @Test func legacyRecordsAreRemovedOnce() throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent("arhivar-home-\(UUID().uuidString)")
+        let legacyDomain = "test.legacy.arhivar.\(UUID().uuidString)"
+        defer {
+            try? FileManager.default.removeItem(at: home)
+            UserDefaults(suiteName: legacyDomain)?.removePersistentDomain(forName: legacyDomain)
+        }
+        let library = home.appendingPathComponent("Library")
+        let legacyItems = ["Caches/net.babadogan.arhivar", "HTTPStorages/net.babadogan.arhivar", "Saved Application State/net.babadogan.arhivar.savedState"]
+        let keptItems = ["Caches/com.babadogantech.arhivar", "Containers/net.babadogan.arhivar.QuickLook"]
+        for item in legacyItems + keptItems {
+            try FileManager.default.createDirectory(at: library.appendingPathComponent(item), withIntermediateDirectories: true)
+        }
+        try Data().write(to: library.appendingPathComponent("HTTPStorages/net.babadogan.arhivar.binarycookies"))
+        // cfprefsd'nin boşalttığı alandan geriye kalan boş plist.
+        try FileManager.default.createDirectory(at: library.appendingPathComponent("Preferences"), withIntermediateDirectories: true)
+        let emptyPlist = try PropertyListSerialization.data(fromPropertyList: [String: Any](), format: .binary, options: 0)
+        try emptyPlist.write(to: library.appendingPathComponent("Preferences/\(legacyDomain).plist"))
+        UserDefaults(suiteName: legacyDomain)?.set("en", forKey: "language")
+
+        let removed = LegacyIdentityMigration.removeLegacyRecords(home: home, legacyDomain: legacyDomain)
+
+        #expect(removed.count == Set(removed).count)
+        #expect(Set(removed) == Set(legacyItems + ["HTTPStorages/net.babadogan.arhivar.binarycookies", "Preferences/\(legacyDomain).plist"]))
+        #expect(!FileManager.default.fileExists(atPath: library.appendingPathComponent("Preferences/\(legacyDomain).plist").path))
+        for item in legacyItems {
+            #expect(!FileManager.default.fileExists(atPath: library.appendingPathComponent(item).path))
+        }
+        for item in keptItems {
+            #expect(FileManager.default.fileExists(atPath: library.appendingPathComponent(item).path))
+        }
+        #expect(UserDefaults(suiteName: legacyDomain)?.persistentDomain(forName: legacyDomain)?.isEmpty ?? true)
+        // İkinci çalıştırmada silinecek bir şey kalmaz.
+        #expect(LegacyIdentityMigration.removeLegacyRecords(home: home, legacyDomain: legacyDomain).isEmpty)
     }
 
     /// Hızlı Bakış kısayol ayarı (Boşluk ve ⌘Y, Yalnızca Boşluk, Yalnızca ⌘Y) tetikleyicileri doğru kısıtlar.
