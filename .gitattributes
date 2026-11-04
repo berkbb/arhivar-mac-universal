@@ -1,3 +1,4 @@
 # Üçüncü taraf dosyaları (7-Zip) olduğu gibi saklanır; satır sonları değiştirilmez.
 Vendor/** -text
 *.icns binary
+graphify-out/graph.json merge=graphify
