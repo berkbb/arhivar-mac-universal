@@ -240,3 +240,10 @@
   1. Extended `StagedExtraction.destination` to check whether the proposed `subfolder` already exists on disk. Under `policy == .rename`, it automatically returns `uniqueURL(for: target)` (e.g. `archiveName_1`), ensuring that multi-item extractions create fresh, collision-free subfolders.
   2. In `StagedExtraction.mergeItem`, restricted directory recursion to `policy != .rename`. Under `policy == .rename`, when `target` already exists (whether directory, file, or package), `source` is moved atomically to `uniqueURL(for: target)` (`Folder_1`), keeping existing directories and files 100% intact.
 - **Tests Added:** `mergeRenameRootFileKeepsBoth` and `destinationAvoidsCollisionWhenSubfolderExists`, with existing `mergeRenameKeepsBoth` updated to verify that `klasor_1` is created as an independent directory alongside the untouched original `klasor`.
+
+---
+
+## Episode 25: A Piped Test Run Reported Success Without Showing Every Suite
+- **Context:** Verifying the GPL-3.0-only license change (2026-11-04) with `swift test 2>&1 | tail -25`.
+- **Root Cause:** The shell reports the exit status of the last command in a pipe, so the `0` came from `tail`, not from `swift test`. The 25 kept lines also covered only the `ArhivarAppTests` summary (116 tests); the `ArhivarCoreTests` summary (280 tests) had already scrolled out.
+- **Solution & Guardrail:** Run the suite with its output redirected to a log file, take `$?` straight from `swift test`, then grep the log for every `Test run with` line and for `✘` / `error:`. A run counts as passed only when the exit code is 0 and both suites report passing (280 + 116 = 396 tests at that commit). `.agents/skills/sentinel_test_skill.md` carries the same check.

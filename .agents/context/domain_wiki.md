@@ -74,6 +74,6 @@ All arguments passed to `7zz` include `-sccUTF-8` and place file/archive paths a
 - **Ed25519 Cryptographic Release Signing:**
   - Distribution `.dmg` packages are signed with an Ed25519 private key securely stored in macOS login keychain (`keychainService = "com.babadogantech.arhivar.update-signing"`).
   - The public key is bundled inside `Support/Info.plist` under `ArhivarUpdatePublicEDKey`.
-  - Releases generate `Arhivar-<version>.dmg.sig` (base64 raw 64-byte Ed25519 signature) and `SHA256SUMS.txt` / `Arhivar-<version>.sha256`.
+  - Releases generate `Arhivar-<version>.dmg.sig` (base64 raw 64-byte Ed25519 signature) and `SHA256SUMS.txt` (`package.sh` deletes a stale `Arhivar-<version>.sha256` left by older builds).
   - `UpdateSignature` and `UpdateChecksums` in `AppUpdate.swift` verify the release using Apple's `CryptoKit.Curve25519.Signing.PublicKey` and `CryptoKit.SHA256`.
 

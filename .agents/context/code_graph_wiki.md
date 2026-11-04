@@ -1,11 +1,41 @@
 # Code-Graph Wiki — Indexed Symbols & Impact Map
 
 > **Memory Category:** TencentDB Code-Graph Memory Asset  
-> **Scope:** Module boundaries, key types, call hierarchy, and cross-file modification impact map.
+> **Scope:** Module boundaries, key types, call hierarchy, and cross-file modification impact map.  
+> **Generated from:** `graphify-out/GRAPH_REPORT.md` and `graphify-out/graph.json` (graphifyy 0.9.101, local tree-sitter AST, `--code-only`, no LLM backend). Sections 3–4 are hand-maintained and checked against the graph.  
+> **Built at commit:** `d5c1455` on 2026-11-04.  
+> **Regenerate:** `GRAPHIFY_NO_TIPS=1 GRAPHIFY_QUERY_LOG_DISABLE=1 GRAPHIFY_BACKEND=off graphify extract . --code-only`, then `GRAPHIFY_BACKEND=off graphify cluster-only . --no-label`, then update sections 1–2 from the new report. `graphify-out/` is git-ignored.
 
 ---
 
-## 1. Module & File Index
+## 1. Graph Summary
+
+- **Corpus:** 89 code files (80 Swift, 7 shell, 1 C, 1 header) → 2,281 nodes, 6,454 edges, 104 Leiden communities (28 thin ones omitted from the report).
+- **Edge provenance:** 88% `EXTRACTED`, 12% `INFERRED` (798 edges, average confidence 0.85), 0% `AMBIGUOUS`.
+- **Edge relations:** `calls` 2,739 · `references` 1,472 · `method` 927 · `contains` 434 · `case_of` 426 · `imports` 238 · `implements` 180 · `defines` 23 · `inherits` 15.
+- **Module dependencies:** `Arhivar` → `ArhivarCore`; `ArhivarQuickLook` → `ArhivarCore`; `ArhivarCore` → `CLibArchive` (system `libarchive`, Quick Look listing only). `ArhivarCore` imports no app target. Import cycles: none.
+- **Not indexed:** `Vendor/` (third-party 7-Zip), Markdown docs (`--code-only`), `.strings` tables, `Info.plist`, and build outputs (see `.graphifyignore`).
+
+## 2. Hub Nodes (most connected)
+
+| Rank | Node | Edges | Why it is a hub |
+| :--- | :--- | ---: | :--- |
+| 1 | `LKey` | 339 | Every user-facing string; a new case needs all three `.strings` tables |
+| 2 | `AppModel` | 192 | App state machine: open, browse, extract, edit, drag, password, update |
+| 3 | `Fixture` | 93 | `ArhivarAppTests` helper: an `AppModel` with its own temporary folder, `UserDefaults` suite and the real `7zz` |
+| 4 | `AppModelTests` | 88 | App-flow test suite |
+| 5 | `CreateOptions` | 71 | Archive creation switches passed to `SevenZipCommand` |
+| 6 | `AppSettings` | 65 | `UserDefaults`-backed preferences (`Key.all` for reset) |
+| 7 | `AppLog` | 53 | Log window, log file and unified log subsystem |
+| 8 | `ArchiveListing` | 50 | Parsed `7zz l -slt` listing (filled by `ListingParser`) and its password probe item |
+| 9 | `ArhivarCore` | 50 | Module imported by the app, the Quick Look extension and tests |
+| 10 | `CommandRunner` | 47 | Sandboxed `7zz` process runner; `graphify affected "CommandRunner"` lists its callers |
+
+Before changing a hub, run `graphify affected "<node>"` to see what depends on it.
+
+---
+
+## 3. Module & File Index
 
 ### Target: `ArhivarCore` (`Sources/ArhivarCore/`)
 
@@ -76,7 +106,7 @@
 
 ---
 
-## 2. Change Impact Map
+## 4. Change Impact Map
 
 - **Adding a UI String:** Must update `LKey` in `Sources/ArhivarCore/Localization.swift` **and** all three `Resources/{tr,en,ro}.lproj/Localizable.strings` files (`RunnerAndLocalizationTests` enforces 100% key and format-specifier parity).
 - **Adding a Supported Archive Format:** Update `ArchiveFormat` (`ArchiveOptions.swift`), `ArchiveNaming.archiveExtensions` (`Engine.swift`), `Support/Info.plist` (`CFBundleDocumentTypes` in exactly one of the six icon families, `NSServices`, `UTImportedTypeDeclarations`), and verify with `DocumentIconTests`, `CommandTests`, and `RoadmapTests`.
@@ -91,3 +121,11 @@
 | `ArchiveEditing.swift` | `SecretLinks`, `FileIdentity`, `AddPlan.skippedSecretLinks` | Detects hard links to files in credential folders (`SandboxProfile.secretDirectories`) inside create/add sources; skipped with a warning, also while copying add sources |
 | `ArchiveListing.swift` | `ArchiveListing.passwordProbeItem` | Smallest encrypted file, test-decrypted to verify a password before names of a content-encrypted archive are shown |
 | `Scripts/StressProbe.swift`, `Scripts/stress-test.sh` | — | Keyboard-free pre-release stress round over the real app and Finder Quick Look via accessibility identifiers (`arhivar.progress`, `arhivar.progress.cancel`, `arhivar.password`, `arhivar.password.cancel`, `arhivar.browser`) |
+
+---
+
+## 5. Known Graph Gaps
+
+- `Sources/ArhivarQuickLook/main.swift` is only partly parsed: tree-sitter-swift rejects the body-less `@_silgen_name("NSExtensionMain") func NSExtensionMain()` declaration. The file compiles; only its graph edges are incomplete.
+- `Sources/CLibArchive/include/CLibArchive.h` and `shim.c` yield no symbols, so the `libarchive` calls from `LibArchiveReader.swift` end at the module boundary.
+- About 12% of edges are `INFERRED` (for example test functions linked to the types they exercise); confirm an inferred edge in the source before relying on it.

@@ -29,8 +29,8 @@
 ### Documentation
 
 #### 3. ⬜ [Low] Sibling App Section in `THIRD_PARTY_NOTICES.md` (blocked: the sibling repositories are private)
-- **Status:** ⬜ Not started. On purpose, Arhivar is public and its docs do not link to the private repositories `copiator-mac-universal`, `descarcator-mac-universal` and `curatare-mac-universal`, because the links would return 404 and reveal unreleased projects.
-- ⬜ **Remaining:** once those repositories are public, add a section to `THIRD_PARTY_NOTICES.md` with the same structure as Curatare's "Arhivar & Copiator (derived components)": each app's name, its repository link and its license, plus the components it derives from Arhivar (the process runner, the `sandbox-exec` profile generator, open-safety helpers, the localization engine, the update checker and signature verification, the license viewer, and the build and release scripts). Before writing it, read each sibling's own `THIRD_PARTY_NOTICES.md` for its current license, because Copiator is moving from `GPL-3.0-or-later` to `GPL-3.0-only`. `LicenseViewerTests` compares the bundled notices with the repository file, so no test change is needed.
+- **Status:** ⬜ Not started. On purpose, Arhivar is public and its docs neither name nor link the private sibling apps of the same copyright holder, because the links would return 404 and reveal unreleased projects.
+- ⬜ **Remaining:** once those repositories are public, add a "derived projects" section to `THIRD_PARTY_NOTICES.md`: each app's name, its repository link and its license, plus the components it derives from Arhivar (the process runner, the `sandbox-exec` profile generator, open-safety helpers, the localization engine, the update checker and signature verification, the license viewer, and the build and release scripts). Before writing it, read each app's own `THIRD_PARTY_NOTICES.md` for its current license, since they differ (`GPL-3.0-only` or `GPL-3.0-or-later`). `LicenseViewerTests` compares the bundled notices with the repository file, so no test change is needed.
 
 ---
 
@@ -42,7 +42,7 @@
 - **Status:** ✅ Done:
   - **Ed25519 Release Signing & Checksums:** Implemented `Scripts/update_signing.swift` and `AppUpdate.swift` (`UpdateSignature`, `UpdateChecksums`) with Keychain-stored private key (`com.babadogantech.arhivar.update-signing`) and embedded public key in `Support/Info.plist`. Automated generation of `Arhivar-1.2.0.dmg.sig` and `SHA256SUMS.txt`.
   - **1:1 Multilingual Governance:** Mandated strict 1:1 translation parity across all supported languages (`tr`, `en`, `ro`) with dedicated files per language (`Resources/<lang>.lproj/Localizable.strings`) and strict localization CI validation.
-  - **SOTA 2026 Core AI Standards:** Expanded AI agent standard governance from 38 to 42 enterprise standards, integrating Linux Foundation AAIF, Apple AIAP, OWASP Agentic Security, and Hugging Face Actions-as-Code.
+  - **SOTA 2026 Core AI Standards:** Expanded AI agent standard governance from 38 to 42 enterprise standards, integrating Linux Foundation AAIF, Apple App Intents, OWASP Agentic Security, and Hugging Face Actions-as-Code.
 - **Locations:** `Scripts/update_signing.swift`, `Sources/ArhivarCore/AppUpdate.swift`, `Support/Info.plist`, `CHANGELOG.md`, `.agents/rules/`
 
 ### 11-Discipline Chaos & Security Matrix Strengthening (2026-10-20)
