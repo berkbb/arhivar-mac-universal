@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Arhivar uygulama simgesini (AppIcon.icns) çizer.
 // Kullanım: swift Scripts/make_icon.swift Resources/AppIcon.icns
 import AppKit

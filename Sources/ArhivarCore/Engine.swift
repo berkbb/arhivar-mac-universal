@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 import Foundation
 
 /// 7zz programını bulur ve sürümünü okur.

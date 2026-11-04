@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 import Foundation
 
 /// 7zz'ye çok sayıda öğe adını liste dosyasıyla (`-i@dosya`) verir.

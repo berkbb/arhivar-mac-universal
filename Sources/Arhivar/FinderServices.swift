@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 import AppKit
 
 /// Info.plist'teki NSServices girdilerinin hedefi. Finder'da seçili dosyalar panodan okunur.

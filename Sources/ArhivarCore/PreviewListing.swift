@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 import Foundation
 
 /// Hızlı Bakış eklentisinin arşiv listesini nasıl okuyacağına karar verir.

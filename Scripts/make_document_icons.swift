@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Arhivar varsayılan uygulama olduğunda Finder'da arşivlerin gösterdiği belge simgelerini çizer.
 // Her biçim ailesi kendi rengini, çizimini ve etiketini alır: ZIP, 7Z, RAR, TAR ailesi, disk görüntüleri, genel arşiv.
 // (Biçim başına ayrı simgeler toplam ~10 MB tutuyordu; altı aile simgesi ~1,5 MB.)

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 import AppKit
 import ArhivarCore
 import SwiftUI
@@ -44,7 +45,7 @@ enum LicenseDocument: String, CaseIterable, Identifiable {
 
     var licenseName: String? {
         switch self {
-        case .app: "GPL-3.0"
+        case .app: "GPL-3.0-only"
         case .sevenZip: "GNU LGPL + unRAR"
         case .notices: nil
         }
