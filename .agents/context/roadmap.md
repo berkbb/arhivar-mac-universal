@@ -26,6 +26,12 @@
 - ⬜ **Prerequisite — in-app 7-Zip updater must stop modifying the app bundle:** when run from inside the app, `Scripts/update-7zip.sh` writes the new `7zz` into `Arhivar.app/Contents/MacOS/` and ad-hoc re-signs both `7zz` and the app bundle (`codesign --force --sign -`). On a Developer ID signed, notarized app this breaks the signature and the notarization seal. Before switching, the in-app updater must write only to the fallback folder `~/Library/Application Support/Arhivar/engine` (already searched by `EngineLocator`, where the newest version wins) and never touch the bundle; the bundled `7zz` is then updated only by shipping a new release.
 - ⬜ **Remaining:** notarize in `package.sh` / `release.sh` (`xcrun notarytool submit --wait`, then `xcrun stapler staple`) before computing `SHA256SUMS.txt` and the Ed25519 `.dmg.sig`; verify with `codesign --verify --deep --strict` and `spctl -a -vv`; update the README installation steps and the release notes footer in `release.sh`.
 
+### Documentation
+
+#### 3. ⬜ [Low] Sibling App Section in `THIRD_PARTY_NOTICES.md` (blocked: the sibling repositories are private)
+- **Status:** ⬜ Not started. On purpose, Arhivar is public and its docs do not link to the private repositories `copiator-mac-universal`, `descarcator-mac-universal` and `curatare-mac-universal`, because the links would return 404 and reveal unreleased projects.
+- ⬜ **Remaining:** once those repositories are public, add a section to `THIRD_PARTY_NOTICES.md` with the same structure as Curatare's "Arhivar & Copiator (derived components)": each app's name, its repository link and its license, plus the components it derives from Arhivar (the process runner, the `sandbox-exec` profile generator, open-safety helpers, the localization engine, the update checker and signature verification, the license viewer, and the build and release scripts). Before writing it, read each sibling's own `THIRD_PARTY_NOTICES.md` for its current license, because Copiator is moving from `GPL-3.0-or-later` to `GPL-3.0-only`. `LicenseViewerTests` compares the bundled notices with the repository file, so no test change is needed.
+
 ---
 
 ## Done

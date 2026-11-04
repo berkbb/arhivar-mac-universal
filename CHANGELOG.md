@@ -3,6 +3,12 @@
 This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format and
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Arhivar's license is now stated explicitly as GNU General Public License version 3 only (`GPL-3.0-only`); the `LICENSE` text is unchanged. `README.md`, `THIRD_PARTY_NOTICES.md` and the license viewer say so, and every Swift source file starts with an `SPDX-License-Identifier: GPL-3.0-only` line. 7-Zip keeps its own LGPL + unRAR terms as a separate program.
+
 ## [1.5.4] — 2026-11-02
 
 ### Changed
