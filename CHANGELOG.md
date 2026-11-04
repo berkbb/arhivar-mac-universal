@@ -5,9 +5,14 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ## [Unreleased]
 
+### Added
+
+- Developer tooling, not part of the app: a local code knowledge graph built with [Graphify](https://github.com/Graphify-Labs/graphify) from code only, offline and without an LLM (`.graphifyrc`, `.graphifyignore`, output in the git-ignored `graphify-out/`), plus the project-scoped Claude Code skill and pre-search reminder (`CLAUDE.md`, `.claude/`). The skill files keep their Apache-2.0 license; `LICENSE`, `LICENSE-MIT` and `NOTICE` sit next to them and `THIRD_PARTY_NOTICES.md` has a new "Repository-only files" section. See DEVELOPMENT.md › Agent tooling.
+
 ### Changed
 
 - Arhivar's license is now stated explicitly as GNU General Public License version 3 only (`GPL-3.0-only`); the `LICENSE` text is unchanged. `README.md`, `THIRD_PARTY_NOTICES.md` and the license viewer say so, and every Swift source file starts with an `SPDX-License-Identifier: GPL-3.0-only` line. 7-Zip keeps its own LGPL + unRAR terms as a separate program.
+- Agent governance in `.agents/` is brought up to date. The rule files are rewritten against the current primary sources of each standard, with Arhivar-specific requirements checked against the code. Outdated and invented standard names are gone: eight files are renamed (for example `memgpt_os_memory.md` → `letta_memory_management.md`), `grok_reasoning_trace.md` is removed and `graphify_knowledge_graph.md` is added. `AGENTS.md` gains graph-first navigation, a repository map and the 2026 OWASP agentic categories. The engine skill is renamed `engine_maintenance_skill.md`, and the test skill takes the exit code from `swift test` itself. `code_graph_wiki.md` now starts from the graph's summary and hub nodes.
 
 ## [1.5.4] — 2026-11-02
 
@@ -116,7 +121,7 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 - Native macOS Ed25519 cryptographic release signing (`Scripts/update_signing.swift`, `UpdateSignature`) with macOS Keychain storage (`com.babadogantech.arhivar.update-signing`) and embedded public key in `Support/Info.plist` (`ArhivarUpdatePublicEDKey`). Every `.dmg` distribution bundle is accompanied by `.dmg.sig` and SHA-256 checksum verification (`SHA256SUMS.txt`, `Arhivar-1.3.0.sha256`).
 - Mandatory 1:1 exact multilingual translation architecture across all supported languages (`tr`, `en`, `ro`) with dedicated independent localization files (`Resources/<lang>.lproj/Localizable.strings`) and automated unit test validation (`eachSupportedLanguageHasDedicatedFile`).
-- SOTA 2026 AI Agent Governance expansion to 42 enterprise standards in `.agents/rules/` including Linux Foundation AAIF, Apple App Intents AIAP, OWASP Agentic Security ASI, and Hugging Face Actions-as-Code CodeAgent.
+- SOTA 2026 AI Agent Governance expansion to 42 enterprise standards in `.agents/rules/` including Linux Foundation AAIF, Apple App Intents, OWASP Agentic Security ASI, and Hugging Face Actions-as-Code CodeAgent.
 - Embedded release signing public key integrity verification in `AppUpdateTests.swift` (`embeddedUpdatePublicKeyIsValid`). Total automated test count increased to 287 tests.
 
 ## [1.2.0] — 2026-10-20

@@ -36,7 +36,10 @@ Arhivar/
 ├── Tests/ArhivarAppTests/    App model (AppModel) flow tests
 ├── Paketle.command           Double-click to package
 ├── Yayimla.command           Double-click to publish to GitHub Releases
-└── 7-Zip-Guncelle.command    Double-click to update 7-Zip
+├── 7-Zip-Guncelle.command    Double-click to update 7-Zip
+├── .agents/                  Agent governance: AGENTS.md, context/ (wikis, roadmap), rules/, skills/
+├── CLAUDE.md, .claude/       Graphify rules, skill and pre-search hook for Claude Code
+└── .graphifyrc, .graphifyignore   Graphify settings; the graph itself is in the git-ignored graphify-out/
 ```
 
 ## Architecture
@@ -158,6 +161,20 @@ Verification steps:
 ## Finder services
 
 The services are defined under `NSServices` in `Support/Info.plist`; their titles come from the `ServicesMenu.strings` files. They are registered with `NSUpdateDynamicServices()` when the app first launches. In Finder they appear under right-click › **Quick Actions** or **Services**. If they are missing, they can be enabled in System Settings › Keyboard › Keyboard Shortcuts › Services.
+
+## Agent tooling (`.agents/` and Graphify)
+
+Coding agents read [`.agents/AGENTS.md`](.agents/AGENTS.md) first: it holds the invariants (process boundary, sandbox, staged extraction, quarantine, localization), the workflow and a repository map. `.agents/rules/` keeps one file per adopted agent standard (index: `about_rules.md`), `.agents/skills/` the test, snapshot and engine procedures, and `.agents/context/` the domain and code-graph wikis, the roadmap and the rejected specs.
+
+The code knowledge graph comes from [Graphify](https://github.com/Graphify-Labs/graphify) (`uv tool install graphifyy`). It is built from code only, locally and without an LLM:
+
+```bash
+GRAPHIFY_NO_TIPS=1 GRAPHIFY_QUERY_LOG_DISABLE=1 GRAPHIFY_BACKEND=off graphify extract . --code-only
+GRAPHIFY_BACKEND=off graphify cluster-only . --no-label
+graphify query "how does extraction staging work?"
+```
+
+The output goes to the git-ignored `graphify-out/`. The Claude Code skill and its pre-search reminder (`CLAUDE.md`, `.claude/`) are versioned; the git hooks that refresh the graph after commits and the `graph.json` merge driver are per clone, so run `graphify hook install` once after cloning. The skill files are Apache-2.0 (see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)); details and privacy rules are in [`.agents/rules/graphify_knowledge_graph.md`](.agents/rules/graphify_knowledge_graph.md).
 
 ## Known limitations and unverified points
 

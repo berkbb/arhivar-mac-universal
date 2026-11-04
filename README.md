@@ -68,10 +68,10 @@ The same tasks from the terminal:
 ./Scripts/set-version.sh 1.0.1        # change the version (single source: Support/Info.plist)
 ./Scripts/release.sh --dry-run        # rehearse a release without sending anything
 ./Scripts/release.sh                  # package, tag and upload to GitHub Releases
-swift test                            # 392 tests
+swift test                            # 396 tests
 ```
 
-Requires Xcode 26 or later. See [DEVELOPMENT.md](DEVELOPMENT.md) for details, [roadmap.md](.agents/context/roadmap.md) for planned features and [CHANGELOG.md](CHANGELOG.md) for release notes.
+Requires Xcode 26 or later. See [DEVELOPMENT.md](DEVELOPMENT.md) for details, [roadmap.md](.agents/context/roadmap.md) for planned features and [CHANGELOG.md](CHANGELOG.md) for release notes. Coding agents start from [.agents/AGENTS.md](.agents/AGENTS.md); an optional code knowledge graph is built locally with [Graphify](https://github.com/Graphify-Labs/graphify) (see DEVELOPMENT.md › Agent tooling).
 
 ## License & Third-Party Notices
 
