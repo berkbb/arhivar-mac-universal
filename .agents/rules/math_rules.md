@@ -1,9 +1,11 @@
-# Mathematical, Byte-Counting & Physical Invariants
+# Mathematical, Byte-Counting & Physical Invariants (`math_rules.md`)
 
-- **Source:** Project Domain Invariants (`ArhivarCore`)
-- **Version:** 1.0.2
-- **Last Review Date:** 2026-10-20
-- **Change Summary:** Codified saturating `Int64` size summation, disk space reserve formulas, and civil date conversion invariants.
+> **Memory Category:** Declarative Domain Rule
+> **Source:** Project domain invariants (`ArhivarCore`)
+> **Version / Date:** 1.0.2 (content of 2026-10-20)
+> **Last Reviewed:** 2026-11-04
+> **Change Summary:** 2026-11-04: header aligned with the standard rule files and every cited symbol re-checked against `Sources/`; rule content unchanged from 1.0.2.
+> **Scope:** Saturating `Int64` size summation, disk space reserve formulas, compression ratio and progress bounds, and civil date conversion.
 
 ---
 
