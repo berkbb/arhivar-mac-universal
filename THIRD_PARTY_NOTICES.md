@@ -1,12 +1,13 @@
 # Third-Party Notices
 
-Arhivar's own source code is licensed under the GNU General Public License, version 3 (GPL-3.0; see `LICENSE`).
-Copyright (C) 2026 Babadogan Tech and Edu.
+Arhivar is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
+License as published by the Free Software Foundation, version 3 of the License only (`GPL-3.0-only`, full text in
+`LICENSE`). Copyright (C) 2026 Babadogan Tech and Edu.
 Arhivar bundles and runs the following third-party software. Its license
 terms are **not** changed by Arhivar's license.
 
 7-Zip runs as a separate program (`7zz`) that Arhivar starts as a subprocess; it is not linked into Arhivar.
-Its GNU LGPL and unRAR terms therefore apply to `7zz` alone and do not conflict with Arhivar's GPL-3.0.
+Its GNU LGPL and unRAR terms therefore apply to `7zz` alone and do not conflict with Arhivar's GPL-3.0-only.
 
 ## libarchive (macOS system library)
 

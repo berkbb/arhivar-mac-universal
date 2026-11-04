@@ -73,6 +73,10 @@ swift test                            # 392 tests
 
 Requires Xcode 26 or later. See [DEVELOPMENT.md](DEVELOPMENT.md) for details, [roadmap.md](.agents/context/roadmap.md) for planned features and [CHANGELOG.md](CHANGELOG.md) for release notes.
 
-## License
+## License & Third-Party Notices
 
-Arhivar's own code is licensed under the GNU General Public License, version 3 ([LICENSE](LICENSE)); Copyright (C) 2026 Babadogan Tech and Edu. You may redistribute and modify it under the GPL-3.0; it comes with no warranty. The bundled 7-Zip is distributed under the GNU LGPL with the unRAR restriction ([THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)). Because of that restriction, Arhivar can extract RAR archives but cannot create them.
+Arhivar is licensed under the **GNU General Public License, version 3 only** ([GPL-3.0-only](LICENSE)); Copyright (C) 2026 Babadogan Tech and Edu. It comes with no warranty.
+
+- **7-Zip:** © Igor Pavlov, distributed under the GNU LGPL with the unRAR restriction ([7-zip.org](https://www.7-zip.org)). It runs as a separate, unmodified program. Because of the unRAR restriction, Arhivar can extract RAR archives but cannot create them.
+
+See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the full terms and attributions.
