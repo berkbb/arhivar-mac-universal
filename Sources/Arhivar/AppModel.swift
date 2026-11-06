@@ -318,18 +318,39 @@ final class AppModel {
         openMainWindowAction = action
     }
 
-    /// Ana pencereyi açar (kapalıysa ya da hiç açılmadıysa) ve öne getirir.
+    /// Ana pencere bu oturumda bir istekle öne getirildi mi (`presentMainWindow`: açma, Finder servisi, parola sorusu)?
+    /// Penceresiz bir istek için başlatılan Arhivar'da böyle bir istek olmadan beliren pencere (macOS'un durum geri
+    /// yüklemesi) kapatılır (`AppDelegate`).
+    @ObservationIgnored private(set) var mainWindowRequested = false
+
+    /// Ana pencereyi uygulamayı etkinleştirmeden açar: olağan açılışın sonunda ve Dock'tan yeniden açmada. SwiftUI ana
+    /// pencereyi açılışta kendisi açmaz (`defaultLaunchBehavior(.suppressed)`); açıksa yalnızca öne gelir.
+    func openMainWindow() {
+        showMainWindow(activating: false)
+    }
+
+    /// Ana pencereyi açar (kapalıysa ya da hiç açılmadıysa), uygulamayı etkinleştirir ve pencereyi öne getirir.
     /// Finder servisleri ve "Birlikte Aç" uygulamayı penceresiz başlatabilir; işlem göstergesinin görünmesi için gerekir.
-    func presentMainWindow(attempt: Int = 0) {
-        NSApp?.activate()
+    func presentMainWindow() {
+        showMainWindow(activating: true)
+    }
+
+    private func showMainWindow(activating: Bool, attempt: Int = 0) {
+        if activating {
+            mainWindowRequested = true
+            NSApp?.activate()
+        }
         guard let openMainWindowAction else {
             // Menü komutları henüz kurulmadıysa (çok erken soğuk açılış) kısa bir süre sonra yeniden dene.
             if attempt < 20 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { self.presentMainWindow(attempt: attempt + 1) }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    self.showMainWindow(activating: activating, attempt: attempt + 1)
+                }
             }
             return
         }
         openMainWindowAction()
+        guard activating else { return }
         // Etkinleştirme reddedilse bile pencere öne gelsin.
         DispatchQueue.main.async {
             (NSApp?.windows ?? [])

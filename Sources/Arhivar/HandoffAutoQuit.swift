@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
+import AppKit
 import ArhivarCore
-import Foundation
 
 /// Yalnızca penceresiz bir Buraya Çıkar isteği (`ExtractHandoff`) için başlatılan Arhivar'ın, istekler bitince kendiliğinden
 /// kapanması (Descarcator madde 506).
@@ -42,8 +42,37 @@ final class HandoffAutoQuit {
         var queueBusy = false
         /// Parola sorusu, uyarı ya da başka bir soru ekranda.
         var questionOnScreen = false
-        /// Görünen bir pencere var.
+        /// Kullanıcının görebileceği bir pencere var (bkz. `isUserWindow`).
         var windowVisible = false
+    }
+
+    /// Bir pencerenin kapanma kararını ilgilendiren özellikleri.
+    struct WindowTraits: Equatable {
+        var isVisible = false
+        /// Ana pencere olabilir: Arhivar'ın kendi pencereleri (ana pencere, Ayarlar, Hakkında, Günlük).
+        var canBecomeMain = false
+        /// Bir pencereye bağlı sayfa (parola, uyarı, oluşturma).
+        var isSheet = false
+        /// Uygulamayı kilitleyen kipli pencere (`NSApp.modalWindow`; ör. uyarı paneli).
+        var isModal = false
+    }
+
+    /// Kapanmayı engelleyen pencere: ekranda ve kullanıcınınsa (ana olabilen pencere, sayfa, kipli uyarı). AppKit'in ve
+    /// sistemin iç pencereleri (menü, araç ipucu, giriş yöntemi, açılır pencere) kapanmayı engellemez.
+    static func isUserWindow(_ window: WindowTraits) -> Bool {
+        window.isVisible && (window.canBecomeMain || window.isSheet || window.isModal)
+    }
+
+    /// Uygulamanın pencereleri arasında kullanıcının görebileceği bir pencere var mı?
+    static func showsUserWindow(_ windows: [NSWindow], modalWindow: NSWindow?) -> Bool {
+        windows.contains { window in
+            isUserWindow(WindowTraits(
+                isVisible: window.isVisible,
+                canBecomeMain: window.canBecomeMain,
+                isSheet: window.isSheet,
+                isModal: window === modalWindow
+            ))
+        }
     }
 
     /// Son istekten sonra kapanmadan önce beklenen süre: Descarcator'ın art arda gönderdiği istekler aynı süreci kullanır.
@@ -108,6 +137,20 @@ final class HandoffAutoQuit {
 
     /// İstekler bitti ve sonuçları bildirildi: uygulama bu istekler için açıldıysa bekleme sonunda hâlâ boştaysa kapanır.
     func handoffsSettled() {
+        scheduleQuitCheck()
+    }
+
+    /// Son pencere kapandı; uygulama hemen kapanmalı mı? Penceresiz açılışta hayır: süren bir istek yarıda kalırdı (ör.
+    /// açılışta kendiliğinden beliren pencere kapatıldığında). Karar bekleme sonunda yeniden verilir. Diğer açılışlarda
+    /// olağan kural geçerlidir: son pencere kapanınca uygulama kapanır.
+    func lastWindowClosed() -> Bool {
+        guard launch == .handoffOnly else { return true }
+        scheduleQuitCheck()
+        return false
+    }
+
+    /// Bekleme süresinden sonra kapanma kararını yeniden verir (yalnızca penceresiz açılışta).
+    private func scheduleQuitCheck() {
         cancelPendingQuit()
         guard launch == .handoffOnly else { return }
         pendingQuit = Task { [gracePeriod, sleep] in

@@ -401,8 +401,17 @@ struct AppModelTests {
         defer { fixture.cleanUp() }
         var opened = 0
         fixture.model.registerWindowOpener { opened += 1 }
+        #expect(!fixture.model.mainWindowRequested)
         fixture.model.presentMainWindow()
-        #expect(opened == 1)
+        #expect(opened == 1 && fixture.model.mainWindowRequested)
+
+        // Olağan açılışın sonunda ve Dock'ta açılan pencere bir istek sayılmaz (penceresiz açılışta kapatılabilir).
+        let plain = try Fixture()
+        defer { plain.cleanUp() }
+        var plainOpened = 0
+        plain.model.registerWindowOpener { plainOpened += 1 }
+        plain.model.openMainWindow()
+        #expect(plainOpened == 1 && !plain.model.mainWindowRequested)
 
         // Pencere açma eylemi henüz kayıtlı değilse (çok erken soğuk açılış) kayıt gelince yeniden denenir.
         let late = try Fixture()
@@ -1989,7 +1998,7 @@ struct AppModelTests {
         #expect(reports.first?.statuses == [.extracted, .skipped, .failed, .skipped])
         #expect(fixture.exists("paket/kaynak/not.txt"))
         #expect(Quarantine.value(of: fixture.workspace.appendingPathComponent("paket/kaynak/not.txt")) != nil)
-        #expect(opened == 0 && model.alert == nil && model.passwordRequest == nil)
+        #expect(opened == 0 && !model.mainWindowRequested && model.alert == nil && model.passwordRequest == nil)
         // Günlükte yalnızca sayılar: yol ya da ad yok.
         let line = try #require(AppLog.shared.entries.last { $0.message.hasPrefix("Background extract request finished") })
         #expect(line.message == "Background extract request finished: 1 extracted, 0 warnings, 1 failed, 0 cancelled, 2 skipped")
@@ -2019,6 +2028,8 @@ struct AppModelTests {
         model.extractHereInBackground([secret], requestID: "parola")
         for _ in 0..<200 where model.passwordRequest == nil { try await Task.sleep(for: .milliseconds(50)) }
         #expect(model.passwordRequest != nil && opened == 1)
+        // Penceresiz açılışta bu pencere kendiliğinden kapatılmaz (`AppDelegate.mainWindowAppeared`).
+        #expect(model.mainWindowRequested)
         #expect(reports.isEmpty, "yanıt beklenirken sonuç bildirilmez")
         // Soru ekrandayken penceresiz açılış kapanmaz (madde 506).
         #expect(settled == 0 && model.handoffAutoQuitActivity.questionOnScreen && model.handoffAutoQuitActivity.handoffPending)

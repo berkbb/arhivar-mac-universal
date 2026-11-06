@@ -19,8 +19,12 @@ struct ArhivarApp: App {
                 .environment(settings)
                 .frame(minWidth: 780, minHeight: 500)
                 .task { await model.launch() }
+                .onAppear { appDelegate.mainWindowAppeared() }
         }
         .defaultSize(width: 1060, height: 700)
+        // SwiftUI ana pencereyi açılışta kendisi açmaz: penceresiz bir istek için başlatılan Arhivar pencere göstermez.
+        // Diğer her açılışta pencereyi `AppDelegate.launchFinished` açar.
+        .defaultLaunchBehavior(.suppressed)
         .commands { AppCommands(model: model, settings: settings) }
 
         Window(settings.t(.menuAbout), id: WindowID.about) {
@@ -32,6 +36,7 @@ struct ArhivarApp: App {
         .windowResizability(.contentSize)
         .defaultPosition(.center)
         .restorationBehavior(.disabled)
+        .defaultLaunchBehavior(.suppressed)
         .commandsRemoved()
 
         // Konsol benzeri günlük; Pencere menüsündeki "Günlüğü Göster" (⌥⌘L) ile açılır.
@@ -41,6 +46,7 @@ struct ArhivarApp: App {
         }
         .defaultSize(width: 960, height: 560)
         .restorationBehavior(.disabled)
+        .defaultLaunchBehavior(.suppressed)
         .commandsRemoved()
 
         Settings {
@@ -52,26 +58,56 @@ struct ArhivarApp: App {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    /// Ana pencere işlemleri (gerçekte `AppModel` ve `NSApp`; testler sayar).
+    struct MainWindowActions {
+        /// Ana pencereyi uygulamayı etkinleştirmeden açar (`AppModel.openMainWindow`).
+        var open: () -> Void
+        /// Ana pencere bu oturumda bir istekle öne getirildi mi (`AppModel.mainWindowRequested`; ör. parola sorusu)?
+        var wasRequested: () -> Bool
+        /// Ekrandaki pencereleri kapatır (yalnızca penceresiz açılışta, istenmemiş pencere için çağrılır).
+        var close: () -> Void
+    }
+
     private let services = FinderServices()
     private var keyMonitor: Any?
     /// Yalnızca penceresiz bir istek için açıldıysa istekler bitince kapanma (Descarcator madde 506).
     let autoQuit: HandoffAutoQuit
+    private let mainWindow: MainWindowActions
 
     override convenience init() {
-        self.init(autoQuit: HandoffAutoQuit(
+        let autoQuit = HandoffAutoQuit(
             activity: {
                 var activity = AppModel.shared.handoffAutoQuitActivity
-                activity.windowVisible = NSApp?.windows.contains(where: \.isVisible) ?? false
+                // Yalnızca kullanıcının pencereleri, sayfalar ve kipli uyarılar sayılır; sistemin iç pencereleri değil.
+                activity.windowVisible = HandoffAutoQuit.showsUserWindow(NSApp?.windows ?? [], modalWindow: NSApp?.modalWindow)
                 return activity
             },
             terminate: { NSApp?.terminate(nil) }
-        ))
+        )
+        self.init(
+            autoQuit: autoQuit,
+            mainWindow: MainWindowActions(
+                open: { AppModel.shared.openMainWindow() },
+                wasRequested: { AppModel.shared.mainWindowRequested },
+                close: {
+                    // SwiftUI pencereyi göstermeyi bitirsin; kapatma bir sonraki turda yapılır ve karar yeniden denetlenir.
+                    DispatchQueue.main.async {
+                        guard autoQuit.launch == .handoffOnly, !AppModel.shared.mainWindowRequested else { return }
+                        let windows = (NSApp?.windows ?? []).filter { $0.canBecomeMain && $0.isVisible }
+                        guard !windows.isEmpty else { return }
+                        AppLog.shared.info(.app, "Closed \(windows.count) window(s) that opened by themselves during a background-only launch")
+                        windows.forEach { $0.close() }
+                    }
+                }
+            )
+        )
         // Uygulama nesnesi kurulurken bağlanır: istekle açılışta `odoc`, `applicationDidFinishLaunching`'den önce gelir.
         AppModel.shared.onHandoffsSettled = { [autoQuit] in autoQuit.handoffsSettled() }
     }
 
-    init(autoQuit: HandoffAutoQuit) {
+    init(autoQuit: HandoffAutoQuit, mainWindow: MainWindowActions) {
         self.autoQuit = autoQuit
+        self.mainWindow = mainWindow
         super.init()
         services.onUserRequest = { [autoQuit] in autoQuit.userEngaged(.service) }
         // Etkinleştirme bildirimi doğrudan izlenir (SwiftUI'nin temsilci aktarımına bağlı kalmaz): Dock tıklaması, ⌘⇥,
@@ -88,13 +124,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Belgesiz, olağan açılış kullanıcınındır; istekle (belgeyle) açılışta bu değer false'tur.
         let isDefaultLaunch = notification.userInfo?[NSApplication.launchIsDefaultUserInfoKey] as? Bool ?? true
-        autoQuit.launchFinished(isDefaultLaunch: isDefaultLaunch)
+        launchFinished(isDefaultLaunch: isDefaultLaunch)
         // Finder sağ tık menüsündeki "Hızlı Eylemler / Servisler" öğeleri.
         NSApp.servicesProvider = services
         NSUpdateDynamicServices()
         setupSpaceKeyMonitor()
         // Eski paket kimliğinin varsayılan uygulama seçimleri taşınır, Mac'te kalan kayıtları bir kez silinir.
         Task { await LegacyIdentityMigration.run() }
+    }
+
+    /// Açılışın sonu (açılıştaki `odoc` gelmiştir). SwiftUI ana pencereyi kendisi açmadığından, penceresiz bir istek için
+    /// başlatılmadıysa (olağan açılış, açma, Finder servisi, geri yüklenen oturum) ana pencere burada açılır; açıksa
+    /// yalnızca öne gelir. Penceresiz açılışta macOS'un geri yüklediği pencere kapatılır.
+    func launchFinished(isDefaultLaunch: Bool) {
+        autoQuit.launchFinished(isDefaultLaunch: isDefaultLaunch)
+        if autoQuit.launch == .handoffOnly {
+            closeUnrequestedWindows()
+        } else {
+            mainWindow.open()
+        }
+    }
+
+    /// Ana pencerenin içeriği belirdi. Penceresiz açılışta kimse istemediyse (macOS'un durum geri yüklemesi) kapatılır.
+    func mainWindowAppeared() {
+        closeUnrequestedWindows()
+    }
+
+    private func closeUnrequestedWindows() {
+        guard autoQuit.launch == .handoffOnly, !mainWindow.wasRequested() else { return }
+        mainWindow.close()
     }
 
     private func setupSpaceKeyMonitor() {
@@ -162,6 +220,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // ekleyebildiği istek kimliği parametresi vardır (`ExtractHandoff`). Pencere açılmaz; işaretsiz açma bugünkü gibi.
         if let request = ExtractHandoff.request(in: NSAppleEventManager.shared().currentAppleEvent) {
             autoQuit.handoffRequested()
+            // İlk istekten önce macOS'un geri yüklediği (ya da açılış sonunda açılan) pencere kullanıcının değildir.
+            closeUnrequestedWindows()
             AppModel.shared.extractHereInBackground(request.urls, requestID: request.requestID)
             return
         }
@@ -170,9 +230,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppModel.shared.handleOpenRequest(urls)
     }
 
-    /// Dock simgesine tıklama: kullanıcı uygulamayı istiyor, penceresiz açılış kapanmaz. true: olağan davranış (pencere açılır).
+    /// Dock simgesine tıklama: kullanıcı uygulamayı istiyor, penceresiz açılış kapanmaz. Görünen pencere yoksa ana pencere
+    /// açılır (SwiftUI açılışta bastırılan sahneyi kendisi açmayabilir); true: olağan davranış (küçültülmüş pencere geri gelir).
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         autoQuit.userEngaged(.reopen)
+        if !flag { mainWindow.open() }
         return true
     }
 
@@ -180,8 +242,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppModel.shared.discardTemporaryFiles()
     }
 
+    /// Son pencere kapanınca uygulama kapanır; penceresiz açılışta kapanma kararı `HandoffAutoQuit`'tedir (süren istek
+    /// yarıda kalmaz).
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
+        autoQuit.lastWindowClosed()
     }
 }
 

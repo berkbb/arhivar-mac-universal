@@ -28,11 +28,24 @@ private final class Harness {
     let clock = ManualSleep()
     var activity = HandoffAutoQuit.Activity()
     private(set) var terminated = 0
+    /// Ana pencere işlemleri: açma ve kapatma sayılır, "istekle öne getirildi" testte değiştirilir.
+    private(set) var opened = 0
+    private(set) var closed = 0
+    var windowRequested = false
     lazy var autoQuit = HandoffAutoQuit(
         sleep: { [clock] in await clock.sleep($0) },
         activity: { [unowned self] in self.activity },
         terminate: { [unowned self] in self.terminated += 1 }
     )
+
+    /// Uygulama temsilcisi; ana pencere işlemleri sayılır, hiçbir pencere açılmaz.
+    func makeDelegate() -> AppDelegate {
+        AppDelegate(autoQuit: autoQuit, mainWindow: AppDelegate.MainWindowActions(
+            open: { [unowned self] in self.opened += 1 },
+            wasRequested: { [unowned self] in self.windowRequested },
+            close: { [unowned self] in self.closed += 1 }
+        ))
+    }
 
     /// Bekleme görevi `sleep`'e ulaşana kadar bekler.
     func waitForSleep() async {
@@ -165,19 +178,138 @@ struct HandoffAutoQuitTests {
     /// olağan davranış (pencere açma) korunur.
     @Test func appDelegateTreatsReopenAndActivationAsUserActivity() async {
         let reopened = Harness()
-        let delegate = AppDelegate(autoQuit: reopened.autoQuit)
+        let delegate = reopened.makeDelegate()
         await reopened.backgroundLaunchSettled()
         let task = reopened.autoQuit.pendingQuit
         #expect(delegate.applicationShouldHandleReopen(NSApplication.shared, hasVisibleWindows: false))
         reopened.clock.advance()
         await task?.value
         #expect(reopened.terminated == 0 && reopened.autoQuit.launch == .user)
+        // SwiftUI ana pencereyi açılışta açmadığından Dock tıklaması onu açar.
+        #expect(reopened.opened == 1)
 
         let activated = Harness()
-        let other = AppDelegate(autoQuit: activated.autoQuit)
+        let other = activated.makeDelegate()
         activated.autoQuit.handoffRequested()
         NotificationCenter.default.post(name: NSApplication.didBecomeActiveNotification, object: NSApplication.shared)
         #expect(activated.autoQuit.launch == .user)
         withExtendedLifetime(other) {}
+    }
+
+    /// Gerçek deneme (Arhivar 1.6.0, yapı 21): istek için başlatılan Arhivar'da ana pencere belirdi ve "görünen pencere"
+    /// kapanmayı engelledi. SwiftUI ana pencereyi açılışta artık kendisi açmaz (`defaultLaunchBehavior(.suppressed)`);
+    /// temsilci de penceresiz açılışta açmaz, macOS'un geri yüklediği ya da sonradan kendiliğinden beliren pencereyi kapatır.
+    /// Bekleme süresi dolunca uygulama kapanır.
+    @Test func aBackgroundOnlyLaunchOpensNoMainWindowAndQuits() async {
+        let harness = Harness()
+        let delegate = harness.makeDelegate()
+        // Açılıştaki `odoc`, `applicationDidFinishLaunching`'den önce gelir.
+        harness.autoQuit.handoffRequested()
+        delegate.launchFinished(isDefaultLaunch: false)
+        #expect(harness.opened == 0, "penceresiz açılışta ana pencere açılmaz")
+        #expect(harness.closed == 1, "macOS'un geri yüklediği pencere kapatılır")
+        delegate.mainWindowAppeared()
+        #expect(harness.closed == 2, "sonradan kendiliğinden beliren pencere de kapatılır")
+
+        harness.autoQuit.handoffsSettled()
+        await harness.waitForSleep()
+        #expect(harness.terminated == 0, "bekleme süresi dolmadan kapanmaz")
+        await harness.elapse()
+        #expect(harness.terminated == 1)
+        #expect(harness.opened == 0)
+    }
+
+    /// Penceresiz açılışta parola sorusu için öne getirilen ana pencere kapatılmaz; kapanmayı pencerenin kendisi engeller.
+    @Test func aWindowPresentedForAPasswordStaysOpen() async {
+        let harness = Harness()
+        let delegate = harness.makeDelegate()
+        harness.autoQuit.handoffRequested()
+        delegate.launchFinished(isDefaultLaunch: false)
+        harness.windowRequested = true
+        harness.activity.windowVisible = true
+        delegate.mainWindowAppeared()
+        #expect(harness.closed == 1, "yalnızca açılıştaki denetim; istenen pencereye dokunulmaz")
+        harness.autoQuit.handoffsSettled()
+        await harness.waitForSleep()
+        await harness.elapse()
+        #expect(harness.terminated == 0)
+    }
+
+    /// Penceresiz açılışta kapanan son pencere (kendiliğinden belirip kapatılan) uygulamayı hemen kapatmaz: süren istek
+    /// yarıda kalırdı. Karar bekleme sonunda verilir. Diğer açılışlarda olağan kural: son pencere kapanınca kapanır.
+    @Test func theLastWindowClosingQuitsOnlyOutsideABackgroundLaunch() async {
+        let background = Harness()
+        let delegate = background.makeDelegate()
+        background.autoQuit.handoffRequested()
+        background.activity.handoffPending = true
+        #expect(!delegate.applicationShouldTerminateAfterLastWindowClosed(NSApplication.shared))
+        await background.waitForSleep()
+        await background.elapse()
+        #expect(background.terminated == 0, "istek sürüyor")
+        background.activity.handoffPending = false
+        background.autoQuit.handoffsSettled()
+        await background.waitForSleep()
+        await background.elapse()
+        #expect(background.terminated == 1)
+
+        for launch in [true, false] {
+            let normal = Harness()
+            let other = normal.makeDelegate()
+            other.launchFinished(isDefaultLaunch: launch)
+            #expect(other.applicationShouldTerminateAfterLastWindowClosed(NSApplication.shared))
+            #expect(normal.autoQuit.pendingQuit == nil)
+        }
+    }
+
+    /// Penceresiz istek için başlatılmayan her açılış ana pencereyi açar: olağan açılış, açma ya da Finder servisiyle açılış
+    /// ve geri yüklenen oturum (olağan sayılmaz). Kendiliğinden kapatma yalnızca penceresiz açılışta yapılır.
+    @Test func aNormalLaunchStillOpensTheMainWindow() {
+        let normal = Harness()
+        let delegate = normal.makeDelegate()
+        delegate.launchFinished(isDefaultLaunch: true)
+        #expect(normal.opened == 1 && normal.closed == 0 && normal.autoQuit.launch == .user)
+        delegate.mainWindowAppeared()
+        #expect(normal.closed == 0)
+
+        let opened = Harness()
+        let openDelegate = opened.makeDelegate()
+        opened.autoQuit.userEngaged(.open)
+        openDelegate.launchFinished(isDefaultLaunch: false)
+        #expect(opened.opened == 1 && opened.closed == 0)
+
+        let restored = Harness()
+        let restoredDelegate = restored.makeDelegate()
+        restoredDelegate.launchFinished(isDefaultLaunch: false)
+        restoredDelegate.mainWindowAppeared()
+        #expect(restored.opened == 1 && restored.closed == 0)
+        // Dock: görünen pencere varsa olağan davranış, yeni pencere açılmaz.
+        #expect(restoredDelegate.applicationShouldHandleReopen(NSApplication.shared, hasVisibleWindows: true))
+        #expect(restored.opened == 1)
+        #expect(restoredDelegate.applicationShouldHandleReopen(NSApplication.shared, hasVisibleWindows: false))
+        #expect(restored.opened == 2)
+    }
+
+    /// Kapanmayı yalnızca kullanıcının pencereleri engeller: ana olabilen pencere, sayfa ve kipli uyarı. Sistemin ve
+    /// AppKit'in iç pencereleri (ana olamayan panel) ya da ekranda olmayan pencere engellemez.
+    @Test func onlyUserWindowsKeepArhivarOpen() {
+        typealias Traits = HandoffAutoQuit.WindowTraits
+        #expect(HandoffAutoQuit.isUserWindow(Traits(isVisible: true, canBecomeMain: true)), "Arhivar penceresi")
+        #expect(HandoffAutoQuit.isUserWindow(Traits(isVisible: true, isSheet: true)), "parola sayfası")
+        #expect(HandoffAutoQuit.isUserWindow(Traits(isVisible: true, isModal: true)), "kipli uyarı")
+        #expect(!HandoffAutoQuit.isUserWindow(Traits(isVisible: true)), "iç pencere")
+        #expect(!HandoffAutoQuit.isUserWindow(Traits(canBecomeMain: true, isSheet: true, isModal: true)), "ekranda değil")
+
+        // Gerçek pencerelerle.
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 240, height: 120), styleMask: [.titled], backing: .buffered, defer: false)
+        let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 120, height: 60), styleMask: [.borderless], backing: .buffered, defer: false)
+        for item in [window, panel] { item.isReleasedWhenClosed = false }
+        defer { [window, panel].forEach { $0.close() } }
+        #expect(!HandoffAutoQuit.showsUserWindow([window, panel], modalWindow: nil), "henüz gösterilmedi")
+        panel.orderFrontRegardless()
+        #expect(panel.isVisible && !panel.canBecomeMain)
+        #expect(!HandoffAutoQuit.showsUserWindow([window, panel], modalWindow: nil), "ana olamayan iç panel")
+        #expect(HandoffAutoQuit.showsUserWindow([window, panel], modalWindow: panel), "kipli panel")
+        window.orderFrontRegardless()
+        #expect(HandoffAutoQuit.showsUserWindow([window, panel], modalWindow: nil))
     }
 }
