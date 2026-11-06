@@ -54,8 +54,41 @@ struct ArhivarApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let services = FinderServices()
     private var keyMonitor: Any?
+    /// Yalnızca penceresiz bir istek için açıldıysa istekler bitince kapanma (Descarcator madde 506).
+    let autoQuit: HandoffAutoQuit
+
+    override convenience init() {
+        self.init(autoQuit: HandoffAutoQuit(
+            activity: {
+                var activity = AppModel.shared.handoffAutoQuitActivity
+                activity.windowVisible = NSApp?.windows.contains(where: \.isVisible) ?? false
+                return activity
+            },
+            terminate: { NSApp?.terminate(nil) }
+        ))
+        // Uygulama nesnesi kurulurken bağlanır: istekle açılışta `odoc`, `applicationDidFinishLaunching`'den önce gelir.
+        AppModel.shared.onHandoffsSettled = { [autoQuit] in autoQuit.handoffsSettled() }
+    }
+
+    init(autoQuit: HandoffAutoQuit) {
+        self.autoQuit = autoQuit
+        super.init()
+        services.onUserRequest = { [autoQuit] in autoQuit.userEngaged(.service) }
+        // Etkinleştirme bildirimi doğrudan izlenir (SwiftUI'nin temsilci aktarımına bağlı kalmaz): Dock tıklaması, ⌘⇥,
+        // menü ya da pencere; kullanıcı uygulamayı kullanıyor.
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(applicationActivated(_:)), name: NSApplication.didBecomeActiveNotification, object: nil
+        )
+    }
+
+    @objc func applicationActivated(_ notification: Notification) {
+        autoQuit.userEngaged(.activated)
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Belgesiz, olağan açılış kullanıcınındır; istekle (belgeyle) açılışta bu değer false'tur.
+        let isDefaultLaunch = notification.userInfo?[NSApplication.launchIsDefaultUserInfoKey] as? Bool ?? true
+        autoQuit.launchFinished(isDefaultLaunch: isDefaultLaunch)
         // Finder sağ tık menüsündeki "Hızlı Eylemler / Servisler" öğeleri.
         NSApp.servicesProvider = services
         NSUpdateDynamicServices()
@@ -128,11 +161,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Başka bir uygulamanın (Descarcator) penceresiz Buraya Çıkar isteği: `odoc` olayında yalnızca çağıranın
         // ekleyebildiği istek kimliği parametresi vardır (`ExtractHandoff`). Pencere açılmaz; işaretsiz açma bugünkü gibi.
         if let request = ExtractHandoff.request(in: NSAppleEventManager.shared().currentAppleEvent) {
+            autoQuit.handoffRequested()
             AppModel.shared.extractHereInBackground(request.urls, requestID: request.requestID)
             return
         }
+        autoQuit.userEngaged(.open)
         AppModel.shared.presentMainWindow()
         AppModel.shared.handleOpenRequest(urls)
+    }
+
+    /// Dock simgesine tıklama: kullanıcı uygulamayı istiyor, penceresiz açılış kapanmaz. true: olağan davranış (pencere açılır).
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        autoQuit.userEngaged(.reopen)
+        return true
     }
 
     func applicationWillTerminate(_ notification: Notification) {

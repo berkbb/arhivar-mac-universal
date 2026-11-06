@@ -239,6 +239,8 @@ final class AppModel {
     @ObservationIgnored private var handoffStatus: ExtractHandoff.Status?
     /// İsteğin sonucunu çağırana iletir (gerçekte dağıtık bildirim; testler kaydeder).
     @ObservationIgnored var reportHandoff: (String, [ExtractHandoff.Status]) -> Void = { ExtractHandoff.post(requestID: $0, statuses: $1) }
+    /// Penceresiz istekler bitti, sonuçları bildirildi ve Buraya Çıkar kuyruğu boş (bkz. `HandoffAutoQuit`).
+    @ObservationIgnored var onHandoffsSettled: () -> Void = {}
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var previewCache: [String: URL] = [:]
     /// Şifreli girdilerin ve üst klasörlerinin yolları (bkz. `needsPassword`); liste değişince yeniden kurulur.
@@ -1649,6 +1651,19 @@ final class AppModel {
             reportHandoff(batch.requestID, statuses)
         }
         handoffBatches = waiting
+        // Sonuçlar bildirildikten sonra: bekleyen istek ve süren kuyruk yoksa penceresiz açılış kapanabilir (madde 506).
+        if waiting.isEmpty, serviceTask == nil { onHandoffsSettled() }
+    }
+
+    /// Penceresiz bir açılışın kendiliğinden kapanmasını engelleyen model durumu (`HandoffAutoQuit`; pencereleri
+    /// `AppDelegate` ekler). Aynı adlı öğe için soru sorulmaz (ayardaki kural uygulanır); her uyarı ve sayfa soru sayılır.
+    var handoffAutoQuitActivity: HandoffAutoQuit.Activity {
+        HandoffAutoQuit.Activity(
+            handoffPending: !handoffBatches.isEmpty,
+            queueBusy: serviceTask != nil || !serviceQueue.isEmpty || operation != nil || pendingOpen != nil,
+            questionOnScreen: passwordRequest != nil || alert != nil || createRequest != nil || renameRequest != nil
+                || deleteRequest != nil || addRequest != nil || quickLookURL != nil
+        )
     }
 
     /// Arşivin bu oturumda doğrulanmış parolası: açık arşivinki ya da iç içe gezinmede en dıştaki arşivinki.

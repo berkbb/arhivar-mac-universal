@@ -1967,7 +1967,10 @@ struct AppModelTests {
         var opened = 0
         model.registerWindowOpener { opened += 1 }
         var reports: [(id: String, statuses: [ExtractHandoff.Status])] = []
-        model.reportHandoff = { reports.append(($0, $1)) }
+        // Madde 506: "istekler bitti" (kendiliğinden kapanma denetimi) sonuç bildirildikten sonra, bir kez gelir.
+        var events: [String] = []
+        model.reportHandoff = { reports.append(($0, $1)); events.append("report \($0)") }
+        model.onHandoffsSettled = { events.append("settled") }
         let zip = try await fixture.makeArchive("paket.zip", format: .zip)
         let quarantine = Array("0083;68f1a2b3;Descarcator;0A1B2C3D-0000-4000-8000-000000000076".utf8)
         #expect(setxattr(zip.path, "com.apple.quarantine", quarantine, quarantine.count, 0, XATTR_NOFOLLOW) == 0)
@@ -1976,9 +1979,12 @@ struct AppModelTests {
         let text = fixture.workspace.appendingPathComponent("kaynak/not.txt")
 
         model.extractHereInBackground([zip, text, broken, nil], requestID: "istek-1")
+        #expect(model.handoffAutoQuitActivity.handoffPending && model.handoffAutoQuitActivity.queueBusy)
         await model.serviceQueueTask?.value
         await fixture.settle()
 
+        #expect(events == ["report istek-1", "settled"])
+        #expect(model.handoffAutoQuitActivity == HandoffAutoQuit.Activity())
         #expect(reports.map(\.id) == ["istek-1"])
         #expect(reports.first?.statuses == [.extracted, .skipped, .failed, .skipped])
         #expect(fixture.exists("paket/kaynak/not.txt"))
@@ -1992,6 +1998,7 @@ struct AppModelTests {
         // Arşiv yoksa hemen yanıtlanır.
         model.extractHereInBackground([text], requestID: "istek-2")
         #expect(reports.last?.id == "istek-2" && reports.last?.statuses == [.skipped])
+        #expect(events.suffix(2) == ["report istek-2", "settled"])
     }
 
     /// Parola gerekirse soru için pencere açılır (Buraya Çıkar gibi); doğru parolayla çıkarılır. Bölünmüş arşivin parçaları
@@ -2005,16 +2012,20 @@ struct AppModelTests {
         model.registerWindowOpener { opened += 1 }
         var reports: [[ExtractHandoff.Status]] = []
         model.reportHandoff = { reports.append($1) }
+        var settled = 0
+        model.onHandoffsSettled = { settled += 1 }
         let secret = try await fixture.makeArchive("gizli.7z", format: .sevenZip, password: "p4ss", encryptNames: true)
 
         model.extractHereInBackground([secret], requestID: "parola")
         for _ in 0..<200 where model.passwordRequest == nil { try await Task.sleep(for: .milliseconds(50)) }
         #expect(model.passwordRequest != nil && opened == 1)
         #expect(reports.isEmpty, "yanıt beklenirken sonuç bildirilmez")
+        // Soru ekrandayken penceresiz açılış kapanmaz (madde 506).
+        #expect(settled == 0 && model.handoffAutoQuitActivity.questionOnScreen && model.handoffAutoQuitActivity.handoffPending)
         model.submitPassword("p4ss")
         await model.serviceQueueTask?.value
         await fixture.settle()
-        #expect(reports == [[.extracted]])
+        #expect(reports == [[.extracted]] && settled == 1)
         #expect(fixture.exists("gizli/kaynak/not.txt") && model.alert == nil)
     }
 
