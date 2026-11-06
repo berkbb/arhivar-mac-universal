@@ -5,6 +5,10 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ## [Unreleased]
 
+### Changed
+
+- When a background Extract Here request from another app (Descarcator) is what started Arhivar, Arhivar now quits by itself about 4 seconds after it has reported the last result, instead of staying open with no window. A new request within those seconds is handled by the same Arhivar. It stays open if you started using it in the meantime (opened an archive or a window, clicked its Dock icon, switched to it, used a Finder service), while a password question or another window is on screen, while more archives are queued or extracting, and whenever it was already running before the request arrived.
+
 ## [1.6.0] — 2026-11-06
 
 ### Added

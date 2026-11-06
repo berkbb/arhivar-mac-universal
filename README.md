@@ -46,7 +46,7 @@ A native archive manager for macOS 26+, built with SwiftUI and Liquid Glass on t
 
 **Finder context menu:** the "Extract Here / Open / Compress with Arhivar" items appear under right-click › **Quick Actions** or **Services**. If they are missing, enable them in System Settings › Keyboard › Keyboard Shortcuts › Services › Files and Folders.
 
-**Extracting for other apps:** Descarcator can ask Arhivar to extract downloaded archives next to themselves in the background, without opening a window (a window appears only when an archive needs a password). This works through an open request only an app can send, never through a web link, and it does not depend on the Services setting. See DEVELOPMENT.md › Background Extract Here for other apps.
+**Extracting for other apps:** Descarcator can ask Arhivar to extract downloaded archives next to themselves in the background, without opening a window (a window appears only when an archive needs a password). If the request is what started Arhivar, it quits again a few seconds after the work is done, unless you started using it in the meantime. This works through an open request only an app can send, never through a web link, and it does not depend on the Services setting. See DEVELOPMENT.md › Background Extract Here for other apps.
 
 **Updates:** **Check for Arhivar Updates…** in the Arhivar menu opens the download link when a new version is available. The 7-Zip engine is updated from inside the app with **Check for 7-Zip Updates…**.
 

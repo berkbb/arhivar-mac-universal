@@ -74,7 +74,7 @@
 | `Package.swift` | SwiftPM manifest: `ArhivarCore`, `CLibArchive`, `Arhivar`, `ArhivarQuickLook`, `ArhivarCoreTests`, `ArhivarAppTests`. |
 | `Sources/ArhivarCore/` | Engine-facing core: `SevenZipCommand`, `CommandRunner`, `SandboxProfile`, `ListingParser` / `ArchiveListing`, `ArchiveTree`, `StagedExtraction`, `Quarantine`, `OpenSafety`, `AppUpdateChecker` + `UpdateSignature`, `AppLog`, `Localization` (`LKey`). |
 | `Sources/CLibArchive/` | Header and shim for the macOS system `libarchive` (linked, not bundled), used only by the Quick Look listing. |
-| `Sources/Arhivar/` | `@MainActor` SwiftUI app (`ArhivarApp`, `AppModel`, `AppSettings`, `FinderServices`, `LegacyIdentityMigration`, `Views/`). |
+| `Sources/Arhivar/` | `@MainActor` SwiftUI app (`ArhivarApp`, `AppModel`, `AppSettings`, `FinderServices`, `HandoffAutoQuit`, `LegacyIdentityMigration`, `Views/`). |
 | `Sources/ArhivarQuickLook/` | Finder Quick Look preview extension. |
 | `Vendor/7-Zip/` | Bundled unmodified `7zz` with its license and manual, updated by `Scripts/update-7zip.sh` (`SOURCE.txt` records provenance). |
 | `Resources/` | `AppIcon.icns`, `DocumentIcons/`, and the `tr.lproj`, `en.lproj`, `ro.lproj` localization tables. |
