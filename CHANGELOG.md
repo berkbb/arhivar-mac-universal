@@ -5,10 +5,6 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ## [Unreleased]
 
-### Changed
-
-- An Arhivar started only for a background Extract Here request from another app (Descarcator) no longer shows its main window. SwiftUI no longer opens the main window by itself at launch; Arhivar opens it at the end of every other launch (a normal launch, an open from Finder, "Open With" or a browser, a Finder service, a restored session) and when you click its Dock icon with no window open. A window that macOS restores during a background-only launch is closed, and the App Log says so. Arhivar therefore quits by itself after the last result again, as 1.6.0 intended. Only Arhivar's own windows, sheets and modal alerts now keep it open; AppKit's internal windows do not. A password question still opens the window and keeps Arhivar open, and closing the last window during a background-only launch no longer stops a request that is still running.
-
 ## [1.6.0] — 2026-11-06
 
 ### Added
@@ -21,6 +17,7 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 - Arhivar's license is now stated explicitly as GNU General Public License version 3 only (`GPL-3.0-only`); the `LICENSE` text is unchanged. `README.md`, `THIRD_PARTY_NOTICES.md` and the license viewer say so, and every Swift source file starts with an `SPDX-License-Identifier: GPL-3.0-only` line. 7-Zip keeps its own LGPL + unRAR terms as a separate program.
 - Agent governance in `.agents/` is brought up to date. The rule files are rewritten against the current primary sources of each standard, with Arhivar-specific requirements checked against the code. Outdated and invented standard names are gone: eight files are renamed (for example `memgpt_os_memory.md` → `letta_memory_management.md`), `grok_reasoning_trace.md` is removed and `graphify_knowledge_graph.md` is added. `AGENTS.md` gains graph-first navigation, a repository map and the 2026 OWASP agentic categories. The engine skill is renamed `engine_maintenance_skill.md`, and the test skill takes the exit code from `swift test` itself. `code_graph_wiki.md` now starts from the graph's summary and hub nodes.
 - When a background Extract Here request from another app (Descarcator) is what started Arhivar, Arhivar now quits by itself about 4 seconds after it has reported the last result, instead of staying open with no window. A new request within those seconds is handled by the same Arhivar. It stays open if you started using it in the meantime (opened an archive or a window, clicked its Dock icon, switched to it, used a Finder service), while a password question or another window is on screen, while more archives are queued or extracting, and whenever it was already running before the request arrived.
+- An Arhivar started only for a background Extract Here request from another app (Descarcator) no longer shows its main window. SwiftUI no longer opens the main window by itself at launch; Arhivar opens it at the end of every other launch (a normal launch, an open from Finder, "Open With" or a browser, a Finder service, a restored session) and when you click its Dock icon with no window open. A window that macOS restores during a background-only launch is closed, and the App Log says so. Arhivar therefore quits by itself after the last result again, as 1.6.0 intended. Only Arhivar's own windows, sheets and modal alerts now keep it open; AppKit's internal windows do not. A password question still opens the window and keeps Arhivar open, and closing the last window during a background-only launch no longer stops a request that is still running.
 
 ## [1.5.4] — 2026-11-02
 
