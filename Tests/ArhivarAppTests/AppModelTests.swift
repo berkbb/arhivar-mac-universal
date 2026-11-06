@@ -1954,6 +1954,102 @@ struct AppModelTests {
         #expect(!fixture.exists("sirada"))
     }
 
+    // MARK: - Penceresiz Buraya Çıkar (ExtractHandoff, Descarcator madde 76)
+
+    /// İstek pencere açmadan her arşivi yanına (Buraya Çıkar kurallarıyla) çıkarır ve istekteki sırayla arşiv başına
+    /// sonuç bildirir: arşiv olmayan öğe atlanır, bozuk arşiv hata penceresi yerine "failed" olur. Karantina işareti
+    /// çıkanlara aktarılır. Sonuç bildirimi testte kaydedilir; hiçbir şey yayımlanmaz.
+    @Test func backgroundExtractReportsEachArchiveWithoutAWindow() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let model = fixture.model
+        var opened = 0
+        model.registerWindowOpener { opened += 1 }
+        var reports: [(id: String, statuses: [ExtractHandoff.Status])] = []
+        model.reportHandoff = { reports.append(($0, $1)) }
+        let zip = try await fixture.makeArchive("paket.zip", format: .zip)
+        let quarantine = Array("0083;68f1a2b3;Descarcator;0A1B2C3D-0000-4000-8000-000000000076".utf8)
+        #expect(setxattr(zip.path, "com.apple.quarantine", quarantine, quarantine.count, 0, XATTR_NOFOLLOW) == 0)
+        let broken = fixture.workspace.appendingPathComponent("bozuk.7z")
+        try Data("not an archive".utf8).write(to: broken)
+        let text = fixture.workspace.appendingPathComponent("kaynak/not.txt")
+
+        model.extractHereInBackground([zip, text, broken, nil], requestID: "istek-1")
+        await model.serviceQueueTask?.value
+        await fixture.settle()
+
+        #expect(reports.map(\.id) == ["istek-1"])
+        #expect(reports.first?.statuses == [.extracted, .skipped, .failed, .skipped])
+        #expect(fixture.exists("paket/kaynak/not.txt"))
+        #expect(Quarantine.value(of: fixture.workspace.appendingPathComponent("paket/kaynak/not.txt")) != nil)
+        #expect(opened == 0 && model.alert == nil && model.passwordRequest == nil)
+        // Günlükte yalnızca sayılar: yol ya da ad yok.
+        let line = try #require(AppLog.shared.entries.last { $0.message.hasPrefix("Background extract request finished") })
+        #expect(line.message == "Background extract request finished: 1 extracted, 0 warnings, 1 failed, 0 cancelled, 2 skipped")
+        #expect(line.level == .warning && line.detail == nil)
+
+        // Arşiv yoksa hemen yanıtlanır.
+        model.extractHereInBackground([text], requestID: "istek-2")
+        #expect(reports.last?.id == "istek-2" && reports.last?.statuses == [.skipped])
+    }
+
+    /// Parola gerekirse soru için pencere açılır (Buraya Çıkar gibi); doğru parolayla çıkarılır. Bölünmüş arşivin parçaları
+    /// tek arşiv olarak çıkarılır, her parça aynı sonucu alır.
+    @Test func backgroundExtractAsksForThePasswordInTheWindow() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let model = fixture.model
+        var opened = 0
+        model.registerWindowOpener { opened += 1 }
+        var reports: [[ExtractHandoff.Status]] = []
+        model.reportHandoff = { reports.append($1) }
+        let secret = try await fixture.makeArchive("gizli.7z", format: .sevenZip, password: "p4ss", encryptNames: true)
+
+        model.extractHereInBackground([secret], requestID: "parola")
+        for _ in 0..<200 where model.passwordRequest == nil { try await Task.sleep(for: .milliseconds(50)) }
+        #expect(model.passwordRequest != nil && opened == 1)
+        #expect(reports.isEmpty, "yanıt beklenirken sonuç bildirilmez")
+        model.submitPassword("p4ss")
+        await model.serviceQueueTask?.value
+        await fixture.settle()
+        #expect(reports == [[.extracted]])
+        #expect(fixture.exists("gizli/kaynak/not.txt") && model.alert == nil)
+    }
+
+    /// Parola sorusu kapatılır ya da işlem durdurulursa sonuç "cancelled"; kuyrukta bekleyenler de durdurulmuş sayılır.
+    @Test func backgroundExtractReportsCancelledArchives() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let model = fixture.model
+        var reports: [[ExtractHandoff.Status]] = []
+        model.reportHandoff = { reports.append($1) }
+        let secret = try await fixture.makeArchive("gizli.7z", format: .sevenZip, password: "p4ss", encryptNames: true)
+        let plain = try await fixture.makeArchive("acik.zip", format: .zip)
+
+        model.extractHereInBackground([secret, plain], requestID: "vazgec")
+        for _ in 0..<200 where model.passwordRequest == nil { try await Task.sleep(for: .milliseconds(50)) }
+        model.cancelPasswordRequest()
+        await model.serviceQueueTask?.value
+        await fixture.settle()
+        #expect(reports == [[.cancelled, .extracted]])
+        #expect(!fixture.exists("gizli") && fixture.exists("acik/kaynak/not.txt"))
+
+        // Başka bir işlem sürerken gelen istek, iptalle kuyruktan düşer.
+        model.openArchive(plain)
+        await fixture.settle()
+        model.testArchive()
+        #expect(model.operation != nil)
+        model.extractHereInBackground([secret], requestID: "durdur")
+        model.cancelOperation()
+        await model.serviceQueueTask?.value
+        await fixture.settle()
+        #expect(reports.last == [.cancelled])
+        #expect(!fixture.exists("gizli"))
+    }
+
     /// Yerinde düzenleme (7zz arşivi yeni bir inode olarak yazar) karantina işaretini, Finder etiketlerini ve kipi korur.
     @Test func inPlaceEditKeepsQuarantineTagsAndMode() async throws {
         let fixture = try Fixture()

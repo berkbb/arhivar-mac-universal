@@ -125,6 +125,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Finder'dan "Birlikte Aç" ile gelen arşivler.
     func application(_ application: NSApplication, open urls: [URL]) {
+        // Başka bir uygulamanın (Descarcator) penceresiz Buraya Çıkar isteği: `odoc` olayında yalnızca çağıranın
+        // ekleyebildiği istek kimliği parametresi vardır (`ExtractHandoff`). Pencere açılmaz; işaretsiz açma bugünkü gibi.
+        if let request = ExtractHandoff.request(in: NSAppleEventManager.shared().currentAppleEvent) {
+            AppModel.shared.extractHereInBackground(request.urls, requestID: request.requestID)
+            return
+        }
         AppModel.shared.presentMainWindow()
         AppModel.shared.handleOpenRequest(urls)
     }

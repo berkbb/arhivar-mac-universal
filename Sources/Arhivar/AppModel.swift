@@ -231,6 +231,14 @@ final class AppModel {
     /// Açık arşivin önizleme ve sürükleme dosyaları; arşiv kapanınca ve uygulamadan çıkışta silinir.
     @ObservationIgnored private var sessionRoot: URL?
     @ObservationIgnored private var serviceTask: Task<Void, Never>?
+    /// Penceresiz Buraya Çıkar istekleri (`ExtractHandoff`), geliş sırasıyla; sonuçlanan istek bildirilip düşer.
+    @ObservationIgnored private var handoffBatches: [HandoffBatch] = []
+    /// Şu an penceresiz bir istek için çıkarılan arşiv (ilk parça); nil ise kuyruktaki çıkarma sıradandır.
+    @ObservationIgnored private var handoffArchive: URL?
+    /// `handoffArchive`'ın sonucu; çıkarma bitince okunur (nil: durduruldu ya da parola sorusu kapatıldı).
+    @ObservationIgnored private var handoffStatus: ExtractHandoff.Status?
+    /// İsteğin sonucunu çağırana iletir (gerçekte dağıtık bildirim; testler kaydeder).
+    @ObservationIgnored var reportHandoff: (String, [ExtractHandoff.Status]) -> Void = { ExtractHandoff.post(requestID: $0, statuses: $1) }
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var previewCache: [String: URL] = [:]
     /// Şifreli girdilerin ve üst klasörlerinin yolları (bkz. `needsPassword`); liste değişince yeniden kurulur.
@@ -932,6 +940,8 @@ final class AppModel {
         let subfolderMode = settings.subfolderMode
         let archiveName = ArchiveNaming.baseName(of: archive)
         let isOpenArchive = archive == archiveURL
+        // Penceresiz istek: uyarı gösterilmez, sonucu kaydedilir (bkz. extractHereInBackground).
+        let quiet = handoffArchive == archive
         let knownEntries = isOpenArchive ? listing?.entries : nil
         let rawItems = isOpenArchive ? items.map(archivePath(for:)) : items
         let retry = PendingAction.extract(items: items, destination: base, stripping: stripping)
@@ -1006,7 +1016,8 @@ final class AppModel {
                 let targetItems = meaningfulChanged.isEmpty ? changed : meaningfulChanged
                 let reveal = destination == base && targetItems.count == 1 ? targetItems[0] : destination
                 let warning = warnings.isEmpty ? nil : warnings.joined(separator: "\n\n")
-                self.finish(message: self.t(.toastExtracted, reveal.lastPathComponent), reveal: reveal, warning: warning)
+                if quiet { self.handoffStatus = warning == nil ? .extracted : .warnings }
+                self.finish(message: self.t(.toastExtracted, reveal.lastPathComponent), reveal: reveal, warning: warning, quiet: quiet)
             } catch {
                 await Self.discardStaging(staging)
                 throw error
@@ -1570,14 +1581,74 @@ final class AppModel {
                 // Beklerken iptal kuyruğu boşalttıysa bu arşiv de çıkarılmaz (baş öğe önce kuyruktan alınsaydı kaçardı).
                 guard serviceQueue.first == archive else { continue }
                 serviceQueue.removeFirst()
+                // Penceresiz bir istek bu arşivi bekliyorsa çıkarma sessizdir ve sonucu o isteğe yazılır.
+                let quiet = handoffBatches.contains { $0.awaits(archive) }
+                handoffArchive = quiet ? archive : nil
+                handoffStatus = nil
                 // Açık (ya da iç içe gezinmede en dıştaki) arşivin bilinen parolası kullanılır: parolasız deneme
                 // "yanlış parola" sayılıp açık arşivin parolasını silerdi.
                 runExtract(archive: archive, items: [], base: archive.deletingLastPathComponent(), stripping: "", password: knownPassword(for: archive))
                 // Parola sorulursa, yeniden deneme de bitene kadar sıradakine geçme.
                 await waitUntilIdle()
+                if quiet { recordHandoff(archive, status: handoffStatus ?? .cancelled) }
+                handoffArchive = nil
+                handoffStatus = nil
             }
             serviceTask = nil
+            // Kuyruk boşaldı (iptal kuyruğu da boşaltır): sonucu olmayan arşivler durduruldu sayılır.
+            reportFinishedHandoffs(cancellingUnfinished: true)
         }
+    }
+
+    /// Penceresiz bir "Buraya Çıkar" isteği (`ExtractHandoff`, Descarcator madde 76).
+    struct HandoffBatch {
+        let requestID: String
+        /// İstekteki her dosyanın kuyruktaki karşılığı (bölünmüş arşivde ilk parça), istekteki sırayla; arşiv değilse nil.
+        let archives: [URL?]
+        var results: [URL: ExtractHandoff.Status] = [:]
+
+        func awaits(_ archive: URL) -> Bool { results[archive] == nil && archives.contains(archive) }
+        var isComplete: Bool { archives.allSatisfy { $0.map { results[$0] != nil } ?? true } }
+        /// İstekteki sırayla durumlar: arşiv olmayan `skipped`, sonucu olmayan `cancelled`.
+        var statuses: [ExtractHandoff.Status] { archives.map { $0.map { results[$0] ?? .cancelled } ?? .skipped } }
+    }
+
+    /// Penceresiz "Buraya Çıkar": Buraya Çıkar kuyruğunu ve kurallarını (yanına çıkarma, alt klasör, aynı adlı öğe,
+    /// karantina) kullanır ama pencere açmaz; hata ve uyarılar pencerede gösterilmez, günlüğe yazılır ve arşiv başına
+    /// sonuçla bildirilir. Parola gerekirse soru için pencere açılır (Buraya Çıkar'daki gibi).
+    /// - Parameter urls: İstekteki dosyalar, sırayla (dosya olmayan öğe nil).
+    func extractHereInBackground(_ urls: [URL?], requestID: String) {
+        let archives = urls.map { url in url.flatMap { ArchiveNaming.isArchive($0) ? ArchiveNaming.firstVolume(of: $0) : nil } }
+        AppLog.shared.info(.archive, "Background extract request: \(urls.count) item(s), \(archives.compactMap { $0 }.count) archive(s)")
+        handoffBatches.append(HandoffBatch(requestID: requestID, archives: archives))
+        extractHere(archives.compactMap { $0 })
+        // Hiç arşiv yoksa hemen yanıtlanır.
+        reportFinishedHandoffs()
+    }
+
+    /// Arşivin sonucu onu bekleyen ilk isteğe yazılır (aynı arşivi isteyen sonraki istek kuyruktaki ikinci çıkarmayı bekler).
+    private func recordHandoff(_ archive: URL, status: ExtractHandoff.Status) {
+        if let index = handoffBatches.firstIndex(where: { $0.awaits(archive) }) {
+            handoffBatches[index].results[archive] = status
+        }
+        reportFinishedHandoffs()
+    }
+
+    /// Tamamlanan istekleri (ya da kuyruk boşaldıysa hepsini) çağırana bildirir; günlüğe yalnızca sayılar yazılır.
+    private func reportFinishedHandoffs(cancellingUnfinished: Bool = false) {
+        var waiting: [HandoffBatch] = []
+        for batch in handoffBatches {
+            guard batch.isComplete || cancellingUnfinished else {
+                waiting.append(batch)
+                continue
+            }
+            let statuses = batch.statuses
+            let counts = ExtractHandoff.Status.allCases.map { status in "\(statuses.filter { $0 == status }.count) \(status.rawValue)" }
+            AppLog.shared.log(statuses.allSatisfy { $0 == .extracted } ? .info : .warning, .archive,
+                              "Background extract request finished: " + counts.joined(separator: ", "))
+            reportHandoff(batch.requestID, statuses)
+        }
+        handoffBatches = waiting
     }
 
     /// Arşivin bu oturumda doğrulanmış parolası: açık arşivinki ya da iç içe gezinmede en dıştaki arşivinki.
@@ -1841,6 +1912,12 @@ final class AppModel {
             return
         }
         guard let engineURL, engineStatus != .missing else {
+            if let archive, archive == handoffArchive {
+                // Penceresiz istek: uyarı yerine sonuç (pencere açılmaz).
+                AppLog.shared.error(.archive, "Background extraction failed: 7-Zip engine not found")
+                handoffStatus = .failed
+                return
+            }
             alert = AlertItem(title: t(.engineMissingTitle), message: t(.errorEngineNotFound))
             return
         }
@@ -1878,6 +1955,8 @@ final class AppModel {
                     AppLog.shared.info(.archive, usedPassword ? "Password was wrong; asking again" : "Archive needs a password")
                     if archive == archiveURL { password = nil }
                     passwordRequest = PasswordRequest(archive: archive, isRetry: usedPassword, action: retry)
+                    // Penceresiz istek: soru için pencere gerekir; Buraya Çıkar'daki gibi açılır.
+                    if archive == handoffArchive { presentMainWindow() }
                     return
                 }
             default:
@@ -1885,6 +1964,11 @@ final class AppModel {
             }
         }
         AppLog.shared.error(.archive, "Operation failed: \(kind)", detail: detail)
+        if let archive, archive == handoffArchive {
+            // Penceresiz istek: hata pencerede gösterilmez; çağıran sonuçla öğrenir, ayrıntı günlükte.
+            handoffStatus = .failed
+            return
+        }
         alert = AlertItem(title: t(.errorTitle), message: message(for: error))
     }
 
@@ -1931,8 +2015,11 @@ final class AppModel {
         }
     }
 
-    private func finish(message: String, reveal url: URL, warning: String?) {
-        if let warning {
+    /// - Parameter quiet: penceresiz istek; uyarı pencerede gösterilmez, günlüğe yazılır (çağıran sonuçla öğrenir).
+    private func finish(message: String, reveal url: URL, warning: String?, quiet: Bool = false) {
+        if let warning, quiet {
+            AppLog.shared.warning(.archive, "Background extraction finished with warnings", detail: warning)
+        } else if let warning {
             alert = AlertItem(title: t(.warningTitle), message: warning)
         } else {
             showToast(message, systemImage: "checkmark.circle.fill", revealURL: url)
