@@ -162,6 +162,17 @@ Verification steps:
 
 The services are defined under `NSServices` in `Support/Info.plist`; their titles come from the `ServicesMenu.strings` files. They are registered with `NSUpdateDynamicServices()` when the app first launches. In Finder they appear under right-click › **Quick Actions** or **Services**. If they are missing, they can be enabled in System Settings › Keyboard › Keyboard Shortcuts › Services.
 
+### Background Extract Here for other apps
+
+Another app (Descarcator) can hand archives to Arhivar without a window and without waiting for it (`ExtractHandoff` in ArhivarCore):
+
+- **Support:** `Support/Info.plist` › `ArhivarExtractHandoff` (integer, contract version, currently 1). Callers read it without launching Arhivar and use the Finder service when it is missing.
+- **Request:** the caller builds an open-documents Apple event (`aevt`/`odoc`, the archives as a list of file URLs) with one extra string parameter `'ArXh'` holding its own opaque request ID (1–64 letters, digits or `-`), sets it as `NSWorkspace.OpenConfiguration.appleEvent` and calls `NSWorkspace.openApplication(at:configuration:)` (`activates = false`). Passing the archives to `open(_:withApplicationAt:configuration:)` as well is not needed and could produce a second, plain open. `AppDelegate.application(_:open:)` reads the parameter from the current Apple event; without it (Finder, "Open With", a browser) the archive opens in the window as before. There is no URL scheme, so a web page cannot start an extraction.
+- **Work:** each archive is extracted next to itself through the Extract Here queue, with the same subfolder, same-name and quarantine rules. No window opens unless a password is needed; errors and warnings go to the log (Window › Show Log) instead of an alert.
+- **Result:** one distributed notification `com.babadogantech.arhivar.extractHandoffFinished` per request, with the request ID as its object and `userInfo` = `["version": 1, "results": [...]]`, one of `extracted`, `warnings`, `failed`, `cancelled`, `skipped` per file in request order. It carries no paths or names, because every process in the session can read distributed notifications.
+- Tests: `ExtractHandoffTests` (event parsing, payload, Info.plist key, no URL scheme) and `AppModelTests.backgroundExtract…` (real 7zz in a temporary folder; the notification is replaced by a recorder).
+- Arhivar stays running without a window after a background request that launched it (clicking the Dock icon opens the window); it is not quit automatically.
+
 ## Agent tooling (`.agents/` and Graphify)
 
 Coding agents read [`.agents/AGENTS.md`](.agents/AGENTS.md) first: it holds the invariants (process boundary, sandbox, staged extraction, quarantine, localization), the workflow and a repository map. `.agents/rules/` keeps one file per adopted agent standard (index: `about_rules.md`), `.agents/skills/` the test, snapshot and engine procedures, and `.agents/context/` the domain and code-graph wikis, the roadmap and the rejected specs.

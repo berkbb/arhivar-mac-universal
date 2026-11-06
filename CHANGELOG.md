@@ -7,6 +7,7 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ### Added
 
+- Background Extract Here for other apps: Descarcator (and any app that follows the contract) can hand archives to Arhivar with a marked open request; Arhivar extracts each one next to itself with its usual subfolder, same-name and quarantine rules, opens no window unless an archive needs a password, and reports one result per archive (`extracted`, `warnings`, `failed`, `cancelled`, `skipped`) back to the caller in a notification with no paths or names. Plain opens from Finder, "Open With" or a browser behave as before, and there is no URL scheme. `Support/Info.plist` announces it with `ArhivarExtractHandoff` = 1. See DEVELOPMENT.md › Background Extract Here for other apps.
 - Developer tooling, not part of the app: a local code knowledge graph built with [Graphify](https://github.com/Graphify-Labs/graphify) from code only, offline and without an LLM (`.graphifyrc`, `.graphifyignore`, output in the git-ignored `graphify-out/`), plus the project-scoped Claude Code skill and pre-search reminder (`CLAUDE.md`, `.claude/`). The skill files keep their Apache-2.0 license; `LICENSE`, `LICENSE-MIT` and `NOTICE` sit next to them and `THIRD_PARTY_NOTICES.md` has a new "Repository-only files" section. See DEVELOPMENT.md › Agent tooling.
 
 ### Changed
