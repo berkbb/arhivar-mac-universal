@@ -2,7 +2,7 @@
 
 > **Memory Category:** TencentDB Procedural Memory (Skill Asset)
 > **Trigger:** Checking or updating the bundled `7zz` engine (`Vendor/7-Zip`, or the copy inside `build/Arhivar.app`), or changing `ListingParser` / `ArchiveTree` performance-critical paths.
-> **Last Reviewed:** 2026-11-04 (renamed from `model_trainer_skill.md`; every command and flag checked against `Scripts/update-7zip.sh`).
+> **Last Reviewed:** 2026-11-08 (`--arch` and the API download fallback added; every command and flag checked against `Scripts/update-7zip.sh`).
 
 ---
 
@@ -18,15 +18,18 @@ Keeps the bundled, unmodified 7-Zip (`7zz`) engine current with recorded provena
 ```bash
 ./Scripts/update-7zip.sh check
 ```
-- Queries `https://api.github.com/repos/ip7z/7zip/releases/latest` and prints `KEY=value` lines (`LATEST`, `CURRENT`, `SOURCE`, `TARGET`, `STATUS=up-to-date` or `update-available`); human messages go to stderr. With no target it checks `Vendor/7-Zip` when run from the project.
+- Queries `https://api.github.com/repos/ip7z/7zip/releases/latest` and prints `KEY=value` lines (`LATEST`, `CURRENT`, `ARCH`, `SOURCE`, `TARGET`, `STATUS=up-to-date` or `update-available`); human messages go to stderr. With no target it checks `Vendor/7-Zip` when run from the project.
 
 ### Step 2: Install the Update (Needs the User's Approval)
 ```bash
-./Scripts/update-7zip.sh install --dest Vendor/7-Zip
-./Scripts/update-7zip.sh install --dest Vendor/7-Zip --app build/Arhivar.app   # also update a built app
+./Scripts/update-7zip.sh install --dest Vendor/7-Zip --arch universal          # Vendor must stay universal (arm64 + x86_64)
+./Scripts/update-7zip.sh install --dest Vendor/7-Zip --app build/Arhivar.app --arch universal   # also update a built app
 ```
+
+Since 7-Zip 26.06 the macOS download is split into an arm64 package (`-mac.tar.xz`) and an x86_64 package (`-mac-x64.tar.xz`); `--arch universal` downloads both, verifies both digests and merges them with `lipo`. Without `--arch`, an explicit `--dest`/`--app` target keeps a universal `7zz` universal and otherwise gets this Mac's architecture; the project default target is always universal. Confirm with `lipo -archs Vendor/7-Zip/7zz` (expected: `x86_64 arm64`) and the `archs=` line in `SOURCE.txt`; `package.sh` refuses an engine that lacks a built architecture.
+
 - `7-Zip-Guncelle.command` does the same from Finder (both targets when `build/Arhivar.app` exists).
-- Downloads the `7zNNNN-mac.tar.xz` release asset over HTTPS only, rejects URLs outside `https://github.com/ip7z/7zip/releases/download/`, verifies the GitHub `sha256:` digest, checks that `7zz` is a Mach-O binary whose reported version matches the release tag, replaces the binary atomically, and signs it ad hoc. For `--dest` it copies `License.txt`, `History.txt`, `readme.txt`, and `MANUAL` and records `version`, `asset`, `url`, and `sha256` in `SOURCE.txt`; for `--app` it updates `Contents/MacOS/7zz`, `7-Zip-License.txt`, and `Manual` and re-signs the app ad hoc.
+- Downloads the `7zNNNN-mac.tar.xz` (and, for `universal`/`x86_64`, `7zNNNN-mac-x64.tar.xz`) release asset over HTTPS only, rejects URLs outside `https://github.com/ip7z/7zip/releases/download/` (fallback: the same asset's `https://api.github.com/repos/ip7z/7zip/releases/assets/` URL when github.com fails), verifies the GitHub `sha256:` digest of each file, checks that `7zz` is a Mach-O binary with the requested architectures whose reported version matches the release tag (a slice that cannot run on this Mac is accepted on digest and `lipo` alone), replaces the binary atomically, and signs it ad hoc. For `--dest` it copies `License.txt`, `History.txt`, `readme.txt`, and `MANUAL` and records `version`, `archs`, `asset`, `url`, `sha256` (plus `asset_x64`, `url_x64`, `sha256_x64` for a merged engine) in `SOURCE.txt`; for `--app` it updates `Contents/MacOS/7zz`, `7-Zip-License.txt`, and `Manual` and re-signs the app ad hoc.
 - `--force` reinstalls the current version. Never use `--no-verify` (skips the SHA-256 check) without the user's explicit decision.
 
 ### Step 3: Re-Verify the Engine Contract After an Update
