@@ -18,7 +18,7 @@ A native archive manager for macOS 26+, built with SwiftUI and Liquid Glass on t
 - **Create:** 7z, ZIP, TAR, WIM, GZIP, BZIP2, XZ; compression level, AES-256, file name encryption, split volumes
 - **Edit (7z, ZIP, TAR, WIM):** add files (including drag and drop), delete, rename
 - **Finder context menu:** Extract Here / Open / Compress with Arhivar
-- **Document icons:** when Arhivar is the default app for a type, archives get Arhivar icons (ZIP, 7Z, RAR, TAR family, disk images, other archives)
+- **Document icons:** when Arhivar is the default app for a type, archives get Arhivar icons labelled with their format (ZIP, 7Z, RAR, TAR, GZ, TGZ, BZ2, XZ, TXZ, ZST, ISO, DMG, WIM, CAB, DEB, RPM, …)
 - **Languages:** Turkish (default), English, Romanian
 - **Appearance:** Automatic, Light, Dark
 - **Windows:** Settings, About and a Console-style Log (⌥⌘L) that also mirrors to the macOS Console app
@@ -43,6 +43,12 @@ A native archive manager for macOS 26+, built with SwiftUI and Liquid Glass on t
      ```
    - You only need to do this once, although macOS may ask again after an update.
 5. On first launch, Arhivar asks for permission to check GitHub for updates automatically. You can change this later in **Settings › Advanced**.
+
+**Upgrading from 1.6.0 or earlier:** 1.6.1 replaces the six family document icons with one icon per format. If Finder keeps showing the old icons, clear the system icon cache once in Terminal (administrator password required):
+
+```bash
+sudo rm -rf /Library/Caches/com.apple.iconservices.store && killall Finder Dock
+```
 
 **Finder context menu:** the "Extract Here / Open / Compress with Arhivar" items appear under right-click › **Quick Actions** or **Services**. If they are missing, enable them in System Settings › Keyboard › Keyboard Shortcuts › Services › Files and Folders.
 

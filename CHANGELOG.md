@@ -5,6 +5,15 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ## [Unreleased]
 
+## [1.6.1] — 2026-11-08
+
+### Added
+
+- Settings › Advanced › Finder › **Refresh Finder Icons**: after a confirmation, Arhivar re-registers itself with Launch Services and relaunches Finder and Dock, so archives whose default app is Arhivar show its document icons. The footer names the one step an app cannot do by itself, clearing the system icon cache with an administrator password, and shows the Terminal command for it.
+- On the first launch of a new build, Arhivar re-registers its bundle with Launch Services by itself (`LSRegisterURL`), so Finder picks up new or changed document icons and type claims after an upgrade without a manual `lsregister`. Tests: `FinderIconRefreshTests`.
+
+**Upgrading from 1.6.0 or earlier:** macOS may keep showing the old six family icons from its icon cache. If Finder does not switch to the new per-format icons after the upgrade, run in Terminal: `sudo rm -rf /Library/Caches/com.apple.iconservices.store && killall Finder Dock`.
+
 ### Fixed
 
 - The 7-Zip updater (`Scripts/update-7zip.sh`, also inside the app) no longer stops at "Download failed" when GitHub's `github.com/…/releases/download/` endpoint answers with a server error: it then fetches the same file from the GitHub API asset URL that the release listing already named, with the usual SHA-256 check against the digest GitHub publishes. On 2026-11-08 GitHub's Frankfurt edge answered 504 for every release download while the API still worked; the check found 26.06 but the install could not download it.
@@ -12,6 +21,8 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ### Changed
 
+- The bundled 7-Zip engine is 26.06 (universal, arm64 + x86_64, merged from 7-Zip's two macOS packages and verified against GitHub's SHA-256 digests). 7-Zip 26.06 improves support for split files created by the Linux `split` utility and fixes bugs and vulnerabilities.
+- Finder document icons now name the format. Each archive type has its own icon and label instead of one of six family icons, so a `.tar.xz` shows "XZ", a `.tgz` "TGZ", a `.tar.gz` or `.gz` "GZ", a `.dmg` "DMG", a `.deb` "DEB" and so on (33 icons: ZIP, 7Z, RAR, TAR, GZ, TGZ, BZ2, TBZ, XZ, TXZ, Z, ZST, LZ4, LZ, LZMA, ISO, DMG, VMDK, VHD, VHDX, QCOW2, SQUASHFS, UDF, WIM, CAB, CPIO, XAR, DEB, RPM, 001, ARJ, LZH and an unlabelled generic archive). Formats of one group keep the same drawing and colour; at 16 and 32 px only the drawing is shown. As before, Finder uses them only for types you make Arhivar the default for (Get Info › Open with › Change All). If Finder keeps the system icon after that, re-registering the app and relaunching Finder refreshes it (see DEVELOPMENT.md › Document icons).
 - A2UI v1.0 recorded as current and the Mistral standard updated to the Agents SDK and Managed Agents in `.agents/rules` (index: `.agents/rules/about_rules.md`).
 
 ## [1.6.0] — 2026-11-06
