@@ -3,29 +3,37 @@
 "CFBundleName" = "Arhivar";
 "NSHumanReadableCopyright" = "Babadogan Tech and Edu. 7-Zip © Igor Pavlov.";
 
-/* Belge türleri (CFBundleTypeName); "7z archive" ve "RAR archive" aşağıdaki tür açıklamalarıyla ortaktır */
-"Archive" = "Arhivă";
-"Disk image" = "Imagine de disc";
-"Tar or compressed file" = "Fișier Tar sau comprimat";
-"ZIP archive" = "Arhivă ZIP";
-
-/* Tür açıklamaları (UTTypeDescription) */
+/* Belge türü adları (CFBundleTypeName, biçim başına bir tür) ve tür açıklamaları (UTTypeDescription); birçok anahtar ikisinde de kullanılır */
 "7z archive" = "Arhivă 7z";
+"Apple disk image" = "Imagine de disc Apple";
+"Archive" = "Arhivă";
 "ARJ archive" = "Arhivă ARJ";
+"Bzip2 archive" = "Arhivă Bzip2";
 "Bzip2 Tar archive" = "Arhivă Tar Bzip2";
+"CPIO archive" = "Arhivă CPIO";
 "Debian package" = "Pachet Debian";
+"Gzip archive" = "Arhivă Gzip";
+"Gzip Tar archive" = "Arhivă Tar Gzip";
+"ISO disk image" = "Imagine de disc ISO";
 "LZ4 archive" = "Arhivă LZ4";
 "LZH archive" = "Arhivă LZH";
-"LZMA archive" = "Arhivă LZMA";
 "Lzip archive" = "Arhivă Lzip";
+"LZMA archive" = "Arhivă LZMA";
 "Microsoft CAB archive" = "Arhivă Microsoft CAB";
 "QCOW2 disk image" = "Imagine de disc QCOW2";
 "RAR archive" = "Arhivă RAR";
 "RPM package" = "Pachet RPM";
 "Split archive (first volume)" = "Arhivă divizată (primul volum)";
 "SquashFS image" = "Imagine SquashFS";
+"Tar archive" = "Arhivă Tar";
 "UDF disk image" = "Imagine de disc UDF";
+"VHD disk image" = "Imagine de disc VHD";
 "VHDX disk image" = "Imagine de disc VHDX";
+"VMDK disk image" = "Imagine de disc VMDK";
 "Windows Imaging Format image" = "Imagine Windows Imaging Format";
+"XAR archive" = "Arhivă XAR";
 "XZ archive" = "Arhivă XZ";
+"XZ Tar archive" = "Arhivă Tar XZ";
+"Z archive" = "Arhivă Z";
+"ZIP archive" = "Arhivă ZIP";
 "Zstandard archive" = "Arhivă Zstandard";

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Arhivar varsayılan uygulama olduğunda Finder'da arşivlerin gösterdiği belge simgelerini çizer.
-// Her biçim ailesi kendi rengini, çizimini ve etiketini alır: ZIP, 7Z, RAR, TAR ailesi, disk görüntüleri, genel arşiv.
-// (Biçim başına ayrı simgeler toplam ~10 MB tutuyordu; altı aile simgesi ~1,5 MB.)
+// Her biçim kendi simgesini ve etiketini alır (ZIP, 7Z, RAR, TAR, GZ, TGZ, BZ2, XZ, ZST, ISO, DMG, CAB, DEB, …);
+// aynı gruptaki biçimler çizimi ve rengi paylaşır: sıkıştırma (turuncu katmanlar), disk görüntüsü (yeşil disk),
+// diğer arşivler (gri kutu). 16 ve 32 pikselde etiket okunmaz, yalnızca grup çizimi gösterilir.
 //
 // Kullanım: swift Scripts/make_document_icons.swift Resources/DocumentIcons [--preview önizleme.png]
 import AppKit
@@ -212,12 +213,64 @@ func disc(_ ctx: CGContext, _ family: Family, _ area: CGRect) {
     ctx.strokePath()
 }
 
+/// Aynı çizimi ve rengi paylaşan biçim grubu.
+struct Group {
+    let light: UInt32
+    let dark: UInt32
+    let glyph: (CGContext, Family, CGRect) -> Void
+
+    /// (simge adı, etiket) çiftlerinden bu grubun ailelerini üretir.
+    func members(_ formats: [(String, String)]) -> [Family] {
+        formats.map { Family(name: $0.0, label: $0.1, light: light, dark: dark, glyph: glyph) }
+    }
+}
+
+/// Tar ve tek akışlı sıkıştırıcılar: üst üste katmanlar.
+let compressed = Group(light: 0xFDBA74, dark: 0xEA580C) { layers($0, $1, $2) }
+/// Disk görüntüleri: disk.
+let disk = Group(light: 0x5EEAD4, dark: 0x0F766E) { disc($0, $1, $2) }
+/// Diğer arşiv ve paket biçimleri: kapaklı kutu.
+let other = Group(light: 0x94A3B8, dark: 0x475569) { box($0, $1, $2, zipped: false) }
+
+// Info.plist'teki CFBundleDocumentTypes ile birebir: her UTI'nin simgesi buradaki adla aynı (DocumentIconTests).
 let families: [Family] = [
     Family(name: "zip", label: "ZIP", light: 0x60A5FA, dark: 0x1D4ED8) { zipper($0, $1, $2) },
     Family(name: "7z", label: "7Z", light: 0xA78BFA, dark: 0x4F46E5) { box($0, $1, $2, zipped: true) },
     Family(name: "rar", label: "RAR", light: 0xFB7185, dark: 0xBE123C) { books($0, $1, $2) },
-    Family(name: "tar", label: "TAR", light: 0xFDBA74, dark: 0xEA580C) { layers($0, $1, $2) },
-    Family(name: "disk", label: "IMG", light: 0x5EEAD4, dark: 0x0F766E) { disc($0, $1, $2) },
+] + compressed.members([
+    ("tar", "TAR"),
+    ("gz", "GZ"),
+    ("tgz", "TGZ"),
+    ("bz2", "BZ2"),
+    ("tbz", "TBZ"),
+    ("xz", "XZ"),
+    ("txz", "TXZ"),
+    ("z", "Z"),
+    ("zst", "ZST"),
+    ("lz4", "LZ4"),
+    ("lz", "LZ"),
+    ("lzma", "LZMA"),
+]) + disk.members([
+    ("iso", "ISO"),
+    ("dmg", "DMG"),
+    ("vmdk", "VMDK"),
+    ("vhd", "VHD"),
+    ("vhdx", "VHDX"),
+    ("qcow2", "QCOW2"),
+    ("squashfs", "SQUASHFS"),
+    ("udf", "UDF"),
+    ("wim", "WIM"),
+]) + other.members([
+    ("cab", "CAB"),
+    ("cpio", "CPIO"),
+    ("xar", "XAR"),
+    ("deb", "DEB"),
+    ("rpm", "RPM"),
+    ("split", "001"),
+    ("arj", "ARJ"),
+    ("lzh", "LZH"),
+]) + [
+    // Başka bir türe girmeyen arşivler (public.archive): etiketsiz kutu.
     Family(name: "archive", label: nil, light: 0x94A3B8, dark: 0x475569) { box($0, $1, $2, zipped: false) },
 ]
 
@@ -332,8 +385,8 @@ try fileManager.createDirectory(at: outputDirectory, withIntermediateDirectories
 let variants: [(Int, String)] = [
     (16, "16x16"), (32, "16x16@2x"), (32, "32x32"), (64, "32x32@2x"),
     (128, "128x128"), (256, "128x128@2x"), (256, "256x256"), (512, "256x256@2x"),
-    // 1024 piksel (512@2x) eklenmez: belge simgeleri bu boyutta gösterilmez ve dosya boyutunu ikiye katlıyordu.
-    (512, "512x512"),
+    // 512x512 ve 1024 piksel (512@2x) eklenmez: 256x256@2x zaten 512 piksel, belge simgeleri daha büyük gösterilmez
+    // ve her ek görüntü 33 simgede dosya boyutunu belirgin biçimde artırıyordu.
 ]
 
 for family in families {

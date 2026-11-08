@@ -3,29 +3,37 @@
 "CFBundleName" = "Arhivar";
 "NSHumanReadableCopyright" = "Babadogan Tech and Edu. 7-Zip © Igor Pavlov.";
 
-/* Belge türleri (CFBundleTypeName); "7z archive" ve "RAR archive" aşağıdaki tür açıklamalarıyla ortaktır */
-"Archive" = "Archive";
-"Disk image" = "Disk image";
-"Tar or compressed file" = "Tar or compressed file";
-"ZIP archive" = "ZIP archive";
-
-/* Tür açıklamaları (UTTypeDescription) */
+/* Belge türü adları (CFBundleTypeName, biçim başına bir tür) ve tür açıklamaları (UTTypeDescription); birçok anahtar ikisinde de kullanılır */
 "7z archive" = "7z archive";
+"Apple disk image" = "Apple disk image";
+"Archive" = "Archive";
 "ARJ archive" = "ARJ archive";
+"Bzip2 archive" = "Bzip2 archive";
 "Bzip2 Tar archive" = "Bzip2 Tar archive";
+"CPIO archive" = "CPIO archive";
 "Debian package" = "Debian package";
+"Gzip archive" = "Gzip archive";
+"Gzip Tar archive" = "Gzip Tar archive";
+"ISO disk image" = "ISO disk image";
 "LZ4 archive" = "LZ4 archive";
 "LZH archive" = "LZH archive";
-"LZMA archive" = "LZMA archive";
 "Lzip archive" = "Lzip archive";
+"LZMA archive" = "LZMA archive";
 "Microsoft CAB archive" = "Microsoft CAB archive";
 "QCOW2 disk image" = "QCOW2 disk image";
 "RAR archive" = "RAR archive";
 "RPM package" = "RPM package";
 "Split archive (first volume)" = "Split archive (first volume)";
 "SquashFS image" = "SquashFS image";
+"Tar archive" = "Tar archive";
 "UDF disk image" = "UDF disk image";
+"VHD disk image" = "VHD disk image";
 "VHDX disk image" = "VHDX disk image";
+"VMDK disk image" = "VMDK disk image";
 "Windows Imaging Format image" = "Windows Imaging Format image";
+"XAR archive" = "XAR archive";
 "XZ archive" = "XZ archive";
+"XZ Tar archive" = "XZ Tar archive";
+"Z archive" = "Z archive";
+"ZIP archive" = "ZIP archive";
 "Zstandard archive" = "Zstandard archive";
