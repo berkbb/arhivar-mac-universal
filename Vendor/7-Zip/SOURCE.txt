@@ -1,4 +1,8 @@
-version=26.05
-asset=7z2605-mac.tar.xz
-url=https://github.com/ip7z/7zip/releases/download/26.05/7z2605-mac.tar.xz
-sha256=12ef6830317743cfd3f0ab1724bde43fcc270d8b6d8564f8c12c2a2b7f993570
+version=26.06
+archs=x86_64 arm64
+asset=7z2606-mac.tar.xz
+url=https://github.com/ip7z/7zip/releases/download/26.06/7z2606-mac.tar.xz
+sha256=b6f17920b4240940461dac8ef4009891881ac44d2a5ead625ede2ec8472185dd
+asset_x64=7z2606-mac-x64.tar.xz
+url_x64=https://github.com/ip7z/7zip/releases/download/26.06/7z2606-mac-x64.tar.xz
+sha256_x64=3af68b124052da7fc2a246c96b0bea6a68bfee389baa788f4cead1a133445586
