@@ -133,6 +133,8 @@ private struct AdvancedSettingsView: View {
     @Environment(AppModel.self) private var model
     @Environment(AppSettings.self) private var settings
     @State private var confirmReset = false
+    @State private var confirmFinderRefresh = false
+    @State private var finderRefreshed = false
 
     var body: some View {
         @Bindable var settings = settings
@@ -211,10 +213,39 @@ private struct AdvancedSettingsView: View {
             }
 
             Section {
+                HStack {
+                    Button(settings.t(.finderIconsRefresh)) { confirmFinderRefresh = true }
+                    if finderRefreshed {
+                        Label(settings.t(.finderIconsDone), systemImage: "checkmark.circle")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text(settings.t(.finderSection))
+            } footer: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(settings.t(.finderIconsFooter))
+                    Text(settings.t(.finderIconsCacheNote))
+                    // Komut çevrilmez; kopyalanabilsin diye seçilebilir.
+                    Text(FinderIconRefresh.cacheClearCommand)
+                        .font(.system(.footnote, design: .monospaced))
+                        .textSelection(.enabled)
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            }
+
+            Section {
                 Button(settings.t(.settingsReset), role: .destructive) { confirmReset = true }
             }
         }
         .formStyle(.grouped)
+        .confirmationDialog(settings.t(.finderIconsConfirm), isPresented: $confirmFinderRefresh, titleVisibility: .visible) {
+            Button(settings.t(.finderIconsRefresh)) {
+                FinderIconRefresh.refresh()
+                finderRefreshed = true
+            }
+        }
         .confirmationDialog(settings.t(.settingsResetConfirm), isPresented: $confirmReset) {
             Button(settings.t(.settingsReset), role: .destructive) {
                 model.browserMode = .folders

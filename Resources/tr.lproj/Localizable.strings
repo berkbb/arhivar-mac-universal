@@ -187,6 +187,12 @@
 "updateFailed" = "Güncelleme başarısız";
 "updateAutoCheck" = "Açılışta güncellemeleri denetle";
 "updateSource" = "github.com/ip7z/7zip adresinden indirilir ve SHA-256 ile doğrulanır.";
+"finderSection" = "Finder";
+"finderIconsRefresh" = "Finder Simgelerini Yenile";
+"finderIconsConfirm" = "Finder ve Dock yeniden başlatılsın mı? Açık Finder pencereleri kapanır.";
+"finderIconsDone" = "Arhivar yeniden kaydedildi; Finder ve Dock yeniden başlatıldı.";
+"finderIconsFooter" = "Arhivar'ı Launch Services'a yeniden kaydeder ve Finder ile Dock'u yeniden başlatır; böylece varsayılan uygulaması Arhivar olan arşivler onun belge simgelerini gösterir.";
+"finderIconsCacheNote" = "Eski simgeler kalırsa sistem simge önbelleğinin Terminal'de yönetici parolasıyla temizlenmesi gerekir:";
 
 "aboutVersion" = "Sürüm %1$@ (%2$@)";
 "aboutPoweredBy" = "7-Zip %@ ile güçlendirilmiştir";

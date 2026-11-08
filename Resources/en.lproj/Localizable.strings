@@ -187,6 +187,12 @@
 "updateFailed" = "Update failed";
 "updateAutoCheck" = "Check for updates at launch";
 "updateSource" = "Downloaded from github.com/ip7z/7zip and verified with SHA-256.";
+"finderSection" = "Finder";
+"finderIconsRefresh" = "Refresh Finder Icons";
+"finderIconsConfirm" = "Relaunch Finder and Dock? Open Finder windows will close.";
+"finderIconsDone" = "Arhivar was re-registered; Finder and Dock were relaunched.";
+"finderIconsFooter" = "Re-registers Arhivar with Launch Services and relaunches Finder and Dock, so archives whose default app is Arhivar show its document icons.";
+"finderIconsCacheNote" = "If old icons remain, the system icon cache must be cleared in Terminal with an administrator password:";
 
 "aboutVersion" = "Version %1$@ (%2$@)";
 "aboutPoweredBy" = "Powered by 7-Zip %@";

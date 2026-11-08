@@ -114,6 +114,7 @@ public enum LKey: String, CaseIterable, Sendable {
     case settingsEngineUseCustom, settingsReset, settingsResetConfirm
     case updateSection, updateCheck, updateInstall, updateChecking, updateInstalling, updateAvailable
     case updateUpToDate, updateInstalled, updateFailed, updateAutoCheck, updateSource
+    case finderSection, finderIconsRefresh, finderIconsConfirm, finderIconsDone, finderIconsFooter, finderIconsCacheNote
     case aboutVersion, aboutPoweredBy, aboutEngineCredit, aboutLicense, aboutAppLicense, aboutNotices, aboutCopyright
     case viewFolders, viewTree, viewModeLabel, navUp, contextQuickLook
     case toolbarAdd, editAddFiles, editDelete, editRename, buttonAdd, buttonDelete, buttonRename

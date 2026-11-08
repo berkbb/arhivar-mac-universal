@@ -187,6 +187,12 @@
 "updateFailed" = "Actualizarea a eșuat";
 "updateAutoCheck" = "Caută actualizări la pornire";
 "updateSource" = "Se descarcă de pe github.com/ip7z/7zip și se verifică prin SHA-256.";
+"finderSection" = "Finder";
+"finderIconsRefresh" = "Reîmprospătează pictogramele Finder";
+"finderIconsConfirm" = "Repornești Finder și Dock? Ferestrele Finder deschise se vor închide.";
+"finderIconsDone" = "Arhivar a fost reînregistrat; Finder și Dock au fost repornite.";
+"finderIconsFooter" = "Reînregistrează Arhivar în Launch Services și repornește Finder și Dock, astfel încât arhivele a căror aplicație implicită este Arhivar să afișeze pictogramele sale de document.";
+"finderIconsCacheNote" = "Dacă pictogramele vechi rămân, memoria cache de pictograme a sistemului trebuie golită în Terminal cu parola de administrator:";
 
 "aboutVersion" = "Versiunea %1$@ (%2$@)";
 "aboutPoweredBy" = "Bazat pe 7-Zip %@";

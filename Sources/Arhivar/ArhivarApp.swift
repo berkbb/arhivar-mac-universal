@@ -129,6 +129,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.servicesProvider = services
         NSUpdateDynamicServices()
         setupSpaceKeyMonitor()
+        // Yeni derlemenin ilk açılışında paket Launch Services'a yeniden kaydedilir; Finder belge simgelerini buradan okur.
+        FinderIconRefresh.registerIfBuildChanged()
         // Eski paket kimliğinin varsayılan uygulama seçimleri taşınır, Mac'te kalan kayıtları bir kez silinir.
         Task { await LegacyIdentityMigration.run() }
     }
