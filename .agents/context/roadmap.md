@@ -11,13 +11,6 @@
 
 ## Open / In Progress
 
-### Next Release
-
-#### 4. 🟡 [Medium] Release 1.6.1 (build 23): publish the build that bundles 7-Zip 26.06 universal, the fixed updater and the per-format Finder icons
-- **Status:** 🟡 Built, not published. On 2026-11-08 `Vendor/7-Zip` was updated to universal 26.06 (`SOURCE.txt`: `archs=x86_64 arm64`), `Support/Info.plist` and `Support/QuickLook-Info.plist` carry 1.6.1 (23), the CHANGELOG has a `## [1.6.1] — 2026-11-08` section, the suite passed and a universal `build/Arhivar.app` was installed on the developer's Mac. GitHub's API had recovered by then, so no edge detour was needed.
-- **Why it ships:** the shipped 1.6.0 (22) carries 7-Zip 26.05 and the old `update-7zip.sh`; since 26.06 the macOS 7-Zip download is split into arm64 and x64 packages, so the old script fails on Intel Macs. 26.06 also notes "some bugs and vulnerabilities were fixed". 1.6.1 also brings one Finder icon per format (33) instead of six family icons.
-- ⬜ **Remaining:** commit and push the 1.6.1 changes, then `./Scripts/release.sh` (runs `package.sh` with its architecture gate, tags `v1.6.1`, creates the GitHub release with the `.dmg`, `.dmg.sig` and `SHA256SUMS.txt`). Old tags and releases stay. Remove this item afterwards.
-
 ### Upstream-Dependent Items
 
 #### 1. 🟡 [Medium] Zstandard (`.zst` / `.tar.zst`) Archive Creation
