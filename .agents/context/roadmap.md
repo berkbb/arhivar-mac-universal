@@ -11,6 +11,18 @@
 
 ## Open / In Progress
 
+### Next Release
+
+#### 4. ⬜ [Medium] Release 1.6.1 (build 23): bundle 7-Zip 26.06 universal and ship the fixed updater (waiting for GitHub to recover)
+- **Why:** the shipped 1.6.0 (22) bundle carries 7-Zip 26.05 and the old `update-7zip.sh`. Since 26.06 the macOS 7-Zip download is split into an arm64 package and an x64 package; the old script always takes the arm64 one, so on an Intel Mac the in-app update to 26.06 fails at the version check every time and those users stay on 26.05. 7-Zip 26.06 also notes "some bugs and vulnerabilities were fixed". Apple Silicon users can update in-app with the old script. Decided on 2026-11-08 to wait: the app's Swift code is unchanged, and GitHub's Frankfurt edge was answering 504 / timing out that day (releases download endpoint first, then the API), so the engine download would have needed a manual detour to another edge.
+- **Fixed on `main` already (commits `3cdfee7`, `2cffc34`, `b7edaa4`):** `update-7zip.sh --arch arm64|x86_64|universal` (universal downloads both packages, verifies both digests and merges them with `lipo`), the GitHub API asset download fallback, `archs=` in `SOURCE.txt`, and `package.sh` refusing an engine that lacks a built architecture. CHANGELOG Unreleased holds the two Fixed entries.
+- ⬜ **Steps when GitHub is healthy** (check first: `curl -sS -o /dev/null -w "%{http_code}\n" https://github.com/ip7z/7zip/releases/download/26.06/7z2606-mac.tar.xz` must print `302`):
+  1. `./Scripts/update-7zip.sh install --dest Vendor/7-Zip --arch universal` and confirm `lipo -archs Vendor/7-Zip/7zz` prints `x86_64 arm64` and `Vendor/7-Zip/SOURCE.txt` says `version=26.06`.
+  2. `swift test` (the real-7zz tests run against the new engine).
+  3. Move the CHANGELOG Unreleased entries under `## [1.6.1] — <date>`, add a line for the bundled 7-Zip 26.06; bump `CFBundleShortVersionString` to 1.6.1 and `CFBundleVersion` to 23 in `Support/Info.plist`.
+  4. `./Scripts/package.sh` (its new architecture gate must pass), then `release.sh` as for 1.6.0. Old tags and releases stay.
+  5. Remove this item.
+
 ### Upstream-Dependent Items
 
 #### 1. 🟡 [Medium] Zstandard (`.zst` / `.tar.zst`) Archive Creation
