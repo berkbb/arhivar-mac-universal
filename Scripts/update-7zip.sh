@@ -2,14 +2,19 @@
 # 7-Zip motorunu (7zz) resmi GitHub sürümlerinden (ip7z/7zip) denetler ve kurar.
 #
 # Kullanım:
-#   update-7zip.sh check   [hedefler] [--current SÜRÜM]
-#   update-7zip.sh install [hedefler] [--current SÜRÜM] [--force] [--no-verify]
+#   update-7zip.sh check   [hedefler] [--current SÜRÜM] [--arch MİMARİ]
+#   update-7zip.sh install [hedefler] [--current SÜRÜM] [--arch MİMARİ] [--force] [--no-verify]
 #
 # Hedefler (birden fazla verilebilir):
 #   --dest DIR   7zz, lisans ve kılavuzu bir klasöre kurar (ör. Vendor/7-Zip)
 #   --app PATH   Bir Arhivar.app paketinin içindeki 7zz'yi günceller ve paketi yeniden imzalar
 # Hedef verilmezse: betik bir .app içinden çalışıyorsa o uygulama, projeden çalışıyorsa
 # projenin Vendor/7-Zip klasörü güncellenir.
+#
+# Mimari (--arch arm64 | x86_64 | universal): 7-Zip 26.06'dan beri macOS paketi ikiye ayrıldı
+# (7zNNNN-mac.tar.xz yalnızca arm64, 7zNNNN-mac-x64.tar.xz yalnızca x86_64). "universal" ikisini
+# indirip lipo ile tek 7zz'de birleştirir. Verilmezse: hedefteki 7zz evrenselse universal, değilse
+# bu Mac'in mimarisi; projenin Vendor/7-Zip hedefi her zaman universal (uygulama evrensel derlenir).
 #
 # Makine tarafından okunacak sonuçlar stdout'a KEY=value satırları olarak,
 # insan için mesajlar stderr'e yazılır. Arhivar arayüzü de bu betiği çalıştırır.
@@ -18,9 +23,13 @@ set -euo pipefail
 REPO="ip7z/7zip"
 API_URL="https://api.github.com/repos/$REPO/releases/latest"
 DOWNLOAD_PREFIX="https://github.com/$REPO/releases/download/"
+# github.com indirme ucu yanıt vermezse aynı dosya GitHub API'nin asset adresinden de iner.
+ASSET_API_PREFIX="https://api.github.com/repos/$REPO/releases/assets/"
 FALLBACK_DIR="$HOME/Library/Application Support/Arhivar/engine"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CURRENT=""
+ARCH=""
+HOST_ARCH="$(uname -m)"
 FORCE=0
 VERIFY=1
 TARGET_KINDS=()
@@ -43,6 +52,7 @@ while [ $# -gt 0 ]; do
     --dest) [ $# -ge 2 ] || fail "--dest bir klasör bekliyor"; add_target dir "$2"; shift 2 ;;
     --app) [ $# -ge 2 ] || fail "--app bir .app yolu bekliyor"; add_target app "$2"; shift 2 ;;
     --current) [ $# -ge 2 ] || fail "--current bir sürüm bekliyor"; CURRENT="$2"; shift 2 ;;
+    --arch) [ $# -ge 2 ] || fail "--arch bir mimari bekliyor (arm64, x86_64, universal)"; ARCH="$2"; shift 2 ;;
     --force) FORCE=1; shift ;;
     --no-verify) VERIFY=0; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -54,6 +64,14 @@ case "$COMMAND" in
   -h|--help|"") usage; exit 0 ;;
   *) fail "Bilinmeyen komut: $COMMAND (check veya install)" ;;
 esac
+case "$ARCH" in
+  ""|arm64|x86_64|universal) ;;
+  *) fail "Bilinmeyen mimari: $ARCH (arm64, x86_64 veya universal)" ;;
+esac
+case "$HOST_ARCH" in
+  arm64|x86_64) ;;
+  *) fail "Desteklenmeyen Mac mimarisi: $HOST_ARCH" ;;
+esac
 
 # --- Varsayılan hedef ------------------------------------------------------
 if [ ${#TARGET_KINDS[@]} -eq 0 ]; then
@@ -63,6 +81,8 @@ if [ ${#TARGET_KINDS[@]} -eq 0 ]; then
     add_target app "${SCRIPT_DIR%/Contents/Resources}"
   else
     add_target dir "$(cd "$SCRIPT_DIR/.." && pwd)/Vendor/7-Zip"
+    # Projeye kurulan motor uygulamayla birlikte evrensel paketlenir.
+    [ -n "$ARCH" ] || ARCH=universal
   fi
 fi
 
@@ -106,6 +126,16 @@ version_number() {
   awk -F. '{ printf "%d%02d\n", $1, $2 }' <<<"$1"
 }
 
+# Bir Mach-O dosyasının mimarileri ("x86_64 arm64" gibi); okunamazsa boş.
+binary_archs() {
+  lipo -archs "$1" 2>/dev/null || true
+}
+
+# $1 dosyası $2 mimarisini içeriyor mu?
+has_arch() {
+  case " $(binary_archs "$1") " in *" $2 "*) return 0 ;; *) return 1 ;; esac
+}
+
 # --- Son sürüm bilgisini al -------------------------------------------------
 log "Son sürüm denetleniyor: github.com/$REPO"
 curl -fsSL --proto '=https' --tlsv1.2 --max-time 30 \
@@ -117,20 +147,37 @@ RELEASE_INFO="$(osascript -l JavaScript -e '
 function run(argv) {
   var text = $.NSString.stringWithContentsOfFileEncodingError(argv[0], $.NSUTF8StringEncoding, null).js;
   var release = JSON.parse(text);
-  var asset = (release.assets || []).filter(function (a) { return /^7z[0-9]+-mac\.tar\.xz$/.test(a.name); })[0];
-  if (!asset) { return "TAG=" + release.tag_name; }
-  return ["TAG=" + release.tag_name, "ASSET=" + asset.name, "URL=" + asset.browser_download_url,
-          "DIGEST=" + (asset.digest || "")].join("\n");
+  var assets = release.assets || [];
+  // 26.05 ve oncesi: tek, evrensel paket. 26.06 ve sonrasi: "-mac" yalnizca arm64, "-mac-x64" yalnizca x86_64.
+  var mac = assets.filter(function (a) { return /^7z[0-9]+-mac\.tar\.xz$/.test(a.name); })[0];
+  var x64 = assets.filter(function (a) { return /^7z[0-9]+-mac-x64\.tar\.xz$/.test(a.name); })[0];
+  var lines = ["TAG=" + release.tag_name];
+  if (mac) {
+    lines.push("ASSET=" + mac.name, "URL=" + mac.browser_download_url, "API=" + (mac.url || ""), "DIGEST=" + (mac.digest || ""));
+  }
+  if (x64) {
+    lines.push("X64_ASSET=" + x64.name, "X64_URL=" + x64.browser_download_url, "X64_API=" + (x64.url || ""), "X64_DIGEST=" + (x64.digest || ""));
+  }
+  return lines.join("\n");
 }' "$WORK/release.json")" || fail "Sürüm bilgisi okunamadı"
 
 TAG="$(sed -n 's/^TAG=//p' <<<"$RELEASE_INFO")"
 ASSET="$(sed -n 's/^ASSET=//p' <<<"$RELEASE_INFO")"
 URL="$(sed -n 's/^URL=//p' <<<"$RELEASE_INFO")"
+ASSET_API_URL="$(sed -n 's/^API=//p' <<<"$RELEASE_INFO")"
 DIGEST="$(sed -n 's/^DIGEST=//p' <<<"$RELEASE_INFO")"
+X64_ASSET="$(sed -n 's/^X64_ASSET=//p' <<<"$RELEASE_INFO")"
+X64_URL="$(sed -n 's/^X64_URL=//p' <<<"$RELEASE_INFO")"
+X64_API_URL="$(sed -n 's/^X64_API=//p' <<<"$RELEASE_INFO")"
+X64_DIGEST="$(sed -n 's/^X64_DIGEST=//p' <<<"$RELEASE_INFO")"
 
 [[ "$TAG" =~ ^[0-9]+\.[0-9]+$ ]] || fail "Beklenmeyen sürüm etiketi: $TAG"
 [ -n "$ASSET" ] || fail "Bu sürümde macOS paketi yok ($TAG)"
 [[ "$URL" == "$DOWNLOAD_PREFIX"* ]] || fail "Beklenmeyen indirme adresi: $URL"
+[ -z "$X64_ASSET" ] || [[ "$X64_URL" == "$DOWNLOAD_PREFIX"* ]] || fail "Beklenmeyen indirme adresi: $X64_URL"
+# Yedek indirme adresi yalnızca aynı deponun API asset adresi olabilir; başka bir şeyse kullanılmaz.
+[[ "$ASSET_API_URL" == "$ASSET_API_PREFIX"* ]] || ASSET_API_URL=""
+[[ "$X64_API_URL" == "$ASSET_API_PREFIX"* ]] || X64_API_URL=""
 
 # Kurulu sürüm: hedeflerin en eskisi (biri eksikse güncelleme gerekir).
 # Yedek klasöre çevrilen hedefte henüz 7zz yoksa uygulamanın kendi 7zz'si geçerlidir; "yok" sayılmaz.
@@ -148,8 +195,19 @@ if [ -z "$CURRENT" ]; then
   CURRENT="$LOWEST"
 fi
 
+# Mimari verilmediyse: hedeflerden biri evrensel bir 7zz taşıyorsa evrensel kalır, yoksa bu Mac'in mimarisi.
+if [ -z "$ARCH" ]; then
+  ARCH="$HOST_ARCH"
+  for i in "${!TARGET_KINDS[@]}"; do
+    BINARY="$(target_binary "${TARGET_KINDS[$i]}" "${TARGET_PATHS[$i]}")"
+    if [ ! -f "$BINARY" ] && [ -n "${TARGET_ORIGINALS[$i]}" ]; then BINARY="${TARGET_ORIGINALS[$i]}"; fi
+    if has_arch "$BINARY" arm64 && has_arch "$BINARY" x86_64; then ARCH=universal; break; fi
+  done
+fi
+
 echo "LATEST=$TAG"
 echo "CURRENT=${CURRENT:-none}"
+echo "ARCH=$ARCH"
 echo "SOURCE=https://github.com/$REPO/releases/tag/$TAG"
 for i in "${!TARGET_KINDS[@]}"; do echo "TARGET=${TARGET_KINDS[$i]}:${TARGET_PATHS[$i]}"; done
 
@@ -176,30 +234,87 @@ if [ "$UPDATE_AVAILABLE" = 0 ] && [ "$FORCE" = 0 ]; then
   exit 0
 fi
 
-log "İndiriliyor: $ASSET"
-curl -fL --proto '=https' --tlsv1.2 --max-time 600 --progress-bar "$URL" -o "$WORK/$ASSET" \
-  || fail "İndirme başarısız"
+# Bir paketi indirir (github.com, yanıt vermezse GitHub API asset adresi), SHA-256'sını doğrular ve
+# içindeki 7zz'yi $5 klasörüne açar. Özet DOWNLOADED_SHA değişkeninde kalır.
+download_package() {
+  local asset="$1" url="$2" api_url="$3" digest="$4" outdir="$5"
+  log "İndiriliyor: $asset"
+  if ! curl -fL --proto '=https' --tlsv1.2 --max-time 600 --progress-bar "$url" -o "$WORK/$asset"; then
+    # github.com'un sürüm dosyası ucu bölgesel olarak 5xx dönebiliyor (08.11.2026: Frankfurt ucu her depo için 504 verdi).
+    # Aynı dosya GitHub API'nin asset adresinden "application/octet-stream" ile iner; curl -o yarım dosyanın üzerine yazar.
+    [ -n "$api_url" ] || fail "İndirme başarısız"
+    log "Uyarı: github.com indirme adresi yanıt vermedi; GitHub API asset adresinden deneniyor."
+    curl -fL --proto '=https' --tlsv1.2 --max-time 600 --progress-bar \
+      -H "Accept: application/octet-stream" "$api_url" -o "$WORK/$asset" \
+      || fail "İndirme başarısız"
+  fi
 
-if [ "$VERIFY" = 1 ]; then
-  [[ "$DIGEST" == sha256:* ]] || fail "GitHub SHA-256 özeti vermedi; doğrulamasız kurmak için --no-verify kullanın"
-  EXPECTED="${DIGEST#sha256:}"
-  ACTUAL="$(shasum -a 256 "$WORK/$ASSET" | awk '{ print $1 }')"
-  [ "$EXPECTED" = "$ACTUAL" ] || fail "SHA-256 eşleşmedi (beklenen $EXPECTED, gelen $ACTUAL)"
-  log "SHA-256 doğrulandı."
-else
-  log "UYARI: SHA-256 doğrulaması atlandı."
-  ACTUAL="$(shasum -a 256 "$WORK/$ASSET" | awk '{ print $1 }')"
-fi
+  DOWNLOADED_SHA="$(shasum -a 256 "$WORK/$asset" | awk '{ print $1 }')"
+  if [ "$VERIFY" = 1 ]; then
+    [[ "$digest" == sha256:* ]] || fail "GitHub SHA-256 özeti vermedi; doğrulamasız kurmak için --no-verify kullanın"
+    local expected="${digest#sha256:}"
+    [ "$expected" = "$DOWNLOADED_SHA" ] || fail "SHA-256 eşleşmedi ($asset: beklenen $expected, gelen $DOWNLOADED_SHA)"
+    log "SHA-256 doğrulandı: $asset"
+  else
+    log "UYARI: SHA-256 doğrulaması atlandı ($asset)."
+  fi
+
+  mkdir -p "$outdir"
+  tar -xJf "$WORK/$asset" -C "$outdir" || fail "Paket açılamadı: $asset"
+  [ -f "$outdir/7zz" ] || fail "Paket içinde 7zz bulunamadı: $asset"
+  file "$outdir/7zz" | grep -q "Mach-O" || fail "7zz geçerli bir macOS programı değil: $asset"
+  chmod 755 "$outdir/7zz"
+}
 
 PAYLOAD="$WORK/extract"
-mkdir -p "$PAYLOAD"
-tar -xJf "$WORK/$ASSET" -C "$PAYLOAD" || fail "Paket açılamadı"
-[ -f "$PAYLOAD/7zz" ] || fail "Paket içinde 7zz bulunamadı"
-file "$PAYLOAD/7zz" | grep -q "Mach-O" || fail "7zz geçerli bir macOS programı değil"
-chmod 755 "$PAYLOAD/7zz"
+X64_PAYLOAD="$WORK/extract-x64"
+# SOURCE.txt için: kurulan 7zz hangi paket(ler)den geldi.
+SOURCE_ASSET="" SOURCE_URL="" SOURCE_SHA="" SOURCE_X64_ASSET="" SOURCE_X64_URL="" SOURCE_X64_SHA=""
 
-NEW_VERSION="$(engine_version "$PAYLOAD/7zz")"
-[ "$NEW_VERSION" = "$TAG" ] || fail "İndirilen 7zz sürümü beklenenle uyuşmuyor (${NEW_VERSION:-okunamadı})"
+case "$ARCH" in
+  arm64)
+    download_package "$ASSET" "$URL" "$ASSET_API_URL" "$DIGEST" "$PAYLOAD"
+    SOURCE_ASSET="$ASSET"; SOURCE_URL="$URL"; SOURCE_SHA="$DOWNLOADED_SHA"
+    has_arch "$PAYLOAD/7zz" arm64 || fail "$ASSET içindeki 7zz arm64 içermiyor ($(binary_archs "$PAYLOAD/7zz"))"
+    ;;
+  x86_64)
+    if [ -n "$X64_ASSET" ]; then
+      download_package "$X64_ASSET" "$X64_URL" "$X64_API_URL" "$X64_DIGEST" "$PAYLOAD"
+      SOURCE_ASSET="$X64_ASSET"; SOURCE_URL="$X64_URL"; SOURCE_SHA="$DOWNLOADED_SHA"
+    else
+      # Ayrı x64 paketi olmayan (26.05 ve öncesi) sürümlerde tek paket evrenseldir.
+      download_package "$ASSET" "$URL" "$ASSET_API_URL" "$DIGEST" "$PAYLOAD"
+      SOURCE_ASSET="$ASSET"; SOURCE_URL="$URL"; SOURCE_SHA="$DOWNLOADED_SHA"
+    fi
+    has_arch "$PAYLOAD/7zz" x86_64 || fail "$SOURCE_ASSET içindeki 7zz x86_64 içermiyor ($(binary_archs "$PAYLOAD/7zz"))"
+    ;;
+  universal)
+    download_package "$ASSET" "$URL" "$ASSET_API_URL" "$DIGEST" "$PAYLOAD"
+    SOURCE_ASSET="$ASSET"; SOURCE_URL="$URL"; SOURCE_SHA="$DOWNLOADED_SHA"
+    if ! has_arch "$PAYLOAD/7zz" x86_64; then
+      [ -n "$X64_ASSET" ] || fail "$ASSET yalnızca $(binary_archs "$PAYLOAD/7zz") içeriyor ve bu sürümde ayrı x64 paketi yok"
+      download_package "$X64_ASSET" "$X64_URL" "$X64_API_URL" "$X64_DIGEST" "$X64_PAYLOAD"
+      SOURCE_X64_ASSET="$X64_ASSET"; SOURCE_X64_URL="$X64_URL"; SOURCE_X64_SHA="$DOWNLOADED_SHA"
+      has_arch "$X64_PAYLOAD/7zz" x86_64 || fail "$X64_ASSET içindeki 7zz x86_64 içermiyor ($(binary_archs "$X64_PAYLOAD/7zz"))"
+      lipo -create "$PAYLOAD/7zz" "$X64_PAYLOAD/7zz" -output "$PAYLOAD/7zz.universal" || fail "Evrensel 7zz oluşturulamadı"
+      mv -f "$PAYLOAD/7zz.universal" "$PAYLOAD/7zz"
+      chmod 755 "$PAYLOAD/7zz"
+      log "arm64 ve x86_64 7zz tek evrensel dosyada birleştirildi."
+    fi
+    { has_arch "$PAYLOAD/7zz" arm64 && has_arch "$PAYLOAD/7zz" x86_64; } \
+      || fail "Evrensel 7zz her iki mimariyi içermiyor ($(binary_archs "$PAYLOAD/7zz"))"
+    ;;
+esac
+INSTALLED_ARCHS="$(binary_archs "$PAYLOAD/7zz")"
+
+# Sürüm denetimi 7zz çalıştırılarak yapılır; dosya bu Mac'in mimarisini içermiyorsa (ör. Apple Silicon'da
+# yalnızca x86_64 kurulumu) çalıştırılamaz, o zaman SHA-256, Mach-O ve mimari denetimleriyle yetinilir.
+if has_arch "$PAYLOAD/7zz" "$HOST_ARCH"; then
+  NEW_VERSION="$(engine_version "$PAYLOAD/7zz")"
+  [ "$NEW_VERSION" = "$TAG" ] || fail "İndirilen 7zz sürümü beklenenle uyuşmuyor (${NEW_VERSION:-okunamadı})"
+else
+  log "Not: 7zz bu Mac'in mimarisini ($HOST_ARCH) içermediği için çalıştırılarak denetlenmedi."
+fi
 
 # --- Kurulum ----------------------------------------------------------------
 
@@ -229,7 +344,12 @@ install_to_dir() {
   done
   if [ -d "$PAYLOAD/MANUAL" ]; then replace_dir "$PAYLOAD/MANUAL" "$dest/MANUAL"; fi
   # Hangi 7-Zip sürümünün kurulduğunu kayıt altına al (yeniden üretilebilir sürümler için).
-  printf 'version=%s\nasset=%s\nurl=%s\nsha256=%s\n' "$TAG" "$ASSET" "$URL" "$ACTUAL" > "$dest/SOURCE.txt"
+  {
+    printf 'version=%s\narchs=%s\nasset=%s\nurl=%s\nsha256=%s\n' "$TAG" "$INSTALLED_ARCHS" "$SOURCE_ASSET" "$SOURCE_URL" "$SOURCE_SHA"
+    if [ -n "$SOURCE_X64_ASSET" ]; then
+      printf 'asset_x64=%s\nurl_x64=%s\nsha256_x64=%s\n' "$SOURCE_X64_ASSET" "$SOURCE_X64_URL" "$SOURCE_X64_SHA"
+    fi
+  } > "$dest/SOURCE.txt"
 }
 
 install_to_app() {
@@ -249,7 +369,7 @@ for i in "${!TARGET_KINDS[@]}"; do
   TARGET="${TARGET_PATHS[$i]}"
   if [ "$KIND" = app ]; then install_to_app "$TARGET"; else install_to_dir "$TARGET"; fi
   INSTALLED="$(target_binary "$KIND" "$TARGET")"
-  log "7-Zip $TAG kuruldu: $INSTALLED"
+  log "7-Zip $TAG ($INSTALLED_ARCHS) kuruldu: $INSTALLED"
   echo "INSTALLED=$INSTALLED"
 done
 

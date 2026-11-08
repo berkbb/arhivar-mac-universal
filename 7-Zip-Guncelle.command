@@ -2,7 +2,8 @@
 # Finder'da çift tıklayınca projedeki 7-Zip'i (Vendor/7-Zip) ve varsa derlenmiş
 # build/Arhivar.app içindeki 7-Zip'i GitHub'daki son sürüme günceller.
 cd "$(dirname "$0")" || exit 1
-TARGETS=(--dest "$(pwd)/Vendor/7-Zip")
+# Uygulama evrensel paketlendiği için motor da evrensel kurulur (arm64 + x86_64).
+TARGETS=(--dest "$(pwd)/Vendor/7-Zip" --arch universal)
 if [ -d build/Arhivar.app ]; then TARGETS+=(--app "$(pwd)/build/Arhivar.app"); fi
 ./Scripts/update-7zip.sh install "${TARGETS[@]}" "$@"
 STATUS=$?

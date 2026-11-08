@@ -25,7 +25,7 @@ NAME="Arhivar-$VERSION"
 
 if [ "$UPDATE_ENGINE" = 1 ]; then
   echo "▸ 7-Zip güncelleniyor…"
-  "$ROOT/Scripts/update-7zip.sh" install --dest "$ROOT/Vendor/7-Zip"
+  "$ROOT/Scripts/update-7zip.sh" install --dest "$ROOT/Vendor/7-Zip" --arch universal
 fi
 
 if [ "$RUN_TESTS" = 1 ]; then
@@ -40,7 +40,18 @@ ENGINE="$APP/Contents/MacOS/7zz"
 [ -x "$ENGINE" ] || { echo "HATA: Pakette 7zz yok." >&2; exit 1; }
 ENGINE_VERSION="$(perl -e 'alarm shift; exec @ARGV' 10 "$ENGINE" </dev/null 2>/dev/null \
   | awk '/7-Zip/ { for (i = 1; i <= NF; i++) if ($i ~ /^[0-9]+\.[0-9]+$/) { print $i; exit } }' || true)"
-echo "▸ Paketteki 7-Zip: ${ENGINE_VERSION:-okunamadı} ($(lipo -archs "$ENGINE"))"
+ENGINE_ARCHS="$(lipo -archs "$ENGINE")"
+echo "▸ Paketteki 7-Zip: ${ENGINE_VERSION:-okunamadı} ($ENGINE_ARCHS)"
+# Motor, uygulamanın derlendiği her mimariyi içermeli; yoksa o Mac'lerde Arhivar motorsuz kalır
+# (7-Zip 26.06'dan beri macOS paketi arm64 ve x64 olarak ayrı; update-7zip.sh --arch universal birleştirir).
+REQUIRED_ARCHS="${ARCHS:-arm64 x86_64}"
+[ "$REQUIRED_ARCHS" != native ] || REQUIRED_ARCHS="$(uname -m)"
+for arch in $REQUIRED_ARCHS; do
+  case " $ENGINE_ARCHS " in
+    *" $arch "*) ;;
+    *) echo "HATA: Paketteki 7zz $arch içermiyor ($ENGINE_ARCHS). Scripts/update-7zip.sh install --arch universal --force çalıştırın." >&2; exit 1 ;;
+  esac
+done
 "$ROOT/Scripts/verify_bundle.sh" "$APP"
 
 echo "▸ Dağıtım dosyaları hazırlanıyor…"
