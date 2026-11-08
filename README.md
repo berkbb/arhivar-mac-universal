@@ -65,8 +65,8 @@ The same tasks from the terminal:
 ./Scripts/package.sh --update-7zip    # update 7-Zip first, then package
 ./Scripts/build_app.sh                # build/Arhivar.app only
 ./Scripts/update-7zip.sh check        # is a newer 7-Zip available?
-./Scripts/update-7zip.sh install      # update Vendor/7-Zip
-./Scripts/update-7zip.sh install --app build/Arhivar.app
+./Scripts/update-7zip.sh install      # update Vendor/7-Zip (universal: arm64 + x86_64)
+./Scripts/update-7zip.sh install --app build/Arhivar.app   # --arch arm64|x86_64|universal to choose
 ./Scripts/set-version.sh 1.0.1        # change the version (single source: Support/Info.plist)
 ./Scripts/release.sh --dry-run        # rehearse a release without sending anything
 ./Scripts/release.sh                  # package, tag and upload to GitHub Releases

@@ -5,6 +5,11 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ## [Unreleased]
 
+### Fixed
+
+- The 7-Zip updater (`Scripts/update-7zip.sh`, also inside the app) no longer stops at "Download failed" when GitHub's `github.com/…/releases/download/` endpoint answers with a server error: it then fetches the same file from the GitHub API asset URL that the release listing already named, with the usual SHA-256 check against the digest GitHub publishes. On 2026-11-08 GitHub's Frankfurt edge answered 504 for every release download while the API still worked; the check found 26.06 but the install could not download it.
+- The 7-Zip updater picks the macOS package for the right architecture. Up to 26.05, 7-Zip shipped one universal macOS package; since 26.06 `7zNNNN-mac.tar.xz` is arm64 only and `7zNNNN-mac-x64.tar.xz` is x86_64 only, and the updater always took the first. On an Intel Mac the in-app update would have failed at the version check, and `package.sh --update-7zip` would have shipped an arm64-only engine inside the universal app. The updater now takes `--arch arm64 | x86_64 | universal`; `universal` downloads both packages, verifies both digests and merges them with `lipo` into one `7zz`. Without `--arch`, a target that already holds a universal `7zz` stays universal and any other target gets this Mac's architecture; the project's `Vendor/7-Zip`, `package.sh --update-7zip` and `7-Zip-Guncelle.command` are always universal. A `7zz` that does not contain this Mac's architecture is verified by digest, Mach-O type and architecture instead of being run. `SOURCE.txt` records `archs=` and, for a merged engine, the x64 package too, and `package.sh` stops when the bundled `7zz` lacks an architecture the app is built for.
+
 ### Changed
 
 - A2UI v1.0 recorded as current and the Mistral standard updated to the Agents SDK and Managed Agents in `.agents/rules` (index: `.agents/rules/about_rules.md`).
