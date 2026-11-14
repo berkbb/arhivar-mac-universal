@@ -5,6 +5,17 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ## [Unreleased]
 
+## [1.7.0] — 2026-11-14
+
+### Added
+
+- **Dock icon progress bar:** archive operations now show determinate or indeterminate progress along the bottom of the Arhivar Dock icon (`DockProgress`), with a Settings toggle (`settingsShowDockProgress`, localized in English, Turkish, and Romanian) and automatic cleanup on quit. Tests: `DockProgressTests`.
+
+### Fixed
+
+- `OpenSafety.executableKind(of:)` now queries `.contentTypeKey` and `.isRegularFileKey` independently with `UTType(filenameExtension:)` and `FileManager` attribute fallbacks, preventing a LaunchServices or sandbox `.contentTypeKey` failure from bypassing executable checks (`fail-open`). Tests: `SafetyTests`.
+- `CommandRunner` now schedules timeout termination on `DispatchQueue.global(qos: .userInteractive)` so timed-out helper processes are terminated promptly under load.
+
 ## [1.6.1] — 2026-11-08
 
 ### Added
