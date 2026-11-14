@@ -844,7 +844,8 @@ struct AppModelTests {
         await fixture.settle()
         let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] ?? []
         #expect(urls.map(\.lastPathComponent) == ["not.txt", "alt"])
-        #expect(try String(contentsOf: urls[0], encoding: .utf8) == "merhaba\n")
+        let firstURL = try #require(urls.first)
+        #expect(try String(contentsOf: firstURL, encoding: .utf8) == "merhaba\n")
 
         let extra = fixture.workspace.appendingPathComponent("ek.txt")
         try "ek".write(to: extra, atomically: true, encoding: .utf8)

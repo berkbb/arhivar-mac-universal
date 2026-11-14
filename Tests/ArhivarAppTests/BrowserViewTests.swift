@@ -169,7 +169,8 @@ struct BrowserViewTests {
         await settle()
         let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
         #expect(urls.map(\.lastPathComponent) == ["Dekont1.pdf", "EAR2026.pdf"])
-        #expect(try String(contentsOf: urls[0], encoding: .utf8) == "Dekont1.pdf")
+        let firstURL = try #require(urls.first)
+        #expect(try String(contentsOf: firstURL, encoding: .utf8) == "Dekont1.pdf")
 
         // Metin düzenlenirken arşiv öğeleri kopyalanmaz (komut metne gider).
         pasteboard.clearContents()

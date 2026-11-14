@@ -27,24 +27,32 @@ public enum OpenSafety {
     /// ör. "workflow" uzantısı com.apple.automator-workflow'a değil dinamik bir türe çözülür.
     static let riskyExtensions: Set<String> = [
         "scpt", "scptd", "applescript", "shortcut", "prefpane", "qlgenerator",
-        "workflow", "action", "osax", "url", "webloc", "term", "terminal",
+        "workflow", "action", "osax", "url", "webloc", "inetloc", "term", "terminal",
+        "command", "sh", "zsh", "bash", "csh", "ksh", "fish",
+        "pkg", "mpkg", "mobileconfig", "app", "dmg",
     ]
 
     /// Dosya çalıştırılabilir ya da riskli bir türdeyse türün okunur adını (yoksa tanımlayıcısını) döndürür.
     public static func executableKind(of url: URL) -> String? {
         let resolved = url.resolvingSymlinksInPath()
-        let values = try? resolved.resourceValues(forKeys: [.contentTypeKey, .isRegularFileKey])
-        if let type = values?.contentType, riskyTypes.contains(where: { type.conforms(to: $0) }) {
+        let ext = resolved.pathExtension.lowercased()
+        // `.contentTypeKey` LaunchServices/kum havuzunda başarısız olsa bile `.isRegularFileKey` ve uzantı denetimi çalışmalı;
+        // bu iki özellik birlikte istenirse tek hata her ikisini birden düşürür (fail-open).
+        let contentType = (try? resolved.resourceValues(forKeys: [.contentTypeKey]))?.contentType
+            ?? (ext.isEmpty ? nil : UTType(filenameExtension: ext))
+        if let type = contentType, riskyTypes.contains(where: { type.conforms(to: $0) }) {
             return type.localizedDescription ?? type.identifier
         }
-        if riskyExtensions.contains(resolved.pathExtension.lowercased()) {
-            return values?.contentType?.localizedDescription ?? resolved.pathExtension
+        if riskyExtensions.contains(ext) {
+            return contentType?.localizedDescription ?? ext
         }
         // Uzantısız Mach-O ya da betikler: çalıştırma (x) biti olan sıradan dosyalar.
-        if values?.isRegularFile == true,
+        let isRegularFile = (try? resolved.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile
+            ?? ((try? FileManager.default.attributesOfItem(atPath: resolved.path)[.type] as? FileAttributeType) == .typeRegular)
+        if isRegularFile,
            let permissions = (try? FileManager.default.attributesOfItem(atPath: resolved.path))?[.posixPermissions] as? NSNumber,
            permissions.uint16Value & 0o111 != 0 {
-            return values?.contentType?.localizedDescription ?? "Unix executable"
+            return contentType?.localizedDescription ?? "Unix executable"
         }
         return nil
     }

@@ -104,9 +104,15 @@ func timestampMatchesDateFormatter(zone: String) throws {
     #expect(OpenSafety.executableKind(of: try file("calistir.command")) != nil)
     #expect(OpenSafety.executableKind(of: try file("kur.pkg")) != nil)
     #expect(OpenSafety.executableKind(of: try file("profil.mobileconfig")) != nil)
+    #expect(OpenSafety.executableKind(of: try file("betik.sh")) != nil)
     #expect(OpenSafety.executableKind(of: try file("uzantisiz", executable: true)) != nil)
     #expect(OpenSafety.executableKind(of: try file("not.txt")) == nil)
     #expect(OpenSafety.executableKind(of: try file("resim.png")) == nil)
+
+    let execTarget = try file("gizli_calistir", executable: true)
+    let symlink = root.appendingPathComponent("bag_belge.txt")
+    try FileManager.default.createSymbolicLink(at: symlink, withDestinationURL: execTarget)
+    #expect(OpenSafety.executableKind(of: symlink) != nil)
 }
 
 // MARK: - Geçici klasörler

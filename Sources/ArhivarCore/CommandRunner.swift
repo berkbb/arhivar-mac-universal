@@ -261,7 +261,7 @@ public struct CommandRunner: Sendable {
 
                 if state.isCancelled { box.terminate() }
                 if let timeout {
-                    DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
+                    DispatchQueue.global(qos: .userInteractive).asyncAfter(deadline: .now() + timeout) {
                         if box.isRunning {
                             state.markTimedOut()
                             box.terminate()
