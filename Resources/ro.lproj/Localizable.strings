@@ -151,6 +151,7 @@
 "appearanceSystem" = "Automat";
 "appearanceLight" = "Luminos";
 "appearanceDark" = "Întunecat";
+"settingsShowDockProgress" = "Afișează progresul operațiunii pe pictograma din Dock";
 "settingsExtraction" = "Extragere";
 "settingsExtractTo" = "Extrage în";
 "extractToAsk" = "Întreabă de fiecare dată";

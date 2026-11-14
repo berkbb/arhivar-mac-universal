@@ -151,6 +151,7 @@
 "appearanceSystem" = "Otomatik";
 "appearanceLight" = "Açık";
 "appearanceDark" = "Koyu";
+"settingsShowDockProgress" = "Dock simgesinde işlem ilerlemesini göster";
 "settingsExtraction" = "Çıkarma";
 "settingsExtractTo" = "Çıkarma konumu";
 "extractToAsk" = "Her seferinde sor";

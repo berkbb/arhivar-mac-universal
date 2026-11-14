@@ -151,6 +151,7 @@
 "appearanceSystem" = "Automatic";
 "appearanceLight" = "Light";
 "appearanceDark" = "Dark";
+"settingsShowDockProgress" = "Show operation progress on the Dock icon";
 "settingsExtraction" = "Extraction";
 "settingsExtractTo" = "Extract to";
 "extractToAsk" = "Ask every time";

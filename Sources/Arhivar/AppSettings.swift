@@ -241,6 +241,7 @@ final class AppSettings {
     private enum Key {
         static let language = "language"
         static let appearance = "appearance"
+        static let showDockProgress = "showDockProgress"
         static let extractLocation = "extractLocation"
         static let customExtractFolder = "customExtractFolder"
         /// Eski (1.0.x) anahtar: Bool. `subfolderMode` yoksa geçiş için okunur.
@@ -262,7 +263,7 @@ final class AppSettings {
         static let quickLookShortcut = "quickLookShortcut"
         static let customShortcuts = "customShortcuts"
         static let all = [
-            language, appearance, extractLocation, customExtractFolder, extractIntoSubfolder, subfolderMode, revealAfterOperation,
+            language, appearance, showDockProgress, extractLocation, customExtractFolder, extractIntoSubfolder, subfolderMode, revealAfterOperation,
             overwriteMode, defaultFormat, defaultLevel, multithreaded, excludeMacMetadata, storeSymlinks,
             customEnginePath, checkUpdatesAtLaunch, updateConsentAsked, sandboxEngine, browserMode, quickLookShortcut,
             customShortcuts,
@@ -271,6 +272,7 @@ final class AppSettings {
 
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored let strings: StringTable
+    @ObservationIgnored var onDockProgressSettingChanged: (() -> Void)?
 
     var language: AppLanguage {
         didSet {
@@ -282,6 +284,12 @@ final class AppSettings {
         didSet {
             defaults.set(appearance.rawValue, forKey: Key.appearance)
             applyAppearance()
+        }
+    }
+    var showDockProgress: Bool {
+        didSet {
+            defaults.set(showDockProgress, forKey: Key.showDockProgress)
+            onDockProgressSettingChanged?()
         }
     }
     var extractLocation: ExtractLocation { didSet { defaults.set(extractLocation.rawValue, forKey: Key.extractLocation) } }
@@ -323,6 +331,7 @@ final class AppSettings {
         strings = StringTable(bundle: bundle)
         language = AppLanguage(rawValue: defaults.string(forKey: Key.language) ?? "") ?? .tr
         appearance = AppAppearance(rawValue: defaults.string(forKey: Key.appearance) ?? "") ?? .system
+        showDockProgress = defaults.object(forKey: Key.showDockProgress) as? Bool ?? true
         extractLocation = ExtractLocation(rawValue: defaults.string(forKey: Key.extractLocation) ?? "") ?? .ask
         customExtractFolder = defaults.string(forKey: Key.customExtractFolder)
         subfolderMode = Self.loadSubfolderMode(from: defaults)
@@ -365,6 +374,7 @@ final class AppSettings {
     func resetAll() {
         language = .tr
         appearance = .system
+        showDockProgress = true
         extractLocation = .ask
         customExtractFolder = nil
         subfolderMode = .smart

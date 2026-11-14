@@ -52,6 +52,7 @@ private struct GeneralSettingsView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                Toggle(settings.t(.settingsShowDockProgress), isOn: $settings.showDockProgress)
             } footer: {
                 Text(settings.t(.restartMenuBarNotice))
                     .font(.footnote)

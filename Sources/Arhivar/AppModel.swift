@@ -184,7 +184,9 @@ final class AppModel {
     }
 
     private(set) var recentArchives: [URL] = []
-    private(set) var operation: OperationState?
+    private(set) var operation: OperationState? {
+        didSet { syncDockProgress() }
+    }
     /// Son biten işlemin sonucu; `operation` nil olmadan önce yazılır.
     private(set) var lastOperationOutcome: OperationOutcome?
     var toast: Toast?
@@ -261,6 +263,8 @@ final class AppModel {
     @ObservationIgnored private(set) var dragItemCount = 0
     /// Son sürüklemenin topluluğu (testler için); sürükleme bitip öğeler bırakılınca kendiliğinden düşer.
     @ObservationIgnored private(set) weak var lastDragBatch: DragBatch?
+    /// Dock simgesi altındaki ilerleme çubuğu denetleyicisi; testler sahte yüzey enjekte edebilir.
+    @ObservationIgnored var dockProgress = DockProgress()
 
     private static let recentsKey = "recentArchives"
     private static let maxRecents = 12
@@ -272,6 +276,9 @@ final class AppModel {
         let paths = defaults.stringArray(forKey: Self.recentsKey) ?? []
         recentArchives = paths.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) }
         browserMode = BrowserMode(rawValue: defaults.string(forKey: Self.browserModeKey) ?? "") ?? .folders
+        settings.onDockProgressSettingChanged = { [weak self] in
+            self?.syncDockProgress()
+        }
     }
 
     var engineVersion: String? {
@@ -1056,6 +1063,18 @@ final class AppModel {
         guard let current = operation, !current.isCancelling else { return }
         guard value > 0 || current.progress != nil else { return }
         operation?.progress = value
+    }
+
+    func syncDockProgress() {
+        dockProgress.update(
+            fraction: operation?.progress,
+            active: operation != nil,
+            enabled: settings.showDockProgress
+        )
+    }
+
+    func clearDockProgress() {
+        dockProgress.update(fraction: nil, active: false, enabled: settings.showDockProgress)
     }
 
     /// Çıkarma sırasında boş alan izlemesinin ayarları; testler küçük bir aralık ve sahte boş alan verir.
