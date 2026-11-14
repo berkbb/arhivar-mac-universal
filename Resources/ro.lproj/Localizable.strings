@@ -345,3 +345,6 @@
 "logCategoryArchive" = "Arhivă";
 "logCategoryDrag" = "Glisare și plasare";
 "logCategoryUpdate" = "Actualizare";
+"quitConfirmTitle" = "Închideți Arhivar?";
+"quitConfirmMessage" = "În acest moment rulează o operație cu arhive. Închiderea acum o va opri.";
+"quitConfirmButton" = "Închide";

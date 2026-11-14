@@ -345,3 +345,6 @@
 "logCategoryArchive" = "Archive";
 "logCategoryDrag" = "Drag and drop";
 "logCategoryUpdate" = "Update";
+"quitConfirmTitle" = "Quit Arhivar?";
+"quitConfirmMessage" = "An archive operation is currently running. Quitting now will stop it.";
+"quitConfirmButton" = "Quit";

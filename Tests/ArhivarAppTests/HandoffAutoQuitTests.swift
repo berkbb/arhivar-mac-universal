@@ -312,4 +312,31 @@ struct HandoffAutoQuitTests {
         window.orderFrontRegardless()
         #expect(HandoffAutoQuit.showsUserWindow([window, panel], modalWindow: nil))
     }
+
+    @Test func terminationReplyPromptsOnlyForUserLaunchWithActiveOperation() {
+        var prompted = false
+        let idle = AppDelegate.terminationReply(hasActiveOperation: false, isHandoffOnly: false) {
+            prompted = true
+            return false
+        }
+        #expect(idle == .terminateNow)
+        #expect(!prompted)
+
+        let handoff = AppDelegate.terminationReply(hasActiveOperation: true, isHandoffOnly: true) {
+            prompted = true
+            return false
+        }
+        #expect(handoff == .terminateNow)
+        #expect(!prompted)
+
+        let cancelActive = AppDelegate.terminationReply(hasActiveOperation: true, isHandoffOnly: false) {
+            prompted = true
+            return false
+        }
+        #expect(cancelActive == .terminateCancel)
+        #expect(prompted)
+
+        let confirmActive = AppDelegate.terminationReply(hasActiveOperation: true, isHandoffOnly: false) { true }
+        #expect(confirmActive == .terminateNow)
+    }
 }

@@ -139,6 +139,7 @@ public enum LKey: String, CaseIterable, Sendable {
     case logColumnTime, logColumnType, logColumnCategory, logColumnProcess, logColumnMessage
     case logLevelInfo, logLevelWarning, logLevelError
     case logCategoryApp, logCategoryEngine, logCategoryArchive, logCategoryDrag, logCategoryUpdate
+    case quitConfirmTitle, quitConfirmMessage, quitConfirmButton
     case unknown
 }
 

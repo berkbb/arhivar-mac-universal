@@ -10,6 +10,7 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 ### Added
 
 - **Dock icon progress bar:** archive operations now show determinate or indeterminate progress along the bottom of the Arhivar Dock icon (`DockProgress`), with a Settings toggle (`settingsShowDockProgress`, localized in English, Turkish, and Romanian) and automatic cleanup on quit. Tests: `DockProgressTests`.
+- **Quit protection while an operation is active:** `applicationShouldTerminate(_:)` now prompts before quitting when an archive operation is running for user-initiated sessions while preserving `HandoffAutoQuit` background launches. Tests: `HandoffAutoQuitTests`.
 
 ### Fixed
 

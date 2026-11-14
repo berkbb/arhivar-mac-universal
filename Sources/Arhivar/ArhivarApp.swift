@@ -240,6 +240,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let hasOperation = AppModel.shared.operation != nil
+        let isHandoffOnly = autoQuit.launch == .handoffOnly
+        return Self.terminationReply(hasActiveOperation: hasOperation, isHandoffOnly: isHandoffOnly) {
+            let settings = AppSettings.shared
+            let alert = NSAlert()
+            alert.messageText = settings.t(.quitConfirmTitle)
+            alert.informativeText = settings.t(.quitConfirmMessage)
+            alert.addButton(withTitle: settings.t(.quitConfirmButton))
+            alert.addButton(withTitle: settings.t(.buttonCancel))
+            return alert.runModal() == .alertFirstButtonReturn
+        }
+    }
+
+    static func terminationReply(
+        hasActiveOperation: Bool,
+        isHandoffOnly: Bool,
+        confirm: () -> Bool
+    ) -> NSApplication.TerminateReply {
+        guard hasActiveOperation, !isHandoffOnly else { return .terminateNow }
+        return confirm() ? .terminateNow : .terminateCancel
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         AppModel.shared.clearDockProgress()
         AppModel.shared.discardTemporaryFiles()

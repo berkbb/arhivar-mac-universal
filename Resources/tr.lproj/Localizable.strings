@@ -345,3 +345,6 @@
 "logCategoryArchive" = "Arşiv";
 "logCategoryDrag" = "Sürükle-bırak";
 "logCategoryUpdate" = "Güncelleme";
+"quitConfirmTitle" = "Arhivar'dan çıkılsın mı?";
+"quitConfirmMessage" = "Şu anda bir arşiv işlemi sürüyor. Şimdi çıkarsanız işlem durdurulur.";
+"quitConfirmButton" = "Çık";
