@@ -2414,6 +2414,58 @@ struct AppModelTests {
         #expect(model.alert == nil)
         #expect(!FileManager.default.fileExists(atPath: session.path))
     }
+
+    /// → klasöre veya iç arşive girer (sıradan dosyayı açmaz); ← üst klasöre ya da üst arşive döner.
+    /// Ağaç görünümünde genişletme/daraltma bozulmasın diye yatay ok tuşları devreye girmez.
+    @Test func horizontalArrowKeysNavigateFoldersAndBrowsableArchivesOnly() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        await fixture.model.refreshEngine()
+        let inner = try await fixture.makeArchive("ic.zip", format: .zip)
+        try FileManager.default.moveItem(at: inner, to: fixture.workspace.appendingPathComponent("kaynak/ic.zip"))
+        let outer = try await fixture.makeArchive("dis.7z", format: .sevenZip)
+
+        let model = fixture.model
+        model.browserMode = .folders
+        model.openArchive(outer)
+        await fixture.settle()
+
+        #expect(!model.navigateIntoSelection(editingText: false))
+        #expect(!model.navigateUpSelection(editingText: false))
+
+        model.selection = ["kaynak"]
+        #expect(!model.navigateIntoSelection(editingText: true))
+        model.browserMode = .tree
+        #expect(!model.navigateIntoSelection(editingText: false))
+        model.browserMode = .folders
+
+        #expect(model.navigateIntoSelection(editingText: false))
+        #expect(model.currentFolder == "kaynak")
+
+        // Sıradan dosya → ile açılmaz; alt klasöre girilir.
+        model.selection = ["kaynak/not.txt"]
+        #expect(!model.navigateIntoSelection(editingText: false))
+        #expect(model.currentFolder == "kaynak")
+        #expect(model.alert == nil && model.quickLookURL == nil)
+
+        model.selection = ["kaynak/alt"]
+        #expect(model.navigateIntoSelection(editingText: false))
+        #expect(model.currentFolder == "kaynak/alt")
+        #expect(!model.navigateUpSelection(editingText: true))
+        #expect(model.navigateUpSelection(editingText: false))
+        #expect(model.currentFolder == "kaynak" && model.selection == ["kaynak/alt"])
+
+        // İç içe arşiv → ile açılır, ← ile üst arşive dönülür.
+        model.selection = ["kaynak/ic.zip"]
+        #expect(model.navigateIntoSelection(editingText: false))
+        await fixture.settle()
+        #expect(model.archiveStack.count == 1)
+        #expect(model.navigateUpSelection(editingText: false))
+        await fixture.settle()
+        #expect(model.archiveStack.isEmpty)
+        #expect(model.navigateUpSelection(editingText: false))
+        #expect(model.currentFolder == "" && model.selection == ["kaynak"])
+    }
 }
 
 /// Parola denetimi tablonun her satırı için sorulur: şifreli girdilerin yolları üst klasörleriyle birlikte bir kez

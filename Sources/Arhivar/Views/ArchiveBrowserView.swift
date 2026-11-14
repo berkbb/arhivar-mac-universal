@@ -74,6 +74,14 @@ struct ArchiveBrowserView: View {
             model.primaryAction(model.selection)
             return .handled
         }
+        .onKeyPress(.leftArrow, phases: .down) { press in
+            guard press.modifiers.intersection([.command, .option, .control]).isEmpty else { return .ignored }
+            return model.navigateUpSelection() ? .handled : .ignored
+        }
+        .onKeyPress(.rightArrow, phases: .down) { press in
+            guard press.modifiers.intersection([.command, .option, .control]).isEmpty else { return .ignored }
+            return model.navigateIntoSelection() ? .handled : .ignored
+        }
         .overlay {
             if model.displayNodes.isEmpty {
                 if model.isSearching {

@@ -11,6 +11,7 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 - **Dock icon progress bar:** archive operations now show determinate or indeterminate progress along the bottom of the Arhivar Dock icon (`DockProgress`), with a Settings toggle (`settingsShowDockProgress`, localized in English, Turkish, and Romanian) and automatic cleanup on quit. Tests: `DockProgressTests`.
 - **Quit protection while an operation is active:** `applicationShouldTerminate(_:)` now prompts before quitting when an archive operation is running for user-initiated sessions while preserving `HandoffAutoQuit` background launches. Tests: `HandoffAutoQuitTests`.
+- **Horizontal arrow-key folder navigation:** in Folders view and search results, `→` enters the selected folder or browsable nested archive without launching plain files, and `←` steps up to the parent folder or enclosing archive while preserving `←`/`→` outline expand/collapse in Tree view. Tests: `AppModelTests`.
 
 ### Fixed
 

@@ -941,6 +941,38 @@ final class AppModel {
         }
     }
 
+    private var showsHorizontalFolderKeys: Bool {
+        browserMode == .folders || !searchText.isEmpty
+    }
+
+    /// → (yalnızca klasör görünümü veya arama sonuçlarında): tek seçili klasöre ya da içine girilebilen
+    /// iç içe arşive girer; sıradan dosyaları açmaz ve metin düzenlenirken devreye girmez.
+    @discardableResult
+    func navigateIntoSelection(editingText: Bool = AppModel.isEditingText) -> Bool {
+        guard !editingText, showsHorizontalFolderKeys,
+              selection.count == 1, let id = selection.first, let node = node(id) else {
+            return false
+        }
+        if node.isDirectory {
+            browserMode = .folders
+            enterFolder(id)
+            return true
+        }
+        if ArchiveNaming.isBrowsable(node.name) {
+            browseArchive(id)
+            return true
+        }
+        return false
+    }
+
+    /// ← (ağaç görünümünde genişletme/daraltmayı bozmadan): bir üst klasöre ya da üst arşive döner.
+    @discardableResult
+    func navigateUpSelection(editingText: Bool = AppModel.isEditingText) -> Bool {
+        guard !editingText, showsHorizontalFolderKeys, canGoUp else { return false }
+        goUp()
+        return true
+    }
+
     // MARK: - Çıkarma, test, önizleme
 
     func extract(selectedOnly: Bool) {
